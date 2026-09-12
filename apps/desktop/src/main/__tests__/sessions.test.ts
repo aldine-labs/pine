@@ -1,3 +1,4 @@
+// @vitest-environment node
 import {
   BACKGROUND_CONTEXT,
   branchTip,
