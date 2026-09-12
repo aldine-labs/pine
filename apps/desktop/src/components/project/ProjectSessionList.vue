@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Download, Pencil, Plus, Search, Trash2 } from "@lucide/vue";
-import { useVirtualizer } from "@tanstack/vue-virtual";
 import { useEventListener } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
@@ -18,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -35,7 +35,38 @@ import { useSessionStore } from "@/stores/session";
 import SessionDeleteDialog from "@/components/sessions/SessionDeleteDialog.vue";
 import SessionRenameDialog from "@/components/sessions/SessionRenameDialog.vue";
 
-const { locale, t } = useI18n();
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type SessionGroupKey = "pastThreeDays" | "pastWeek" | "pastMonth" | "older";
+
+const SESSION_GROUP_WINDOWS: readonly {
+  key: SessionGroupKey;
+  labelKey: string;
+  maxAgeMs: number;
+}[] = [
+  {
+    key: "pastThreeDays",
+    labelKey: "sessions.groupPastThreeDays",
+    maxAgeMs: 3 * DAY_MS,
+  },
+  {
+    key: "pastWeek",
+    labelKey: "sessions.groupPastWeek",
+    maxAgeMs: 7 * DAY_MS,
+  },
+  {
+    key: "pastMonth",
+    labelKey: "sessions.groupPastMonth",
+    maxAgeMs: 30 * DAY_MS,
+  },
+  {
+    key: "older",
+    labelKey: "sessions.groupOlder",
+    maxAgeMs: Number.POSITIVE_INFINITY,
+  },
+];
+
+const { t } = useI18n();
 const emit = defineEmits<{
   search: [];
 }>();
@@ -81,7 +112,6 @@ function dropOnSession(event: DragEvent, session: PineSessionSummary): void {
 const { activeSessionTab } = tabNavigation;
 const { activeProject } = storeToRefs(projectStore);
 const { isLoadingRecent, recentSessions } = storeToRefs(sessionStore);
-const scrollHost = ref<HTMLElement | null>(null);
 const sessionPendingDelete = ref<PineSessionSummary | null>(null);
 const isDeleteDialogOpen = ref(false);
 const sessionPendingRename = ref<PineSessionSummary | null>(null);
@@ -94,27 +124,28 @@ watch(isRenameDialogOpen, (open) => {
   if (!open) sessionPendingRename.value = null;
 });
 
-const dateFormatter = computed(
-  () =>
-    new Intl.DateTimeFormat(locale.value, {
-      month: "short",
-      day: "numeric",
-    }),
-);
+// Sessions arrive sorted by `updatedAt` descending, so filtering keeps the
+// original order inside every group. Boundaries use rolling windows from the
+// last reload rather than calendar days.
+const nowMs = ref(Date.now());
 
-const rowVirtualizer = useVirtualizer(
-  computed(() => ({
-    count: recentSessions.value.length,
-    getScrollElement: () =>
-      scrollHost.value?.querySelector<HTMLElement>(
-        '[data-slot="scroll-area-viewport"]',
-      ) ?? null,
-    estimateSize: () => 36,
-    overscan: 10,
-  })),
-);
+function sessionGroupKeyFor(session: PineSessionSummary): SessionGroupKey {
+  const age = nowMs.value - new Date(session.updatedAt).getTime();
+  return (
+    SESSION_GROUP_WINDOWS.find((window) => age <= window.maxAgeMs)?.key ??
+    "older"
+  );
+}
 
-const virtualRows = computed(() => rowVirtualizer.value.getVirtualItems());
+const sessionGroups = computed(() =>
+  SESSION_GROUP_WINDOWS.map((window) => ({
+    key: window.key,
+    label: t(window.labelKey),
+    sessions: recentSessions.value.filter(
+      (session) => sessionGroupKeyFor(session) === window.key,
+    ),
+  })).filter((group) => group.sessions.length > 0),
+);
 
 function sessionTitle(session: PineSessionSummary): string {
   return session.name || session.preview || t("sessions.newSession");
@@ -123,6 +154,7 @@ function sessionTitle(session: PineSessionSummary): string {
 async function loadRecentSessions(): Promise<void> {
   try {
     await sessionStore.loadRecent();
+    nowMs.value = Date.now();
   } catch (error) {
     handleError(error, {
       id: "sessions.sidebar.load",
@@ -210,92 +242,67 @@ watch(
       </SidebarGroupContent>
     </SidebarGroup>
 
-    <div v-else ref="scrollHost" class="min-h-0 flex-1">
+    <div v-else class="min-h-0 flex-1">
       <ScrollArea
         class="h-full [&_[data-slot=scroll-area-viewport]]:scroll-fade"
       >
-        <SidebarMenu
-          class="relative px-2 py-2"
-          :style="{ height: `${rowVirtualizer.getTotalSize() + 16}px` }"
-        >
-          <SidebarMenuItem
-            v-for="virtualRow in virtualRows"
-            :key="recentSessions[virtualRow.index].id"
-            class="absolute inset-x-2 top-2"
-            :style="{
-              transform: `translateY(${virtualRow.start}px)`,
-              height: `${virtualRow.size}px`,
-            }"
-          >
-            <ContextMenu>
-              <ContextMenuTrigger as-child>
-                <SidebarMenuButton
-                  class="min-w-0"
-                  :data-session-id="recentSessions[virtualRow.index].id"
-                  :draggable="true"
-                  :class="{
-                    'bg-sidebar-accent ring-1 ring-sidebar-ring':
-                      dropSessionId === recentSessions[virtualRow.index].id,
-                  }"
-                  @dragover="
-                    dragOverSession($event, recentSessions[virtualRow.index])
-                  "
-                  @dragleave="leaveSession"
-                  @drop="
-                    dropOnSession($event, recentSessions[virtualRow.index])
-                  "
-                  :is-active="
-                    activeSessionTab?.state === 'bound' &&
-                    recentSessions[virtualRow.index].id ===
-                      activeSessionTab.sessionId
-                  "
-                  @click="openSession(recentSessions[virtualRow.index])"
-                  @dragstart="
-                    startSessionDrag($event, recentSessions[virtualRow.index])
-                  "
-                >
-                  <span class="min-w-0 flex-1 truncate">
-                    {{ sessionTitle(recentSessions[virtualRow.index]) }}
-                  </span>
-                  <span class="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {{
-                      dateFormatter.format(
-                        new Date(recentSessions[virtualRow.index].updatedAt),
-                      )
-                    }}
-                  </span>
-                </SidebarMenuButton>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuGroup>
-                  <ContextMenuItem
-                    @select="
-                      requestSessionRename(recentSessions[virtualRow.index])
-                    "
-                  >
-                    <Pencil aria-hidden="true" />
-                    {{ t("sessions.renameAction") }}
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    @select="exportSession(recentSessions[virtualRow.index].id)"
-                  >
-                    <Download aria-hidden="true" />
-                    {{ t("sessions.exportAction") }}
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    variant="destructive"
-                    @select="
-                      requestSessionDeletion(recentSessions[virtualRow.index])
-                    "
-                  >
-                    <Trash2 aria-hidden="true" />
-                    {{ t("sessions.deleteAction") }}
-                  </ContextMenuItem>
-                </ContextMenuGroup>
-              </ContextMenuContent>
-            </ContextMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <SidebarGroup v-for="group in sessionGroups" :key="group.key">
+          <SidebarGroupLabel>{{ group.label }}</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem
+                v-for="session in group.sessions"
+                :key="session.id"
+              >
+                <ContextMenu>
+                  <ContextMenuTrigger as-child>
+                    <SidebarMenuButton
+                      class="min-w-0"
+                      :data-session-id="session.id"
+                      :draggable="true"
+                      :class="{
+                        'bg-sidebar-accent ring-1 ring-sidebar-ring':
+                          dropSessionId === session.id,
+                      }"
+                      @dragover="dragOverSession($event, session)"
+                      @dragleave="leaveSession"
+                      @drop="dropOnSession($event, session)"
+                      :is-active="
+                        activeSessionTab?.state === 'bound' &&
+                        session.id === activeSessionTab.sessionId
+                      "
+                      @click="openSession(session)"
+                      @dragstart="startSessionDrag($event, session)"
+                    >
+                      <span class="min-w-0 flex-1 truncate">
+                        {{ sessionTitle(session) }}
+                      </span>
+                    </SidebarMenuButton>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuGroup>
+                      <ContextMenuItem @select="requestSessionRename(session)">
+                        <Pencil aria-hidden="true" />
+                        {{ t("sessions.renameAction") }}
+                      </ContextMenuItem>
+                      <ContextMenuItem @select="exportSession(session.id)">
+                        <Download aria-hidden="true" />
+                        {{ t("sessions.exportAction") }}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        variant="destructive"
+                        @select="requestSessionDeletion(session)"
+                      >
+                        <Trash2 aria-hidden="true" />
+                        {{ t("sessions.deleteAction") }}
+                      </ContextMenuItem>
+                    </ContextMenuGroup>
+                  </ContextMenuContent>
+                </ContextMenu>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </ScrollArea>
     </div>
 

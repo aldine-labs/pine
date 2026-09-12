@@ -11,18 +11,6 @@ import { useContentTabsStore } from "@/stores/contentTabs";
 import { useProjectStore } from "@/stores/project";
 import ProjectSessionList from "../ProjectSessionList.vue";
 
-vi.mock("@tanstack/vue-virtual", async () => {
-  const { computed } = await import("vue");
-  return {
-    useVirtualizer: (options: { value: { count: number } }) =>
-      computed(() => ({
-        getTotalSize: () => options.value.count * 36,
-        getVirtualItems: () =>
-          options.value.count > 0 ? [{ index: 0, size: 36, start: 0 }] : [],
-      })),
-  };
-});
-
 const session: PineSessionSummary = {
   createdAt: "2026-08-25T00:00:00.000Z",
   id: "019cfe51-7166-79b9-a5b9-c652fcca9eab",
@@ -357,5 +345,72 @@ describe("ProjectSessionList", () => {
       expect.objectContaining({ label: "Renamed conversation" }),
     );
     expect(wrapper.find("#session-name").exists()).toBe(false);
+  });
+
+  it("buckets conversations by age and shows no per-row date", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/", component: { template: "<div />" } }],
+    });
+    await router.push("/");
+    const daysAgo = (days: number) =>
+      new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const sessions: PineSessionSummary[] = [
+      { ...session, id: "recent", preview: "Recent", updatedAt: daysAgo(1) },
+      { ...session, id: "week", preview: "Last week", updatedAt: daysAgo(5) },
+      {
+        ...session,
+        id: "month",
+        preview: "Last month",
+        updatedAt: daysAgo(10),
+      },
+      {
+        ...session,
+        id: "ancient",
+        preview: "Ancient",
+        updatedAt: daysAgo(400),
+      },
+    ];
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: { searchSessions: vi.fn().mockResolvedValue({ sessions }) },
+    });
+    useProjectStore().activeProject = project;
+    const slotStub = { template: "<div><slot /></div>" };
+    const wrapper = mount(ProjectSessionList, {
+      global: {
+        plugins: [pinia, router, createAppI18n("en-US")],
+        stubs: {
+          ScrollArea: slotStub,
+          SidebarGroup: { template: '<div data-slot="group"><slot /></div>' },
+          SidebarGroupContent: slotStub,
+          SidebarGroupLabel: {
+            template: '<div data-slot="group-label"><slot /></div>',
+          },
+          SidebarMenu: slotStub,
+          SidebarMenuButton: { template: "<button><slot /></button>" },
+          SidebarMenuItem: slotStub,
+          SidebarMenuSkeleton: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    const groups = wrapper
+      .findAll('[data-slot="group"]')
+      .filter((group) => group.find('[data-slot="group-label"]').exists());
+
+    expect(
+      groups.map((group) => group.get('[data-slot="group-label"]').text()),
+    ).toEqual(["Past 3 days", "Past week", "Past month", "Older"]);
+    // Each row only renders its title, so the grouped rows carry no date.
+    expect(
+      groups.map((group) =>
+        group.findAll("[data-session-id]").map((item) => item.text()),
+      ),
+    ).toEqual([["Recent"], ["Last week"], ["Last month"], ["Ancient"]]);
+    wrapper.unmount();
   });
 });
