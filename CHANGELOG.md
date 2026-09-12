@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-12
+
+### Fixed
+
+- Preserved Electron's built-in SQLite module in production bundles so projects can open correctly.
+- Removed a blocked remote font request and kept the bundled Inter variable font as the UI font source.
+
 ## [0.1.0] - 2026-09-10
 
 ### Added
@@ -18,5 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/Starlight-Intelligence/pine/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Starlight-Intelligence/pine/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Starlight-Intelligence/pine/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Starlight-Intelligence/pine/releases/tag/v0.1.0
