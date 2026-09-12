@@ -1,9 +1,9 @@
 {
   "r2": {
-    "enabled": false,
-    "accountId": "",
-    "bucket": "",
+    "enabled": true,
+    "accountId": "d4f881390e201071826a3e788b050f7e",
+    "bucket": "phos-dl",
     "prefix": "pine",
-    "publicBaseUrl": ""
+    "publicBaseUrl": "https://dl.phosphoros.works"
   }
 }
