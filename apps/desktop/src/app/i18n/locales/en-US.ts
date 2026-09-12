@@ -274,6 +274,7 @@ export default {
       "\u201c{name}\u201d and its messages will be permanently deleted.",
   },
   project: {
+    closeProject: "Close project",
     preferences: "Project settings",
     preview: {
       metadata: "File metadata",
@@ -611,6 +612,10 @@ export default {
     },
     projectList: {
       title: "Unable to load Projects",
+      description: "Try again in a moment",
+    },
+    projectClose: {
+      title: "Unable to close Project",
       description: "Try again in a moment",
     },
     projectCreate: {

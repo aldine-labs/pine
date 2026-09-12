@@ -258,6 +258,7 @@ export default {
     deleteDescription: "“{name}”及其消息将被永久删除。",
   },
   project: {
+    closeProject: "关闭项目",
     preferences: "项目设置",
     preview: {
       metadata: "文件元数据",
@@ -585,6 +586,7 @@ export default {
       description: "请稍后重试",
     },
     projectList: { title: "无法读取项目", description: "请稍后重试" },
+    projectClose: { title: "无法关闭项目", description: "请稍后重试" },
     projectCreate: {
       title: "无法创建项目",
       description: "请检查名称和文件夹后重试",

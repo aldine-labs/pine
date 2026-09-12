@@ -298,7 +298,7 @@ watch(activeSession, (session) => {
         cn(
           'window-drag pointer-events-auto relative z-30 flex h-[var(--window-titlebar-height)] shrink-0 items-center gap-2 pr-[calc(var(--window-titlebar-control-height)+1rem)] pl-3 transition-[padding] duration-500 ease-out-expo',
           shouldReserveWindowControlsSpace &&
-            'pl-[calc(var(--window-titlebar-leading-offset)+var(--window-titlebar-control-height)+0.75rem)]',
+            'pl-[calc(var(--window-titlebar-leading-offset)+var(--window-titlebar-control-height)+0.25rem+var(--window-titlebar-home-action-width)+0.75rem)]',
         )
       "
     >
