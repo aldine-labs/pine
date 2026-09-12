@@ -11,6 +11,7 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PineToolAccessPolicy } from "../tool-access-policy";
@@ -21,7 +22,7 @@ import { createSandboxFileIO } from "../sandbox/files";
 
 const roots: string[] = [];
 async function fixture() {
-  const root = await mkdtemp("/private/tmp/pine-isolation-");
+  const root = await mkdtemp(path.join(os.tmpdir(), "pine-isolation-"));
   roots.push(root);
   const cwd = path.join(root, "项目 with spaces");
   const temp = path.join(cwd, "tmp");
