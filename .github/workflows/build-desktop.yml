@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node for Vitest
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -52,7 +52,7 @@ jobs:
       - name: Setup Node for Electron Forge
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
