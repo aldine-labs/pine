@@ -30,12 +30,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node for Vitest
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -58,12 +59,13 @@ jobs:
           - x64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node for Electron Forge
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -105,7 +107,7 @@ jobs:
           echo "name=$ASSET" >> "$GITHUB_OUTPUT"
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pine-darwin-${{ matrix.arch }}-${{ github.sha }}
           path: release-assets/${{ steps.installer.outputs.name }}
@@ -118,12 +120,13 @@ jobs:
     needs: check
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node for Electron Forge
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -168,7 +171,9 @@ jobs:
         run: |
           $package = Get-ChildItem "apps/desktop/out" -Directory -Filter "Pine-win32-x64" | Select-Object -First 1
           if (-not $package) { throw "Packaged Windows app was not produced" }
-          $sandboxRuntime = Join-Path $package.FullName "resources/app/node_modules/@anthropic-ai/sandbox-runtime/vendor/srt-win/x64/srt-win.exe"
+          $archive = Join-Path $package.FullName "resources/app.asar"
+          if (-not (Test-Path $archive)) { throw "The packaged app.asar is missing" }
+          $sandboxRuntime = Join-Path $package.FullName "resources/app.asar.unpacked/node_modules/@anthropic-ai/sandbox-runtime/vendor/srt-win/x64/srt-win.exe"
           if (-not (Test-Path $sandboxRuntime)) { throw "The Windows sandbox helper is missing from the package" }
           $process = Start-Process -FilePath (Join-Path $package.FullName "Pine.exe") -ArgumentList "--smoke-test" -PassThru
           if (-not $process.WaitForExit(30000)) {
@@ -176,6 +181,30 @@ jobs:
             throw "The packaged Windows app did not finish its smoke test"
           }
           if ($process.ExitCode -ne 0) { throw "The packaged Windows app exited with code $($process.ExitCode)" }
+
+      - name: Install and launch Squirrel package
+        shell: pwsh
+        run: |
+          $makeDirectory = "apps/desktop/out/make/squirrel.windows/x64"
+          $setup = Get-ChildItem $makeDirectory -File -Filter "*.exe" | Select-Object -First 1
+          if (-not $setup) { throw "Squirrel Setup.exe was not produced" }
+          $installer = Start-Process -FilePath $setup.FullName -ArgumentList "--silent" -PassThru
+          if (-not $installer.WaitForExit(120000)) {
+            Stop-Process -Id $installer.Id -Force
+            throw "The Squirrel installer did not finish"
+          }
+          if ($installer.ExitCode -ne 0) { throw "The Squirrel installer exited with code $($installer.ExitCode)" }
+          $installRoot = Join-Path $env:LOCALAPPDATA "Pine"
+          $installed = Get-ChildItem $installRoot -Recurse -File -Filter "Pine.exe" |
+            Where-Object { $_.Directory.Name -like "app-*" } |
+            Select-Object -First 1
+          if (-not $installed) { throw "The installed Pine executable was not found" }
+          $process = Start-Process -FilePath $installed.FullName -ArgumentList "--smoke-test" -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "The installed Windows app did not finish its smoke test"
+          }
+          if ($process.ExitCode -ne 0) { throw "The installed Windows app exited with code $($process.ExitCode)" }
 
       - name: Stage Windows update assets
         id: installer
@@ -198,7 +227,7 @@ jobs:
           "name=$asset" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Upload Windows installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pine-win32-x64-${{ github.sha }}
           path: release-assets/*
