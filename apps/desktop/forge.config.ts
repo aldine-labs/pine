@@ -140,6 +140,8 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
+      name: "Pine",
+      exe: "Pine.exe",
       setupExe: "PineSetup.exe",
       setupIcon: path.join(__dirname, "resources/icon.ico"),
       windowsSign,
