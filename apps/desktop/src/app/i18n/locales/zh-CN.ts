@@ -372,8 +372,6 @@ export default {
       guide: "拒绝并说明要求",
     },
     questionnaireRequest: {
-      title: "需要你来决定",
-      description: "选择一个选项，或输入你自己的答案。",
       progress: "第 {current} 题，共 {total} 题",
       customAnswer: "输入其他答案…",
       required: "请先选择或输入答案。",
@@ -505,6 +503,11 @@ export default {
       },
       tools: {
         operationSeparator: "：",
+        questionnaire: {
+          complete: "已获得 {count} 个问题的答案",
+          error: "准备问题失败",
+          running: "正在准备询问一些问题",
+        },
         reviewing: "正在审核 {tool}：",
         writeLines: "（{count} 行）",
         denied: "已拒绝 {tool}：",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
 import MarkdownContent from "@/components/markdown/MarkdownContent.vue";
@@ -51,6 +51,18 @@ const items = props.questionnaire.questionnaire.questions.map(
       value: `option:${optionIndex}`,
     })),
   }),
+);
+const activeItem = ref(items[0]?.name ?? "");
+const activeQuestionIndex = computed(() =>
+  Math.max(
+    0,
+    items.findIndex((item) => item.name === activeItem.value),
+  ),
+);
+const activeQuestion = computed(
+  () =>
+    props.questionnaire.questionnaire.questions[activeQuestionIndex.value] ??
+    props.questionnaire.questionnaire.questions[0],
 );
 
 function respond(submission: AskUserQuestionSubmission): void {
@@ -112,20 +124,24 @@ function cancel(): void {
   <Card data-slot="questionnaire-card">
     <Questionnaire
       :key="questionnaire.requestId"
+      v-model:item="activeItem"
       :items="items"
       shortcuts="letters"
       @submit="handleSubmit"
     >
       <CardHeader>
-        <div class="flex items-center justify-between gap-3">
-          <CardTitle>{{ t("project.questionnaireRequest.title") }}</CardTitle>
-          <QuestionnaireProgress v-slot="{ current, total }">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex min-w-0 flex-col gap-1.5">
+            <CardTitle>{{ activeQuestion?.question }}</CardTitle>
+            <CardDescription>{{ activeQuestion?.header }}</CardDescription>
+          </div>
+          <QuestionnaireProgress
+            v-slot="{ current, total }"
+            class="min-w-0 shrink-0 text-end"
+          >
             {{ t("project.questionnaireRequest.progress", { current, total }) }}
           </QuestionnaireProgress>
         </div>
-        <CardDescription>
-          {{ t("project.questionnaireRequest.description") }}
-        </CardDescription>
       </CardHeader>
 
       <CardContent>
@@ -137,8 +153,10 @@ function cancel(): void {
           :multiple="question.multiSelect"
           required
         >
-          <QuestionnaireTitle>{{ question.question }}</QuestionnaireTitle>
-          <QuestionnaireDescription>
+          <QuestionnaireTitle class="sr-only">
+            {{ question.question }}
+          </QuestionnaireTitle>
+          <QuestionnaireDescription class="sr-only">
             {{ question.header }}
           </QuestionnaireDescription>
           <QuestionnaireChoices>
@@ -176,19 +194,24 @@ function cancel(): void {
       </CardContent>
 
       <CardFooter>
-        <QuestionnaireActions>
-          <QuestionnairePrevious>
+        <QuestionnaireActions class="flex justify-end">
+          <QuestionnairePrevious class="me-auto">
             {{ t("project.questionnaireRequest.previous") }}
           </QuestionnairePrevious>
-          <Button type="button" variant="ghost" @click="cancel">
-            {{ t("project.questionnaireRequest.cancel") }}
-          </Button>
-          <QuestionnaireNext>
-            {{ t("project.questionnaireRequest.next") }}
-          </QuestionnaireNext>
-          <QuestionnaireSubmit>
-            {{ t("project.questionnaireRequest.submit") }}
-          </QuestionnaireSubmit>
+          <div
+            data-slot="questionnaire-primary-actions"
+            class="flex items-center gap-2"
+          >
+            <Button type="button" variant="ghost" @click="cancel">
+              {{ t("project.questionnaireRequest.cancel") }}
+            </Button>
+            <QuestionnaireNext>
+              {{ t("project.questionnaireRequest.next") }}
+            </QuestionnaireNext>
+            <QuestionnaireSubmit>
+              {{ t("project.questionnaireRequest.submit") }}
+            </QuestionnaireSubmit>
+          </div>
         </QuestionnaireActions>
       </CardFooter>
     </Questionnaire>

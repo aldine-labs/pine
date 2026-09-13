@@ -395,8 +395,6 @@ export default {
       guide: "Reject with guidance",
     },
     questionnaireRequest: {
-      title: "Your input is needed",
-      description: "Choose an option or enter your own answer.",
       progress: "Question {current} of {total}",
       customAnswer: "Type something…",
       required: "Choose an answer to continue.",
@@ -528,6 +526,11 @@ export default {
       },
       tools: {
         operationSeparator: ": ",
+        questionnaire: {
+          complete: "Received answers to {count} questions",
+          error: "Couldn’t prepare the questions",
+          running: "Preparing some questions",
+        },
         reviewing: "Reviewing {tool}: ",
         writeLines: "({count} lines)",
         denied: "Denied {tool}: ",

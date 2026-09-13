@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { AlertCircleIcon, CheckIcon, ShieldBanIcon } from "@lucide/vue";
+import {
+  AlertCircleIcon,
+  CheckIcon,
+  CircleHelpIcon,
+  ShieldBanIcon,
+} from "@lucide/vue";
 import { computed, ref, type Component, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
@@ -25,7 +30,19 @@ const props = defineProps<{
 const { t } = useI18n();
 const MAX_WEB_PAGE_TITLE_LENGTH = 24;
 
-const kindIcon: Component = TOOL_KIND_ICON[toolKind(props.toolCall.name)];
+function normalizedToolName(name: string): string {
+  return name.toLowerCase().split(/[.:/]/).at(-1) ?? name;
+}
+
+function isAskUserQuestionTool(name: string): boolean {
+  return ["ask_user_question", "ask_user_questions"].includes(
+    normalizedToolName(name),
+  );
+}
+
+const kindIcon: Component = isAskUserQuestionTool(props.toolCall.name)
+  ? CircleHelpIcon
+  : TOOL_KIND_ICON[toolKind(props.toolCall.name)];
 
 const isRunning = computed(() => isRunningTool(props.toolCall));
 const isDenied = computed(() => isDeniedTool(props.toolCall));
@@ -102,6 +119,11 @@ function toolOutputText(value: unknown): string | undefined {
   if (typeof record.text === "string") return record.text;
   if (record.content !== undefined) return toolOutputText(record.content);
   return undefined;
+}
+
+function questionnaireAnswerCount(output: unknown): number {
+  const answers = inputRecord(inputRecord(output).details).answers;
+  return Array.isArray(answers) ? answers.length : 0;
 }
 
 function tinyFishResponseFromOutput(output: unknown): Record<string, unknown> {
@@ -391,6 +413,25 @@ const presentation = computed(() => {
           : props.toolCall.status === "error"
             ? "error"
             : "complete";
+  if (isAskUserQuestionTool(props.toolCall.name)) {
+    const summary =
+      state === "complete"
+        ? t("project.transcript.tools.questionnaire.complete", {
+            count: questionnaireAnswerCount(props.toolCall.output),
+          })
+        : state === "error" || state === "denied"
+          ? t("project.transcript.tools.questionnaire.error")
+          : t("project.transcript.tools.questionnaire.running");
+    return {
+      before: summary,
+      operation: undefined,
+      separator: "",
+      target: "",
+      purpose: undefined,
+      faviconDataUrl: undefined,
+      after: "",
+    };
+  }
   if (state === "reviewing" || state === "awaiting" || state === "denied") {
     // The state name differs from its i18n key ("awaiting" →
     // "awaitingApproval"), so map it explicitly.
@@ -517,9 +558,10 @@ const fullText = computed(() => {
           class="mx-0.5 inline-block size-4 shrink-0 rounded-sm object-contain align-[-0.2em]"
           @error="faviconError = true"
         />
-        <code class="font-mono text-sm font-normal">{{
-          presentation.target
-        }}</code
+        <code
+          v-if="presentation.target"
+          class="font-mono text-sm font-normal"
+          >{{ presentation.target }}</code
         ><span
           v-if="presentation.purpose"
           data-tool-purpose

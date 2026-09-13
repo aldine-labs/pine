@@ -1,4 +1,5 @@
 import { mount } from "@vue/test-utils";
+import { CircleHelpIcon } from "@lucide/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAppI18n } from "@/app/i18n";
 import ProjectCompactionMarker from "../ProjectCompactionMarker.vue";
@@ -195,6 +196,41 @@ describe("project transcript markers", () => {
     expect(wrapper.get('[data-slot="marker"]').attributes("aria-live")).toBe(
       "polite",
     );
+  });
+
+  it("renders questionnaire tool progress without exposing its raw name", async () => {
+    const wrapper = mount(ProjectToolCallMarker, {
+      props: {
+        toolCall: {
+          id: "tool-questionnaire",
+          input: { questions: [{ question: "Choose an approach" }] },
+          name: "ask_user_question",
+          status: "running",
+        },
+      },
+      global: { plugins: [createAppI18n("zh-CN")] },
+    });
+
+    const content = wrapper.get('[data-slot="marker-content"]');
+    expect(content.text()).toBe("正在准备询问一些问题");
+    expect(content.find("code").exists()).toBe(false);
+    expect(wrapper.findComponent(CircleHelpIcon).exists()).toBe(true);
+
+    await wrapper.setProps({
+      toolCall: {
+        ...wrapper.props("toolCall"),
+        status: "complete",
+        output: {
+          details: {
+            answers: [{ questionIndex: 0 }, { questionIndex: 1 }],
+            cancelled: false,
+          },
+        },
+      },
+    });
+
+    expect(content.text()).toBe("已获得 2 个问题的答案");
+    expect(content.classes()).not.toContain("shimmer");
   });
 
   it("shows the filename when a read completes", () => {

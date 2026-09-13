@@ -1,32 +1,33 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import type { AskUserQuestionParams } from "@pine/rpiv-ask-user-question";
 import { createAppI18n } from "@/app/i18n";
 import ProjectQuestionnaireCard from "../ProjectQuestionnaireCard.vue";
 
-function mountCard() {
+const question: AskUserQuestionParams["questions"][number] = {
+  header: "Approach",
+  question: "How should Pine proceed?",
+  options: [
+    {
+      label: "Small patch",
+      description: "Keep the implementation narrow.",
+      preview: "**Small** preview",
+    },
+    {
+      label: "Full adapter",
+      description: "Build a reusable package boundary.",
+    },
+  ],
+};
+
+function mountCard(questions: AskUserQuestionParams["questions"] = [question]) {
   return mount(ProjectQuestionnaireCard, {
     props: {
       questionnaire: {
         requestId: "019cfe51-7166-79b9-a5b9-c652fcca9eab",
         toolCallId: "tool-1",
         questionnaire: {
-          questions: [
-            {
-              header: "Approach",
-              question: "How should Pine proceed?",
-              options: [
-                {
-                  label: "Small patch",
-                  description: "Keep the implementation narrow.",
-                  preview: "**Small** preview",
-                },
-                {
-                  label: "Full adapter",
-                  description: "Build a reusable package boundary.",
-                },
-              ],
-            },
-          ],
+          questions,
         },
       },
     },
@@ -43,6 +44,53 @@ function mountCard() {
 }
 
 describe("ProjectQuestionnaireCard", () => {
+  it("uses the current question as the card heading and keeps actions compact", () => {
+    const wrapper = mountCard();
+
+    expect(wrapper.get('[data-slot="card-title"]').text()).toBe(
+      "How should Pine proceed?",
+    );
+    expect(wrapper.get('[data-slot="card-description"]').text()).toBe(
+      "Approach",
+    );
+    expect(wrapper.text()).not.toContain("Your input is needed");
+    const progressClasses = wrapper
+      .get('[data-slot="questionnaire-progress"]')
+      .classes();
+    expect(progressClasses).toEqual(
+      expect.arrayContaining(["min-w-0", "shrink-0", "text-end"]),
+    );
+    expect(progressClasses).not.toContain("min-w-[14ch]");
+    expect(
+      wrapper.get('[data-slot="questionnaire-actions"]').classes(),
+    ).toContain("flex");
+    expect(
+      wrapper.get('[data-slot="questionnaire-primary-actions"]').classes(),
+    ).toEqual(expect.arrayContaining(["flex", "items-center", "gap-2"]));
+  });
+
+  it("updates the card heading when moving to the next question", async () => {
+    const wrapper = mountCard([
+      question,
+      {
+        header: "Timing",
+        question: "When should Pine start?",
+        options: [
+          { label: "Now", description: "Start immediately." },
+          { label: "Later", description: "Wait for another change." },
+        ],
+      },
+    ]);
+
+    await wrapper.findAll('input[type="radio"]')[0].setValue(true);
+    await wrapper.get('[data-slot="questionnaire-next"]').trigger("click");
+
+    expect(wrapper.get('[data-slot="card-title"]').text()).toBe(
+      "When should Pine start?",
+    );
+    expect(wrapper.get('[data-slot="card-description"]').text()).toBe("Timing");
+  });
+
   it("submits a selected authored option and shows its preview", async () => {
     const wrapper = mountCard();
     await wrapper.findAll('input[type="radio"]')[0].setValue(true);
