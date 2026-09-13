@@ -48,8 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/Starlight-Intelligence/pine/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/Starlight-Intelligence/pine/compare/v0.1.2...v0.2.0
-[0.1.2]: https://github.com/Starlight-Intelligence/pine/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/Starlight-Intelligence/pine/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/Starlight-Intelligence/pine/releases/tag/v0.1.0
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/phosphoros-works/pine/compare/v0.1.2...v0.2.0
+[0.1.2]: https://github.com/phosphoros-works/pine/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/phosphoros-works/pine/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/phosphoros-works/pine/releases/tag/v0.1.0

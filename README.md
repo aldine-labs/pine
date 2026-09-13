@@ -61,7 +61,7 @@ Pine 是这些人的桌面 harness：
 需要 [Bun](https://bun.sh/)，版本以根目录 `package.json` 的 `packageManager` 为准。
 
 ```bash
-git clone https://github.com/Starlight-Intelligence/pine.git
+git clone https://github.com/phosphoros-works/pine.git
 cd pine
 bun install --frozen-lockfile
 bun run dev

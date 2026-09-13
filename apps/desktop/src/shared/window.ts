@@ -8,9 +8,9 @@ export const GET_APP_VERSION_CHANNEL = "app:get-version" as const;
 export const OPEN_EXTERNAL_URL_CHANNEL = "shell:open-external" as const;
 
 export const PINE_REPOSITORY_URL =
-  "https://github.com/Starlight-Intelligence/pine" as const;
+  "https://github.com/phosphoros-works/pine" as const;
 export const PINE_RELEASES_URL =
-  "https://github.com/Starlight-Intelligence/pine/releases" as const;
+  "https://github.com/phosphoros-works/pine/releases" as const;
 
 export const TRANSPARENT_WINDOW_BACKGROUND = "#00000000" as const;
 export const OPAQUE_WINDOW_BACKGROUND = "#FFFFFFFF" as const;
