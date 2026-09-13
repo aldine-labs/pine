@@ -1,11 +1,22 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createBashEnvironment,
   createNativeBashEnvironment,
   resolveLoginPath,
+  resolveUserBunPath,
 } from "../bash-env";
 
 describe("createBashEnvironment", () => {
+  it("uses the host-specific Bun executable name", () => {
+    expect(path.basename(resolveUserBunPath("/home/pine", "win32"))).toBe(
+      "bun.exe",
+    );
+    expect(path.basename(resolveUserBunPath("/Users/pine", "darwin"))).toBe(
+      "bun",
+    );
+  });
+
   it("prepends the project bin directory to the login PATH", () => {
     const environment = createBashEnvironment(
       { HOME: "/Users/dev", LANG: "en_US.UTF-8" },

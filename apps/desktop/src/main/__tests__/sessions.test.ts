@@ -469,6 +469,27 @@ describe("ProjectSessionService", () => {
     }
   });
 
+  it("uses a portable fallback for Windows-reserved export names", async () => {
+    const rootPath = await createTemporaryProjectData();
+    const options = serviceOptions(rootPath);
+    await mkdir(options.cwd, { recursive: true });
+    const environment = new NodeExecutionEnv({ cwd: options.cwd });
+    const repository = createRepository(environment, options.sessionsRoot);
+    const session = await createSession(repository, options.cwd);
+    await session.setName("CON", BACKGROUND_CONTEXT);
+    const metadata = session.metadata;
+    const service = await ProjectSessionService.create(options);
+
+    try {
+      const result = await service.exportSession(metadata.id, "auto-approve");
+
+      expect(result.fileName).toBe(`conversation-${metadata.id}.md`);
+    } finally {
+      await service.dispose();
+      await environment.cleanup(BACKGROUND_CONTEXT);
+    }
+  });
+
   it("restores assistant request errors from session history", async () => {
     const rootPath = await createTemporaryProjectData();
     const options = serviceOptions(rootPath);

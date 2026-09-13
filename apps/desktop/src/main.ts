@@ -193,6 +193,11 @@ if (started) {
   app.quit();
 }
 
+if (process.platform === "win32") {
+  // Squirrel uses this identity for shortcuts and taskbar pinning.
+  app.setAppUserModelId("com.squirrel.Pine.Pine");
+}
+
 const isSmokeTest = process.argv.includes("--smoke-test");
 
 // Must run before app ready. The attachment image protocol lets the renderer
@@ -727,7 +732,9 @@ const createWindow = () => {
     show: false,
     autoHideMenuBar: process.platform !== "darwin",
     webPreferences: {
+      allowRunningInsecureContent: false,
       contextIsolation: true,
+      experimentalFeatures: false,
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
@@ -755,6 +762,9 @@ const createWindow = () => {
     void projectRuntimes?.dispose(webContentsId);
   });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event) => {
+    event.preventDefault();
+  });
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {

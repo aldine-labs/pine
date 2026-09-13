@@ -8,6 +8,7 @@ import {
   MACOS_RUNTIME_FILES,
 } from "../bash-sandbox";
 import type { PineToolAccessPolicy } from "../tool-access-policy";
+import { resolveSpawnableResourcePath } from "./runtime-path";
 
 /** Authority snapshot; no project-controlled config or implicit HOME grants. */
 export function createSandboxConfig(
@@ -78,7 +79,7 @@ export function createSandboxConfig(
       enableWeakerNestedSandbox: false,
       enableWeakerNetworkIsolation: false,
       windows: {
-        srtWin: { path: VENDORED_SRT_WIN_EXE },
+        srtWin: { path: resolveSpawnableResourcePath(VENDORED_SRT_WIN_EXE) },
       },
     };
   }

@@ -1,4 +1,5 @@
 import type { WindowsSandboxStatus } from "../shared/windowsSandbox";
+import { resolveSpawnableResourcePath } from "../agent/sandbox/runtime-path";
 
 async function runtime() {
   return import("@anthropic-ai/sandbox-runtime");
@@ -6,7 +7,9 @@ async function runtime() {
 
 async function resolvedSrtWin() {
   const { resolveSrtWin, VENDORED_SRT_WIN_EXE } = await runtime();
-  return resolveSrtWin({ path: VENDORED_SRT_WIN_EXE });
+  return resolveSrtWin({
+    path: resolveSpawnableResourcePath(VENDORED_SRT_WIN_EXE),
+  });
 }
 
 export async function getWindowsSandboxStatus(

@@ -39,7 +39,11 @@ import {
   type AskUserQuestionSubmission,
 } from "@pine/rpiv-ask-user-question";
 import type { AgentSessionLocation } from "./protocol";
-import { createNativeBashEnvironment, resolveLoginPath } from "./bash-env";
+import {
+  createNativeBashEnvironment,
+  resolveLoginPath,
+  resolveUserBunPath,
+} from "./bash-env";
 import {
   createScopedBashOperations,
   SandboxCommandPermissionError,
@@ -276,7 +280,7 @@ export async function createPineToolDefinitions(
   const loginPath = await resolveLoginPath();
   // Bun's standalone installer puts a single executable in HOME. Grant that
   // exact executable (and its canonical target), never its parent directory.
-  const bunPath = path.join(os.homedir(), ".bun", "bin", "bun");
+  const bunPath = resolveUserBunPath(os.homedir());
   const canonicalBunPath = await realpath(bunPath).catch(() => null);
   const runtimeFiles = [
     ...(canonicalBunPath ? [bunPath, canonicalBunPath] : []),

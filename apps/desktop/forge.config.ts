@@ -103,6 +103,20 @@ const windowsSign =
 
 const config: ForgeConfig = {
   packagerConfig: {
+    // ASAR avoids Windows long-path issues and reduces small-file startup I/O.
+    // srt-win is spawned by the OS, so it must remain a real unpacked file.
+    asar: {
+      unpack: path.join(
+        "**",
+        "node_modules",
+        "@anthropic-ai",
+        "sandbox-runtime",
+        "vendor",
+        "srt-win",
+        "**",
+        "*",
+      ),
+    },
     // Packager discovers icon.icon and compiles its native Assets.car on macOS;
     // icon.icns is Apple's generated legacy fallback, icon.ico is for Windows.
     icon: path.join(__dirname, "resources/icon"),

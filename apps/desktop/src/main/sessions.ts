@@ -9,6 +9,7 @@ import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import sanitizeFilename from "sanitize-filename";
 import type {
   LoadSessionMessagesResult,
   PineSessionModel,
@@ -287,12 +288,13 @@ function sessionDisplayName(
   summary: PineSessionSummary,
   extension: string,
 ): string {
-  const base = (summary.name || summary.preview || `conversation-${summary.id}`)
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/gu, "-")
+  const fallback = `conversation-${summary.id}`;
+  const candidate = (summary.name || summary.preview || fallback)
     .replace(/\s+/gu, " ")
     .trim()
     .slice(0, 100);
-  return `${base || `conversation-${summary.id}`}.${extension}`;
+  const base = sanitizeFilename(candidate, { replacement: "-" });
+  return `${base && !/^[.\s-]+$/u.test(base) ? base : fallback}.${extension}`;
 }
 
 function exportFileName(summary: PineSessionSummary): string {

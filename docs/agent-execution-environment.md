@@ -55,6 +55,9 @@ SRT 的字面路径是递归匹配，Pine 通过单字符 glob 编译精确祖�
 这是本机路径/网络隔离，不是独立虚拟机或文件系统快照。预先存在的硬链接、并发创建
 硬链接、独立进程组、资源耗尽与允许的系统服务仍需要更强隔离方案。文件工具的 link
 检查不能等价为整个 shell 的 inode 隔离。其他应用/原生操作主动更改授权目录也不受 Pine
-控制。Windows 安装包由 `windows-latest` 构建并执行打包产物启动冒烟检查；沙箱首次使用仍需用户在设置中批准一次 UAC 安装。Linux 尚未接入。
+控制。桌面应用使用 ASAR 打包，必须作为独立进程启动的 `srt-win.exe` 会解包到
+`app.asar.unpacked`，运行时统一解析该物理路径。Windows 安装包由 `windows-latest` 构建，
+CI 同时启动未安装产物并静默安装 Squirrel 包后再次启动验证；沙箱首次使用仍需用户在
+设置中批准一次 UAC 安装。Linux 尚未接入。
 
 实现与验证记录见 [沙箱审计](architecture/sandbox-audit.md)。

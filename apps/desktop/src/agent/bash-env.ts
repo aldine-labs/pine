@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { getPowerShellConfig } from "@earendil-works/pi-coding-agent";
 
@@ -7,6 +8,19 @@ const LOGIN_PATH_TIMEOUT_MS = 10_000;
 
 let cachedLoginPath: string | null = null;
 let loginPathFailed = false;
+
+/** Resolve Bun's standard per-user install without hard-coded separators. */
+export function resolveUserBunPath(
+  homeDirectory: string = os.homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return path.join(
+    homeDirectory,
+    ".bun",
+    "bin",
+    platform === "win32" ? "bun.exe" : "bun",
+  );
+}
 
 /**
  * Resolve the user's login-shell PATH once and cache it.
