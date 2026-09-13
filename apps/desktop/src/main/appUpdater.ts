@@ -9,6 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import type { AutoUpdater } from "electron";
 import type {
   DownloadUpdateResult,
   InstallUpdateResult,
@@ -38,6 +39,15 @@ export interface AppUpdaterOptions {
   platform: NodeJS.Platform;
   quit: () => void;
   tempDirectory: string;
+  windowsUpdater?: Pick<
+    AutoUpdater,
+    | "checkForUpdates"
+    | "on"
+    | "once"
+    | "quitAndInstall"
+    | "removeListener"
+    | "setFeedURL"
+  >;
 }
 
 const VERSION_PATTERN =
@@ -88,6 +98,13 @@ export function resolveCurrentAppPath(executablePath: string): string | null {
   const markerIndex = executablePath.indexOf(marker);
   if (markerIndex === -1) return null;
   return executablePath.slice(0, markerIndex + ".app".length);
+}
+
+export function resolveWindowsFeedUrl(
+  manifestUrl: string,
+  arch: NodeJS.Architecture,
+): string {
+  return new URL(`win32-${arch}/`, new URL(".", manifestUrl)).href;
 }
 
 function requireString(
@@ -272,13 +289,16 @@ export class AppUpdater {
   private readonly fetchImpl: typeof fetch;
   private downloadedPath: string | null = null;
   private update: UpdateManifest | null = null;
+  private windowsUpdateReady = false;
 
   constructor(private readonly options: AppUpdaterOptions) {
     this.fetchImpl = options.fetch ?? fetch;
   }
 
   async check(): Promise<UpdateCheckResult> {
-    if (this.options.platform !== "darwin") return { status: "unsupported" };
+    if (!["darwin", "win32"].includes(this.options.platform)) {
+      return { status: "unsupported" };
+    }
     if (!this.options.manifestUrl) return { status: "unconfigured" };
 
     const checkUrl = new URL(this.options.manifestUrl);
@@ -320,6 +340,10 @@ export class AppUpdater {
     const asset =
       this.update.assets[`${this.options.platform}-${this.options.arch}`];
     if (!asset) throw new Error("No compatible installer is available");
+
+    if (this.options.platform === "win32") {
+      return await this.downloadWindowsUpdate();
+    }
 
     await mkdir(this.options.tempDirectory, { recursive: true });
     const destination = path.join(
@@ -385,6 +409,13 @@ export class AppUpdater {
   }
 
   async install(): Promise<InstallUpdateResult> {
+    if (this.options.platform === "win32") {
+      if (!this.windowsUpdateReady || !this.options.windowsUpdater) {
+        throw new Error("No downloaded Windows update is ready");
+      }
+      this.options.windowsUpdater.quitAndInstall();
+      return { started: true };
+    }
     if (this.options.platform !== "darwin" || !this.downloadedPath) {
       throw new Error("No downloaded macOS update is ready");
     }
@@ -412,5 +443,48 @@ export class AppUpdater {
     child.unref();
     setTimeout(this.options.quit, 250);
     return { started: true };
+  }
+
+  private async downloadWindowsUpdate(): Promise<DownloadUpdateResult> {
+    const updater = this.options.windowsUpdater;
+    if (!updater || !this.options.manifestUrl) {
+      throw new Error("Windows updates are not configured");
+    }
+    const manifestUrl = this.options.manifestUrl;
+
+    return await new Promise<DownloadUpdateResult>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error("Windows update download timed out"));
+      }, 30 * 60_000);
+      const onError = (error: Error): void => {
+        cleanup();
+        reject(error);
+      };
+      const onUnavailable = (): void => {
+        cleanup();
+        reject(new Error("The Windows update feed has no compatible release"));
+      };
+      const onDownloaded = (): void => {
+        cleanup();
+        this.windowsUpdateReady = true;
+        this.options.emit({ type: "download-ready" });
+        resolve({ ready: true });
+      };
+      const cleanup = (): void => {
+        clearTimeout(timeout);
+        updater.removeListener("error", onError);
+        updater.removeListener("update-not-available", onUnavailable);
+        updater.removeListener("update-downloaded", onDownloaded);
+      };
+
+      updater.on("error", onError);
+      updater.once("update-not-available", onUnavailable);
+      updater.once("update-downloaded", onDownloaded);
+      updater.setFeedURL({
+        url: resolveWindowsFeedUrl(manifestUrl, this.options.arch),
+      });
+      updater.checkForUpdates();
+    });
   }
 }

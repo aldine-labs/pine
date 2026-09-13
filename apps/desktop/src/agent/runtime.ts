@@ -53,6 +53,7 @@ import {
 } from "./protocol";
 import {
   PINE_SYSTEM_PROMPT,
+  systemPromptForPlatform,
   systemPromptWithUserProfile,
   systemPromptWithCurrentMonth,
   systemPromptForApprovalMode,
@@ -146,7 +147,7 @@ Call submit_ruling exactly once with a rulings array containing one verdict for 
 
 const TRIGGER_DESCRIPTIONS: Record<JudgeRequest["trigger"], string> = {
   "sandbox-denied":
-    "The macOS sandbox blocked the command at runtime (EPERM). An allowance re-runs the exact command outside the sandbox.",
+    "The project sandbox blocked the command at runtime. An allowance re-runs the exact command outside the sandbox.",
   "authorize-denied":
     "Pine's folder policy rejected the path. An allowance performs the operation regardless of folder grants.",
   "destructive-pattern":
@@ -379,12 +380,16 @@ export function toolNamesForApprovalMode(
         name as (typeof TINYFISH_TOOL_NAMES)[number],
       ),
   );
-  const withoutBash = withoutNetwork.filter((name) => name !== "bash");
+  const withoutBash = withoutNetwork.filter(
+    (name) => name !== "bash" && name !== "powershell",
+  );
   if (approvalMode === "YOLO") {
     return tinyFishEnabled ? [...withoutBash, ...networkTools] : withoutBash;
   }
   const readIndex = withoutBash.indexOf("read");
-  const privilegedIndex = withoutBash.indexOf("privileged_bash");
+  const privilegedIndex = withoutBash.findIndex(
+    (name) => name === "privileged_bash" || name === "privileged_powershell",
+  );
   const insertionIndex =
     readIndex !== -1
       ? readIndex + 1
@@ -393,7 +398,10 @@ export function toolNamesForApprovalMode(
         : privilegedIndex;
   const result = [
     ...withoutBash.slice(0, insertionIndex),
-    "bash",
+    activeToolNames.includes("powershell") ||
+    withoutBash[privilegedIndex] === "privileged_powershell"
+      ? "powershell"
+      : "bash",
     ...withoutBash.slice(insertionIndex),
   ];
   return tinyFishEnabled ? [...result, ...networkTools] : result;
@@ -1174,7 +1182,7 @@ export class PineAgentRuntime {
         },
       ],
       noThemes: true,
-      systemPromptOverride: () => PINE_SYSTEM_PROMPT,
+      systemPromptOverride: () => systemPromptForPlatform(PINE_SYSTEM_PROMPT),
     });
     await resourceLoader.reload();
     live.gate = this.createGate(

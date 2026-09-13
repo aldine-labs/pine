@@ -29,6 +29,13 @@ export default {
     failed: "The update could not be installed.",
   },
   preferences: {
+    windowsSandbox: "Windows Agent sandbox",
+    windowsSandboxDescription:
+      "Configure an isolated local account and network fence for Agent file and PowerShell tools. The first setup requires one UAC confirmation.",
+    windowsSandboxReady: "Ready",
+    windowsSandboxRequired: "Setup required",
+    windowsSandboxInstall: "Set up sandbox",
+    windowsSandboxInstalling: "Setting up",
     title: "Pine Settings",
     open: "Open Pine settings",
     language: "Language",
@@ -594,6 +601,11 @@ export default {
     },
   },
   errors: {
+    windowsSandbox: {
+      title: "Windows sandbox setup failed",
+      description:
+        "Try again and approve the operation in the Windows UAC prompt.",
+    },
     customModel: {
       title: "Unable to add custom model",
       description: "Check the endpoint and model settings, then try again",

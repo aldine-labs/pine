@@ -155,8 +155,17 @@ import {
   type PineUserProfile,
   type SetUserProfileResult,
 } from "./shared/userProfile";
+import {
+  GET_WINDOWS_SANDBOX_STATUS_CHANNEL,
+  INSTALL_WINDOWS_SANDBOX_CHANNEL,
+  type WindowsSandboxStatus,
+} from "./shared/windowsSandbox";
 
 const pineApi: PineDesktopApi = {
+  getWindowsSandboxStatus: (): Promise<WindowsSandboxStatus> =>
+    ipcRenderer.invoke(GET_WINDOWS_SANDBOX_STATUS_CHANNEL),
+  installWindowsSandbox: (): Promise<WindowsSandboxStatus> =>
+    ipcRenderer.invoke(INSTALL_WINDOWS_SANDBOX_CHANNEL),
   checkForUpdate: (): Promise<UpdateCheckResult> =>
     ipcRenderer.invoke(CHECK_FOR_UPDATE_CHANNEL),
   readProjectFilePreview: (request) =>

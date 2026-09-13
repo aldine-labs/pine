@@ -189,4 +189,18 @@ describe("sandbox policy compilation", () => {
       "cannot safely represent",
     );
   });
+
+  it("configures the packaged Windows sandbox broker explicitly", async () => {
+    const { policy, runtimeFiles } = await fixture();
+    const config = createSandboxConfig(policy, runtimeFiles, "win32");
+
+    expect(
+      config.windows?.srtWin?.path.endsWith(
+        path.join("vendor", "srt-win", process.arch, "srt-win.exe"),
+      ),
+    ).toBe(true);
+    expect(config.network.allowedDomains).toEqual([]);
+    expect(config.network.allowLocalBinding).toBe(false);
+    expect(config.filesystem.allowWrite).toEqual(policy.writableFolders());
+  });
 });

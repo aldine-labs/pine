@@ -11,6 +11,7 @@ import { TreeItem, TreeRoot, TreeVirtualizer } from "reka-ui";
 import { storeToRefs } from "pinia";
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { isValidProjectEntryName } from "@/shared/fileNames";
 import { handleError } from "@/app/errors/errorHandler";
 import { fileIcon } from "@/lib/fileIcon";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +107,7 @@ const operationError = ref("");
 const validName = computed(
   () =>
     entryName.value.trim().length > 0 &&
-    !/[\\/\u0000-\u001f]/u.test(entryName.value) &&
+    isValidProjectEntryName(entryName.value, window.pine.platform) &&
     ![".", ".."].includes(entryName.value),
 );
 let generation = 0;

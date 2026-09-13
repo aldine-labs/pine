@@ -123,7 +123,7 @@ Pine 主进程只需要初始化一次 `AgentHarness`，然后把它的事件通
 | 层              | 技术选择                                    | 理由                                                                               |
 | --------------- | ------------------------------------------- | ---------------------------------------------------------------------------------- |
 | 桌面壳          | **Electron + electron-vite**                | 跨平台、成熟、能真正本地读写文件与调用 shell；electron-vite 官方提供 Vue + TS 模板 |
-| 打包/更新       | **electron-builder + electron-updater**     | 主流 Electron 打包方案，支持 mac/Win/Linux 自动更新                                |
+| 打包/更新       | **Electron Forge + Squirrel.Windows**       | macOS 使用 DMG，Windows 使用签名 Squirrel 安装包和 Electron 原生 autoUpdater        |
 | 前端框架        | **Vue 3 + TypeScript**                      | 用户指定 Vue 生态                                                                  |
 | UI 组件         | **shadcn-vue / reka-ui (radix-vue)**        | shadcn-vue 基于 reka-ui 原子组件，可定制、现代化                                   |
 | 样式            | **Tailwind CSS v4 + @tailwindcss/vite**     | v4 推荐 Vite 原生插件，与 shadcn-vue 配合                                          |

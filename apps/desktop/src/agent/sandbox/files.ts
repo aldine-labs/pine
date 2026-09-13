@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { PineToolAccessPolicy } from "../tool-access-policy";
-import { createBashEnvironment } from "../bash-env";
+import { createBashEnvironment, sandboxShell } from "../bash-env";
 import { createSandboxConfig } from "./policy";
 import { quoteShell, runSandbox } from "./backend";
 import fileSource from "./file-worker.mjs?raw";
@@ -24,11 +24,18 @@ export function createSandboxFileIO(
     targetPath: string,
     extra: Record<string, unknown> = {},
   ): Promise<Buffer> => {
+    const shell = sandboxShell();
+    const executable = quoteShell(process.execPath, shell.kind);
+    const source = quoteShell(fileSource, shell.kind);
+    const command =
+      shell.kind === "powershell"
+        ? `$env:ELECTRON_RUN_AS_NODE='1'; & ${executable} --input-type=module -e ${source}`
+        : `exec /usr/bin/env ELECTRON_RUN_AS_NODE=1 ${executable} --input-type=module -e ${source}`;
     let output = "";
     let overflow = false;
     const result = await runSandbox(
       {
-        command: `exec /usr/bin/env ELECTRON_RUN_AS_NODE=1 ${quoteShell(process.execPath)} --input-type=module -e ${quoteShell(fileSource)}`,
+        command,
         cwd: policy.cwd,
         env: createBashEnvironment(
           undefined,
@@ -40,6 +47,7 @@ export function createSandboxFileIO(
           ...runtimeFiles,
           process.execPath,
         ]),
+        shell: shell.executable,
         stdin: JSON.stringify({ operation, path: targetPath, ...extra }),
       },
       {

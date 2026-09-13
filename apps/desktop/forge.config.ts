@@ -91,6 +91,16 @@ function injectAgentRuntimeDeps(buildPath: string): void {
   }
 }
 
+const windowsCertificateFile = process.env.WINDOWS_CERTIFICATE_FILE;
+const windowsCertificatePassword = process.env.WINDOWS_CERTIFICATE_PASSWORD;
+const windowsSign =
+  windowsCertificateFile && windowsCertificatePassword
+    ? {
+        certificateFile: windowsCertificateFile,
+        certificatePassword: windowsCertificatePassword,
+      }
+    : undefined;
+
 const config: ForgeConfig = {
   packagerConfig: {
     // Packager discovers icon.icon and compiles its native Assets.car on macOS;
@@ -101,6 +111,15 @@ const config: ForgeConfig = {
     osxSign: {
       identity: "-",
     },
+    win32metadata: {
+      CompanyName: "Xinyuan Weng",
+      FileDescription: "Pine desktop client",
+      InternalName: "Pine",
+      OriginalFilename: "Pine.exe",
+      ProductName: "Pine",
+      "requested-execution-level": "asInvoker",
+    },
+    windowsSign,
     extraResource: [
       path.join(__dirname, "resources/icon.png"),
       path.join(__dirname, "../../.pine/release.json"),
@@ -121,7 +140,9 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
+      setupExe: "PineSetup.exe",
       setupIcon: path.join(__dirname, "resources/icon.ico"),
+      windowsSign,
     }),
     new MakerZIP({}, ["darwin"]),
     new MakerDMG({ format: "ULFO" }, ["darwin"]),

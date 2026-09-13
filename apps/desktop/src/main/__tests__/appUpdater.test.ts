@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   AppUpdater,
+  type AppUpdaterOptions,
   compareVersions,
   parseUpdateManifest,
   resolveCurrentAppPath,
+  resolveWindowsFeedUrl,
 } from "../appUpdater";
 
 const manifestUrl = "https://downloads.example.com/pine/latest/update.json";
@@ -18,6 +20,11 @@ const manifest = {
       url: "https://downloads.example.com/pine/releases/v1.2.0/Pine-arm64.dmg",
       sha256: "a".repeat(64),
       size: 100,
+    },
+    "win32-x64": {
+      url: "https://downloads.example.com/pine/releases/v1.2.0/Pine-x64.exe",
+      sha256: "b".repeat(64),
+      size: 120,
     },
   },
 };
@@ -35,6 +42,12 @@ describe("app updater", () => {
       resolveCurrentAppPath("/Applications/Pine.app/Contents/MacOS/Pine"),
     ).toBe("/Applications/Pine.app");
     expect(resolveCurrentAppPath("/usr/local/bin/pine")).toBeNull();
+  });
+
+  it("resolves an architecture-specific Windows Squirrel feed", () => {
+    expect(resolveWindowsFeedUrl(manifestUrl, "x64")).toBe(
+      "https://downloads.example.com/pine/latest/win32-x64/",
+    );
   });
 
   it("accepts assets on the configured R2 origin and prefix", () => {
@@ -82,5 +95,64 @@ describe("app updater", () => {
         version: "1.2.0",
       },
     });
+  });
+
+  it("downloads and installs Windows updates through Squirrel", async () => {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const rawWindowsUpdater = {
+      checkForUpdates: vi.fn(),
+      on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+        listeners.set(event, listener);
+        return rawWindowsUpdater;
+      }),
+      once: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+        listeners.set(event, listener);
+        return rawWindowsUpdater;
+      }),
+      quitAndInstall: vi.fn(),
+      removeListener: vi.fn(
+        (event: string, listener: (...args: unknown[]) => void) => {
+          if (listeners.get(event) === listener) listeners.delete(event);
+          return rawWindowsUpdater;
+        },
+      ),
+      setFeedURL: vi.fn(),
+    };
+    const windowsUpdater = rawWindowsUpdater as unknown as NonNullable<
+      AppUpdaterOptions["windowsUpdater"]
+    >;
+    const emit = vi.fn();
+    const updater = new AppUpdater({
+      arch: "x64",
+      currentExecutable: "C:\\Users\\pine\\AppData\\Local\\Pine\\Pine.exe",
+      currentVersion: "1.1.0",
+      emit,
+      fetch: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(manifest), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        }),
+      ),
+      manifestUrl,
+      platform: "win32",
+      quit: vi.fn(),
+      tempDirectory: "C:\\Temp",
+      windowsUpdater,
+    });
+
+    await expect(updater.check()).resolves.toMatchObject({
+      status: "available",
+    });
+    const download = updater.download();
+    expect(rawWindowsUpdater.setFeedURL).toHaveBeenCalledWith({
+      url: "https://downloads.example.com/pine/latest/win32-x64/",
+    });
+    expect(rawWindowsUpdater.checkForUpdates).toHaveBeenCalledOnce();
+    listeners.get("update-downloaded")?.();
+    await expect(download).resolves.toEqual({ ready: true });
+    expect(emit).toHaveBeenCalledWith({ type: "download-ready" });
+
+    await expect(updater.install()).resolves.toEqual({ started: true });
+    expect(rawWindowsUpdater.quitAndInstall).toHaveBeenCalledOnce();
   });
 });

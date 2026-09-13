@@ -1,5 +1,8 @@
 import path from "node:path";
-import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
+import {
+  VENDORED_SRT_WIN_EXE,
+  type SandboxRuntimeConfig,
+} from "@anthropic-ai/sandbox-runtime";
 import {
   MACOS_RUNTIME_DIRECTORIES,
   MACOS_RUNTIME_FILES,
@@ -10,6 +13,7 @@ import type { PineToolAccessPolicy } from "../tool-access-policy";
 export function createSandboxConfig(
   policy: PineToolAccessPolicy,
   runtimeFiles: string[],
+  platform: NodeJS.Platform = process.platform,
 ): SandboxRuntimeConfig {
   // Electron's executable depends on frameworks elsewhere in its app bundle.
   // Grant the containing installation, including when run outside /Applications.
@@ -54,6 +58,31 @@ export function createSandboxConfig(
       ancestor = path.dirname(ancestor);
     }
   }
+  if (platform === "win32") {
+    return {
+      network: {
+        allowedDomains: [],
+        deniedDomains: [],
+        allowUnixSockets: [],
+        allowLocalBinding: false,
+      },
+      filesystem: {
+        // The dedicated srt-sandbox account has no implicit access to the
+        // caller's profile. Runtime grants are concrete NTFS ACL entries.
+        denyRead: [],
+        allowRead: [...new Set([...runtimeFiles, ...policy.readablePaths()])],
+        allowWrite: policy.writableFolders(),
+        denyWrite: [...runtimeFiles],
+        allowGitConfig: false,
+      },
+      enableWeakerNestedSandbox: false,
+      enableWeakerNetworkIsolation: false,
+      windows: {
+        srtWin: { path: VENDORED_SRT_WIN_EXE },
+      },
+    };
+  }
+
   return {
     network: {
       allowedDomains: [],

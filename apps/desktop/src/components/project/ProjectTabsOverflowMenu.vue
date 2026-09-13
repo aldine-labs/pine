@@ -13,6 +13,7 @@ import {
 import { storeToRefs } from "pinia";
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { isValidProjectEntryName } from "@/shared/fileNames";
 import { handleError } from "@/app/errors/errorHandler";
 import {
   AlertDialog,
@@ -109,7 +110,7 @@ const isTrashConfirmOpen = ref(false);
 const validName = computed(
   () =>
     entryName.value.trim().length > 0 &&
-    !/[\\/\u0000-\u001f]/u.test(entryName.value),
+    isValidProjectEntryName(entryName.value, window.pine.platform),
 );
 
 function requestSessionRename(): void {

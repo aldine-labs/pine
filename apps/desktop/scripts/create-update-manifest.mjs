@@ -26,9 +26,7 @@ const internalVersion = required("INTERNAL_VERSION");
 const publicBaseUrl = required("R2_PUBLIC_BASE_URL").replace(/\/$/, "");
 const prefix = process.env.R2_PREFIX ?? "";
 const changelog = readFileSync(required("CHANGELOG_FILE"), "utf8").trim();
-const files = readdirSync(assetsDirectory).filter((name) =>
-  name.endsWith(".dmg"),
-);
+const files = readdirSync(assetsDirectory);
 const assets = {};
 
 for (const arch of ["arm64", "x64"]) {
@@ -44,6 +42,17 @@ for (const arch of ["arm64", "x64"]) {
     url: `${publicBaseUrl}/${objectKey}`,
   };
 }
+
+const windowsName = files.find((candidate) =>
+  candidate.endsWith("-win32-x64.exe"),
+);
+if (!windowsName) throw new Error("Missing win32-x64 installer");
+const windowsPath = path.join(assetsDirectory, windowsName);
+assets["win32-x64"] = {
+  sha256: await sha256(windowsPath),
+  size: statSync(windowsPath).size,
+  url: `${publicBaseUrl}/${prefix}releases/v${version}/${windowsName}`,
+};
 
 const manifest = {
   schemaVersion: 1,

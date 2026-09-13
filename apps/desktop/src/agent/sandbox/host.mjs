@@ -3,6 +3,8 @@
 import { spawn } from "node:child_process";
 import { writeSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -17,11 +19,13 @@ const stop = () => {
   cancelled = true;
   if (!child?.pid) return;
   try {
-    process.kill(-child.pid, "SIGTERM");
+    if (process.platform === "win32") child.kill();
+    else process.kill(-child.pid, "SIGTERM");
   } catch {}
   killTimer ??= setTimeout(() => {
     try {
-      process.kill(-child.pid, "SIGKILL");
+      if (process.platform === "win32") child.kill();
+      else process.kill(-child.pid, "SIGKILL");
     } catch {}
   }, 500);
 };
@@ -30,35 +34,56 @@ process.on("SIGINT", stop);
 try {
   // Unix socket paths have a small platform limit. This private directory is
   // only used by the trusted supervisor and is never a filesystem grant.
-  controlDirectory = await mkdtemp("/private/tmp/pine-srt-");
-  process.env.TMPDIR = controlDirectory;
+  controlDirectory = await mkdtemp(path.join(os.tmpdir(), "pine-srt-"));
+  if (process.platform !== "win32") process.env.TMPDIR = controlDirectory;
   const { SandboxManager, SandboxRuntimeConfigSchema, getDefaultWritePaths } =
     await import(request.runtimeUrl);
   manager = SandboxManager;
   const config = SandboxRuntimeConfigSchema.parse(request.config);
   // SRT adds these paths even with an explicit allowWrite list. Turn off
   // implicit application scratch grants while retaining device I/O.
-  config.filesystem.denyWrite.push(
-    ...getDefaultWritePaths().filter((target) => !target.startsWith("/dev/")),
-  );
+  if (process.platform !== "win32") {
+    config.filesystem.denyWrite.push(
+      ...getDefaultWritePaths().filter((target) => !target.startsWith("/dev/")),
+    );
+  }
   await SandboxManager.initialize(config, undefined, false);
   if (cancelled) throw new Error("aborted");
-  const wrapped = await SandboxManager.wrapWithSandbox(
-    request.command,
-    "/bin/zsh",
-    undefined,
-    undefined,
-    { commandId: request.id },
-  );
-  if (cancelled) throw new Error("aborted");
-  child = spawn("/bin/zsh", ["-f", "-c", wrapped], {
-    cwd: request.cwd,
-    env: request.env,
-    detached: true,
-    // Only stdout/stderr and the file request reach the sandboxed process.
-    // FD 3 is reserved for supervisor results, inaccessible to the command.
-    stdio: ["pipe", "inherit", "inherit"],
-  });
+  if (process.platform === "win32") {
+    const wrapped = await SandboxManager.wrapWithSandboxArgv(
+      request.command,
+      request.shell ?? "powershell",
+      undefined,
+      undefined,
+      request.cwd,
+      { commandId: request.id },
+    );
+    if (cancelled) throw new Error("aborted");
+    child = spawn(wrapped.argv[0], wrapped.argv.slice(1), {
+      cwd: request.cwd,
+      env: wrapped.env,
+      shell: false,
+      windowsHide: true,
+      stdio: ["pipe", "inherit", "inherit"],
+    });
+  } else {
+    const wrapped = await SandboxManager.wrapWithSandbox(
+      request.command,
+      request.shell ?? "/bin/zsh",
+      undefined,
+      undefined,
+      { commandId: request.id },
+    );
+    if (cancelled) throw new Error("aborted");
+    child = spawn("/bin/zsh", ["-f", "-c", wrapped], {
+      cwd: request.cwd,
+      env: request.env,
+      detached: true,
+      // Only stdout/stderr and the file request reach the sandboxed process.
+      // FD 3 is reserved for supervisor results, inaccessible to the command.
+      stdio: ["pipe", "inherit", "inherit"],
+    });
+  }
   child.stdin.on("error", () => {});
   child.stdin.end(request.stdin ?? "");
   const result = await new Promise((resolve, reject) => {
@@ -68,7 +93,7 @@ try {
   // A command invocation does not own background daemons. End its process
   // group even when the leader exits before the descendants.
   try {
-    process.kill(-child.pid, "SIGKILL");
+    if (process.platform !== "win32") process.kill(-child.pid, "SIGKILL");
   } catch {}
   if (cancelled) throw new Error("aborted");
   report({ kind: "exit", ...result });

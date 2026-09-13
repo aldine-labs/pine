@@ -16,6 +16,8 @@ import {
   createBashToolDefinition,
   createEditToolDefinition,
   createLocalBashOperations,
+  createLocalPowerShellOperations,
+  createPowerShellToolDefinition,
   createReadToolDefinition,
   createWriteToolDefinition,
   defineTool,
@@ -241,6 +243,11 @@ export async function createPineToolDefinitions(
   const getApprovalMode = () =>
     permissions?.getApprovalMode() ?? location.approvalMode ?? "auto-approve";
   const getGate = () => permissions?.getGate() ?? gate ?? null;
+  const isWindows = process.platform === "win32";
+  const shellName = isWindows ? "powershell" : "bash";
+  const privilegedShellName = isWindows
+    ? "privileged_powershell"
+    : "privileged_bash";
   const bashTemporaryDirectory = path.join(
     path.dirname(location.sessionsRoot),
     "tmp",
@@ -284,8 +291,12 @@ export async function createPineToolDefinitions(
   );
 
   // Approval changes authority, not the user's shell environment.
-  const nativeBashTool = createBashToolDefinition(location.cwd, {
-    operations: createLocalBashOperations(),
+  const nativeShellTool = (
+    isWindows ? createPowerShellToolDefinition : createBashToolDefinition
+  )(location.cwd, {
+    operations: isWindows
+      ? createLocalPowerShellOperations()
+      : createLocalBashOperations(),
     spawnHook: (context) => ({
       ...context,
       env: createNativeBashEnvironment(context.env, loginPath, location.cwd),
@@ -330,7 +341,9 @@ export async function createPineToolDefinitions(
     getApprovalMode,
   );
 
-  const bashTool = createBashToolDefinition(location.cwd, {
+  const shellTool = (
+    isWindows ? createPowerShellToolDefinition : createBashToolDefinition
+  )(location.cwd, {
     operations: createScopedBashOperations(
       policy,
       canonicalBashTemporaryDirectory,
@@ -343,31 +356,32 @@ export async function createPineToolDefinitions(
   // must state what each command does. The original execute handles the
   // command/timeout args and ignores the extra description, so we forward
   // straight to it.
-  const pineBashParams = Type.Object({
+  const pineShellParams = Type.Object({
     // First property on purpose: models emit keys in schema order, so the
     // description streams in before the command and can render immediately.
     description: Type.String({
       description:
         "A short, imperative description of what this command does, for the user reading the transcript. Write this argument FIRST, before composing command, so readers see the intent while the call streams in. Write it in the same language the user is using in this conversation, not the model's preferred language.",
     }),
-    command: Type.String({ description: "Bash command to execute" }),
+    command: Type.String({
+      description: `${isWindows ? "PowerShell" : "Bash"} command to execute`,
+    }),
     timeout: Type.Optional(
       Type.Number({
         description: "Timeout in seconds (optional, no default timeout)",
       }),
     ),
   });
-  const sandboxGuidance =
-    " Ordinary bash can read only shared project folders, user-attached files/directories, this project's temporary directory, and installed system/application/toolchain runtime files. Ancestor directories can be listed for toolchain discovery without granting access to sibling file contents. Reading or listing other external paths (including ~/Documents, ~/Downloads, private configs, and unrelated projects) is blocked even in Auto Approve mode. Use privileged_bash directly for those external reads and explain the required access; each call requires approval. Writes are limited to read-write shared folders and this project’s $TMPDIR. System temporary storage, network access, local servers and Unix sockets are blocked. Use privileged_bash with approval when native capabilities are needed. Some runtime-protected configuration files also require native approval.";
-  const pineBashTool = defineTool({
-    ...bashTool,
-    parameters: pineBashParams,
-    prepareArguments: (args) => args as Static<typeof pineBashParams>,
+  const sandboxGuidance = ` Ordinary ${shellName} can read only shared project folders, user-attached files/directories, this project's temporary directory, and installed system/application/toolchain runtime files. Ancestor directories can be listed for toolchain discovery without granting access to sibling file contents. Reading or listing other external paths, private configs, and unrelated projects is blocked even in Auto Approve mode. Use ${privilegedShellName} directly for those external reads and explain the required access; each call requires approval. Writes are limited to read-write shared folders and this project's temporary directory. System temporary storage, network access, and local servers are blocked. Use ${privilegedShellName} with approval when native capabilities are needed. Some runtime-protected configuration files also require native approval.`;
+  const pineShellTool = defineTool({
+    ...shellTool,
+    parameters: pineShellParams,
+    prepareArguments: (args) => args as Static<typeof pineShellParams>,
     execute: async (toolCallId, inputParams, signal, onUpdate, ctx) => {
       const params = structuredClone(inputParams);
       if (getApprovalMode() === "YOLO") {
         throw new Error(
-          "Ordinary bash is disabled in YOLO mode. Use privileged_bash instead.",
+          `Ordinary ${shellName} is disabled in YOLO mode. Use ${privilegedShellName} instead.`,
         );
       }
       const command = params.command;
@@ -382,6 +396,7 @@ export async function createPineToolDefinitions(
       if (currentGate && getApprovalMode() === "let-me-review") {
         const pre = await currentGate.reviewBashCommand({
           toolCallId,
+          toolName: shellName,
           command,
           description,
           signal,
@@ -392,7 +407,7 @@ export async function createPineToolDefinitions(
       }
 
       try {
-        return await bashTool.execute(
+        return await shellTool.execute(
           toolCallId,
           params,
           signal,
@@ -408,17 +423,17 @@ export async function createPineToolDefinitions(
         throw error;
       }
     },
-    description: `${bashTool.description}${sandboxGuidance} The shell is zsh (no user startup files); here-documents are supported. The scratch directory is ${JSON.stringify(canonicalBashTemporaryDirectory)} and is exported as TMPDIR to child processes. Keep diagnostic stderr visible. Explicitly describe what each command does in the description field, written first, in the same language as the user's messages.`,
-    promptSnippet: `${bashTool.promptSnippet}. Reads are restricted to shared folders, attachments, $TMPDIR and runtime files; use privileged_bash directly to read or list other external paths, subject to approval. Use $TMPDIR for temporary files instead of /tmp; always write description before command, in the user's language`,
+    description: `${shellTool.description}${sandboxGuidance} The shell is ${isWindows ? "PowerShell without a profile" : "zsh with no user startup files"}. The scratch directory is ${JSON.stringify(canonicalBashTemporaryDirectory)}. Keep diagnostic stderr visible. Explicitly describe what each command does in the description field, written first, in the same language as the user's messages.`,
+    promptSnippet: `${shellTool.promptSnippet}. Reads are restricted to shared folders, attachments, project temporary storage and runtime files; use ${privilegedShellName} directly to read or list other external paths, subject to approval. Use the project temporary directory for temporary files; always write description before command, in the user's language`,
   });
 
-  const privilegedBashTool =
+  const privilegedShellTool =
     getGate() || getApprovalMode() === "YOLO" || permissions
       ? defineTool({
-          ...nativeBashTool,
-          name: "privileged_bash",
-          parameters: pineBashParams,
-          prepareArguments: (args) => args as Static<typeof pineBashParams>,
+          ...nativeShellTool,
+          name: privilegedShellName,
+          parameters: pineShellParams,
+          prepareArguments: (args) => args as Static<typeof pineShellParams>,
           execute: async (toolCallId, inputParams, signal, onUpdate, ctx) => {
             const params = structuredClone(inputParams);
             const command = params.command;
@@ -433,7 +448,7 @@ export async function createPineToolDefinitions(
               }
               const decision = await currentGate.reviewPrivilegedCall({
                 toolCallId,
-                toolName: "privileged_bash",
+                toolName: privilegedShellName,
                 subject: command,
                 description: params.description,
                 evidence:
@@ -447,7 +462,7 @@ export async function createPineToolDefinitions(
               }
             }
             if (signal?.aborted) throw new Error("aborted");
-            return nativeBashTool.execute(
+            return nativeShellTool.execute(
               toolCallId,
               params,
               signal,
@@ -455,10 +470,8 @@ export async function createPineToolDefinitions(
               ctx,
             );
           },
-          description:
-            "Run a shell command with the user's native permissions, outside Pine's project sandbox. Every call requires a fresh approval unless YOLO mode is active. Use it directly to read files or list directories outside the shared project folders and user attachments: ordinary bash blocks these reads even in Auto Approve mode. Also use it for network access, system temporary storage, external writes, macOS application control (osascript, open, Shortcuts, Automator), launching GUI applications, controlling or signaling processes outside Pine (kill, pkill, killall), or another operation that ordinary bash explicitly reports was denied by the project sandbox. State the needed external access in description. Do not use it for normal project commands or ordinary command errors.",
-          promptSnippet:
-            "Use privileged_bash directly for macOS app/GUI control, external process control, out-of-project filesystem access, or after ordinary bash explicitly says the project sandbox denied an operation. Calls receive a fresh review before native execution unless YOLO mode is active. State why native privileges are required in description before composing command.",
+          description: `Run a ${isWindows ? "PowerShell" : "shell"} command with the user's native permissions, outside Pine's project sandbox. Every call requires a fresh approval unless YOLO mode is active. Use it directly for out-of-project filesystem access, network access, system temporary storage, external writes, GUI application control, or another operation that ordinary ${shellName} explicitly reports was denied by the project sandbox. State the needed external access in description. Do not use it for normal project commands or ordinary command errors.`,
+          promptSnippet: `Use ${privilegedShellName} directly for app/GUI control, external process control, out-of-project filesystem access, or after ordinary ${shellName} explicitly says the project sandbox denied an operation. Calls receive a fresh review before native execution unless YOLO mode is active. State why native privileges are required in description before composing command.`,
         })
       : null;
 
@@ -510,13 +523,13 @@ export async function createPineToolDefinitions(
   return [
     {
       ...gatedReadTool,
-      description: `${gatedReadTool.description} Read shared project files and user attachments. To read files in other external folders, use privileged_bash with an explanation of the needed access; approval is required.`,
-      promptSnippet: `${gatedReadTool.promptSnippet}. For files outside shared folders and user attachments, use privileged_bash subject to approval`,
+      description: `${gatedReadTool.description} Read shared project files and user attachments. To read files in other external folders, use ${privilegedShellName} with an explanation of the needed access; approval is required.`,
+      promptSnippet: `${gatedReadTool.promptSnippet}. For files outside shared folders and user attachments, use ${privilegedShellName} subject to approval`,
     },
-    pineBashTool,
+    pineShellTool,
     gatedEditTool,
     gatedWriteTool,
-    ...(privilegedBashTool ? [privilegedBashTool] : []),
+    ...(privilegedShellTool ? [privilegedShellTool] : []),
     ...(askUserQuestionTool ? [askUserQuestionTool] : []),
     ...tinyFishTools,
   ] as ToolDefinition[];

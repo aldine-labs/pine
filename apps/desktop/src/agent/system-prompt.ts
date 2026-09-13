@@ -48,6 +48,31 @@ Use $TMPDIR rather than /tmp for sandboxed scratch files, and quote paths becaus
 
 Project-specific instructions and reusable skills may appear later in this prompt. Follow them when relevant, while treating the user's current request as the goal to satisfy.`;
 
+/** Adapt the tool contract without duplicating the complete cached prompt. */
+export function systemPromptForPlatform(
+  systemPrompt: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform !== "win32") return systemPrompt;
+  return systemPrompt
+    .replaceAll("privileged_bash", "privileged_powershell")
+    .replaceAll("ordinary bash", "ordinary PowerShell")
+    .replaceAll("Ordinary bash", "Ordinary PowerShell")
+    .replaceAll(
+      "macOS application or GUI control",
+      "Windows application or GUI control",
+    )
+    .replaceAll(
+      "macOS TCC, ACL, an upstream sandbox",
+      "Windows ACLs, UAC, an upstream sandbox",
+    )
+    .replaceAll("Use $TMPDIR rather than /tmp", "Use $env:PINE_TMPDIR")
+    .replaceAll(
+      "here-documents are supported",
+      "PowerShell here-strings are supported",
+    );
+}
+
 const COMMUNICATION_STYLE_PROMPTS: Record<
   PineUserProfile["communicationStyle"],
   string
@@ -121,5 +146,7 @@ export function systemPromptForApprovalMode(
   approvalMode: PineApprovalMode,
 ): string | undefined {
   if (approvalMode !== "YOLO") return undefined;
-  return `${systemPrompt}\n\n${PINE_YOLO_SYSTEM_PROMPT}`;
+  return systemPromptForPlatform(
+    `${systemPrompt}\n\n${PINE_YOLO_SYSTEM_PROMPT}`,
+  );
 }

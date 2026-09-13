@@ -39,7 +39,15 @@ export const TOOL_KIND_ORDER: readonly ToolKind[] = [
 export function toolKind(name: string): ToolKind {
   const normalized = name.toLowerCase().split(/[.:/]/).at(-1) ?? name;
   if (
-    ["bash", "privileged_bash", "exec", "execute", "shell"].includes(normalized)
+    [
+      "bash",
+      "powershell",
+      "privileged_bash",
+      "privileged_powershell",
+      "exec",
+      "execute",
+      "shell",
+    ].includes(normalized)
   ) {
     return "bash";
   }

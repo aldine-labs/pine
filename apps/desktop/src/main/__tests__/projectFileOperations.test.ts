@@ -12,7 +12,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PineProjectFolder } from "../../shared/projects";
+import { isValidHostProjectEntryName } from "../fileNames";
 import {
+  isCaseOnlyRename,
   operateProjectFile,
   resolveProjectEntry,
 } from "../projectFileOperations";
@@ -50,6 +52,34 @@ afterEach(async () => {
 });
 
 describe("project file operations", () => {
+  it("validates Windows reserved names without rejecting portable dotfiles", () => {
+    expect(isValidHostProjectEntryName(".gitignore", "win32")).toBe(true);
+    for (const name of [
+      "CON",
+      "con.txt",
+      "report.",
+      "report ",
+      "a:b.txt",
+      "a?.txt",
+    ]) {
+      expect(isValidHostProjectEntryName(name, "win32")).toBe(false);
+    }
+    expect(isValidHostProjectEntryName("a:b.txt", "darwin")).toBe(true);
+  });
+
+  it("detects Windows case-only renames", () => {
+    expect(
+      isCaseOnlyRename(
+        "C:\\Project\\Readme.md",
+        "c:\\project\\README.md",
+        "win32",
+      ),
+    ).toBe(true);
+    expect(
+      isCaseOnlyRename("/Project/Readme.md", "/Project/README.md", "darwin"),
+    ).toBe(false);
+  });
+
   it("creates, renames, and moves files and directories", async () => {
     const root = await folder();
     await operateProjectFile(

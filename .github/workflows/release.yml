@@ -76,6 +76,9 @@ jobs:
     uses: ./.github/workflows/build-desktop.yml
     permissions:
       contents: read
+    secrets: inherit
+    with:
+      require_windows_signing: true
 
   publish:
     name: Publish release
@@ -104,8 +107,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Generate checksums
-        working-directory: release-assets
-        run: sha256sum *.dmg > SHA256SUMS
+        env:
+          ASSETS_DIRECTORY: release-assets
+        run: bun apps/desktop/scripts/create-checksums.mjs
 
       - name: Generate R2 update manifest
         if: needs.precheck.outputs.r2_enabled == 'true'
@@ -148,6 +152,34 @@ jobs:
               --content-type application/x-apple-diskimage \
               --cache-control "no-cache,max-age=0,must-revalidate"
           done
+          WINDOWS_SETUP=$(find release-assets -type f -name "*-win32-x64.exe" -print -quit)
+          WINDOWS_PACKAGE=$(find release-assets -type f -name "*.nupkg" -print -quit)
+          if [ -z "$WINDOWS_SETUP" ] || [ -z "$WINDOWS_PACKAGE" ] || [ ! -f release-assets/RELEASES ]; then
+            echo "Missing Windows Squirrel update assets" >&2
+            exit 1
+          fi
+          WINDOWS_SETUP_NAME=$(basename "$WINDOWS_SETUP")
+          WINDOWS_PACKAGE_NAME=$(basename "$WINDOWS_PACKAGE")
+          aws s3 cp "$WINDOWS_SETUP" \
+            "s3://${R2_BUCKET}/${R2_PREFIX}releases/v${VERSION}/${WINDOWS_SETUP_NAME}" \
+            --endpoint-url "$ENDPOINT" --no-progress \
+            --content-type application/vnd.microsoft.portable-executable \
+            --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp "$WINDOWS_SETUP" \
+            "s3://${R2_BUCKET}/${R2_PREFIX}latest/Pine-win32-x64.exe" \
+            --endpoint-url "$ENDPOINT" --no-progress \
+            --content-type application/vnd.microsoft.portable-executable \
+            --cache-control "no-cache,max-age=0,must-revalidate"
+          aws s3 cp "$WINDOWS_PACKAGE" \
+            "s3://${R2_BUCKET}/${R2_PREFIX}latest/win32-x64/${WINDOWS_PACKAGE_NAME}" \
+            --endpoint-url "$ENDPOINT" --no-progress \
+            --content-type application/octet-stream \
+            --cache-control "no-cache,max-age=0,must-revalidate"
+          aws s3 cp release-assets/RELEASES \
+            "s3://${R2_BUCKET}/${R2_PREFIX}latest/win32-x64/RELEASES" \
+            --endpoint-url "$ENDPOINT" --no-progress \
+            --content-type text/plain \
+            --cache-control "no-store,max-age=0"
           aws s3 cp release-assets/SHA256SUMS \
             "s3://${R2_BUCKET}/${R2_PREFIX}latest/SHA256SUMS" \
             --endpoint-url "$ENDPOINT" --no-progress \
@@ -166,7 +198,8 @@ jobs:
           VERSION: ${{ needs.precheck.outputs.version }}
         run: >-
           gh release create "$TAG"
-          release-assets/*.dmg release-assets/SHA256SUMS
+          release-assets/*.dmg release-assets/*.exe release-assets/*.nupkg
+          release-assets/RELEASES release-assets/SHA256SUMS
           --target "$GITHUB_SHA"
           --title "Pine ${VERSION}"
           --notes-file release-metadata/release-notes.md

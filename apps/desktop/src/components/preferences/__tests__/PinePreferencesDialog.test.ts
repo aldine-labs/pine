@@ -36,6 +36,10 @@ const getContextCompactionStrategy = vi.fn().mockResolvedValue("recommended");
 const setContextCompactionStrategy = vi.fn().mockResolvedValue({
   updated: true,
 });
+const getWindowsSandboxStatus = vi
+  .fn()
+  .mockResolvedValue({ state: "not-installed" });
+const installWindowsSandbox = vi.fn().mockResolvedValue({ state: "ready" });
 
 function installPineApi(platform: string | undefined): void {
   const pineWindow = window as unknown as {
@@ -48,6 +52,8 @@ function installPineApi(platform: string | undefined): void {
       setUserProfile: typeof setUserProfile;
       getContextCompactionStrategy: typeof getContextCompactionStrategy;
       setContextCompactionStrategy: typeof setContextCompactionStrategy;
+      getWindowsSandboxStatus: typeof getWindowsSandboxStatus;
+      installWindowsSandbox: typeof installWindowsSandbox;
     };
   };
   if (platform === undefined) {
@@ -63,6 +69,8 @@ function installPineApi(platform: string | undefined): void {
     setUserProfile,
     getContextCompactionStrategy,
     setContextCompactionStrategy,
+    getWindowsSandboxStatus,
+    installWindowsSandbox,
   };
 }
 
@@ -109,6 +117,10 @@ describe("PinePreferencesDialog", () => {
     setUserProfile.mockClear();
     getContextCompactionStrategy.mockClear();
     setContextCompactionStrategy.mockClear();
+    getWindowsSandboxStatus.mockClear();
+    installWindowsSandbox.mockClear();
+    getWindowsSandboxStatus.mockResolvedValue({ state: "not-installed" });
+    installWindowsSandbox.mockResolvedValue({ state: "ready" });
     getTinyFishCredentialStatus.mockResolvedValue({ configured: false });
     setTinyFishApiKey.mockResolvedValue({ configured: true });
     installPineApi(undefined);
@@ -286,5 +298,28 @@ describe("PinePreferencesDialog", () => {
       "false",
     );
     expect(setSidebarVibrancy).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it("provisions the Windows sandbox through the settings action", async () => {
+    installPineApi("win32");
+    const { wrapper } = mountDialog();
+
+    await vi.waitFor(() =>
+      expect(getWindowsSandboxStatus).toHaveBeenCalledOnce(),
+    );
+    const button = wrapper.get(
+      '[data-testid="pine-windows-sandbox-install-button"]',
+    );
+    await button.trigger("click");
+
+    await vi.waitFor(() =>
+      expect(installWindowsSandbox).toHaveBeenCalledOnce(),
+    );
+    expect(wrapper.text()).toContain("已就绪");
+    expect(
+      wrapper
+        .find('[data-testid="pine-windows-sandbox-install-button"]')
+        .exists(),
+    ).toBe(false);
   });
 });

@@ -137,8 +137,9 @@
 
 残余风险仍包括 inode/硬链接级别隔离、setsid 脱离进程组、CPU/内存/磁盘配额、内核与
 允许系统服务的漏洞。它们需要独立卷/快照/VM 或资源监督器；本次不声称关闭这些风险。
-Linux/Windows 保持不可用，直到在对应平台验证。审批 UI 仍使用既有工具错误展示，
-没有新增系统日志违规实时看板。
+Windows 后端现使用 SRT 自带的 `srt-win.exe`、专用账户、NTFS ACL 与 WFP，设置页提供
+显式的一次性 UAC 安装入口；Windows CI 校验 helper 随包分发并启动打包后的应用。
+Linux 保持不可用。审批 UI 仍使用既有工具错误展示，没有新增系统日志违规实时看板。
 
 验证补充：真实 Electron 44.1.1 Helper（ELECTRON_RUN_AS_NODE）能够启动 supervisor，
 完成受限文件写入与读取；应用安装在 /Applications 之外时，其 app bundle 作为只读运行时

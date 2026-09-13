@@ -7,8 +7,10 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
+import { isValidHostProjectEntryName } from "./fileNames";
 import type {
   ProjectEntryReference,
   ProjectFileOperation,
@@ -25,12 +27,8 @@ const nameSchema = z
   .min(1)
   .max(255)
   .refine(
-    (name) =>
-      name.trim().length > 0 &&
-      !/[\\/\u0000-\u001f]/u.test(name) &&
-      name !== "." &&
-      name !== "..",
-    "Enter a file name without path separators.",
+    (name) => isValidHostProjectEntryName(name),
+    "Enter a valid file name for this platform.",
   );
 const target = ProjectEntryReferenceSchema;
 export const ProjectFileOperationSchema = z.discriminatedUnion("action", [
@@ -127,6 +125,20 @@ async function assertWritable(
 }
 
 async function moveEntry(source: string, destination: string): Promise<void> {
+  if (isCaseOnlyRename(source, destination)) {
+    const temporary = path.join(
+      path.dirname(source),
+      `.pine-case-rename-${randomUUID()}`,
+    );
+    await rename(source, temporary);
+    try {
+      await rename(temporary, destination);
+    } catch (error) {
+      await rename(temporary, source).catch(() => undefined);
+      throw error;
+    }
+    return;
+  }
   await assertMissing(destination);
   try {
     await rename(source, destination);
@@ -142,6 +154,19 @@ async function moveEntry(source: string, destination: string): Promise<void> {
     });
     await rm(source, { recursive: true });
   }
+}
+
+export function isCaseOnlyRename(
+  source: string,
+  destination: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return (
+    platform === "win32" &&
+    source !== destination &&
+    path.win32.normalize(source).toLocaleLowerCase("en-US") ===
+      path.win32.normalize(destination).toLocaleLowerCase("en-US")
+  );
 }
 
 export async function operateProjectFile(

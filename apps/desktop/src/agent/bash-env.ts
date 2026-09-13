@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import path from "node:path";
+import { getPowerShellConfig } from "@earendil-works/pi-coding-agent";
 
 const FALLBACK_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 const LOGIN_PATH_TIMEOUT_MS = 10_000;
@@ -14,7 +15,10 @@ let loginPathFailed = false;
  * (`/usr/bin:/bin:/usr/sbin:/sbin`), so tools installed via Homebrew, MacPorts,
  * nvm, or Bun are invisible unless the PATH is resolved from a login shell.
  */
-export async function resolveLoginPath(): Promise<string> {
+export async function resolveLoginPath(
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> {
+  if (platform === "win32") return process.env.PATH ?? "";
   if (cachedLoginPath) return cachedLoginPath;
   if (loginPathFailed) return FALLBACK_PATH;
 
@@ -58,7 +62,9 @@ export function createBashEnvironment(
     HOME: source.HOME ?? path.join(temporaryDirectory, "home"),
     LANG: source.LANG,
     LOGNAME: source.LOGNAME,
-    PATH: `${path.join(cwd, "node_modules", ".bin")}:${loginPath}`,
+    PATH: [path.join(cwd, "node_modules", ".bin"), loginPath]
+      .filter(Boolean)
+      .join(path.delimiter),
     SHELL: source.SHELL ?? "/bin/zsh",
     TERM: source.TERM,
     TMPDIR: temporaryDirectory,
@@ -85,6 +91,19 @@ export function createNativeBashEnvironment(
 ): NodeJS.ProcessEnv {
   return {
     ...environment,
-    PATH: `${path.join(cwd, "node_modules", ".bin")}:${loginPath}`,
+    PATH: [path.join(cwd, "node_modules", ".bin"), loginPath]
+      .filter(Boolean)
+      .join(path.delimiter),
   };
+}
+
+/** Resolve the trusted host shell used for sandboxed commands. */
+export function sandboxShell(platform: NodeJS.Platform = process.platform): {
+  executable: string;
+  kind: "powershell" | "zsh";
+} {
+  if (platform === "win32") {
+    return { executable: getPowerShellConfig().shell, kind: "powershell" };
+  }
+  return { executable: "/bin/zsh", kind: "zsh" };
 }

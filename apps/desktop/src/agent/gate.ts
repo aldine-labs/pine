@@ -100,6 +100,7 @@ export interface GateHost {
 
 export interface BashReviewInput {
   toolCallId: string;
+  toolName?: "bash" | "powershell";
   command: string;
   /** The caller's imperative summary, shown on the approval card. */
   description?: string;
@@ -169,7 +170,7 @@ export class UserApprovalGate implements ToolGate {
     return this.host.requestUserApproval({
       trigger: "pre-execution",
       toolCallId: input.toolCallId,
-      toolName: "bash",
+      toolName: input.toolName ?? "bash",
       subject: input.command,
       description: input.description,
       signal: input.signal,

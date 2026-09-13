@@ -59,7 +59,7 @@ Project 列表通过扫描 `projects/*/project.json` 获得，不维护重复的
 
 Session 的持久化根目录与 cwd 分离。所有 Project session 存储在 Project 应用数据目录中，新 session 的 cwd 取当时的默认文件夹。Session 搜索不按 cwd 过滤，因此修改默认文件夹不会隐藏历史会话。
 
-文件工具按 Project Folder 权限执行。普通 Shell 从默认文件夹启动，由 macOS OS 级 sandbox 执行目录权限；运行时与临时存储能力见 [Agent 执行环境](agent-execution-environment.md)。cwd 不是安全边界。
+文件工具按 Project Folder 权限执行。普通 Shell 从默认文件夹启动，由 macOS Seatbelt 或 Windows 专用低权限账户、NTFS ACL 与 WFP 执行目录和网络权限；运行时与临时存储能力见 [Agent 执行环境](agent-execution-environment.md)。cwd 不是安全边界。
 
 ## 7. 旧数据
 

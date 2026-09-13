@@ -6,8 +6,13 @@ import { randomUUID } from "node:crypto";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import hostSource from "./host.mjs?raw";
 
-export function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
+export function quoteShell(
+  value: string,
+  shell: "powershell" | "zsh" = "zsh",
+): string {
+  return shell === "powershell"
+    ? `'${value.replaceAll("'", "''")}'`
+    : `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 export interface SandboxRequest {
@@ -15,6 +20,7 @@ export interface SandboxRequest {
   cwd: string;
   env: NodeJS.ProcessEnv;
   config: SandboxRuntimeConfig;
+  shell?: string;
   stdin?: string;
 }
 
@@ -30,7 +36,7 @@ export async function runSandbox(
     timeout?: number;
   },
 ): Promise<{ exitCode: number }> {
-  if (process.platform !== "darwin") {
+  if (process.platform !== "darwin" && process.platform !== "win32") {
     throw new SandboxSetupError(
       "The sandbox backend has not been validated on this platform. Native execution requires explicit approval.",
     );

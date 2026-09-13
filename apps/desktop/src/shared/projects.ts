@@ -70,6 +70,7 @@ import type {
   SetTinyFishApiKeyResult,
   TinyFishCredentialStatus,
 } from "./tinyfish";
+import type { WindowsSandboxStatus } from "./windowsSandbox";
 
 export const PROJECTS_DIRECTORY = "projects" as const;
 export const PROJECT_METADATA_FILE = "project.json" as const;
@@ -147,6 +148,8 @@ export interface PickProjectFoldersRequest {
 }
 
 export interface PineDesktopApi extends PineWindowApi {
+  getWindowsSandboxStatus: () => Promise<WindowsSandboxStatus>;
+  installWindowsSandbox: () => Promise<WindowsSandboxStatus>;
   readProjectFilePreview: (
     request: ProjectFilePreviewRequest,
   ) => Promise<ProjectFilePreview>;

@@ -27,6 +27,13 @@ export default {
     failed: "无法安装更新。",
   },
   preferences: {
+    windowsSandbox: "Windows Agent 沙箱",
+    windowsSandboxDescription:
+      "为 Agent 文件和 PowerShell 工具配置独立本地账户与网络隔离，首次需要一次 UAC 确认。",
+    windowsSandboxReady: "已就绪",
+    windowsSandboxRequired: "需要配置",
+    windowsSandboxInstall: "配置沙箱",
+    windowsSandboxInstalling: "正在配置",
     title: "Pine 设置",
     open: "打开 Pine 设置",
     language: "语言",
@@ -571,6 +578,10 @@ export default {
     },
   },
   errors: {
+    windowsSandbox: {
+      title: "Windows 沙箱配置失败",
+      description: "请重试并在 Windows UAC 提示中确认此操作。",
+    },
     customModel: {
       title: "无法添加自定义模型",
       description: "请检查端点和模型设置后重试",

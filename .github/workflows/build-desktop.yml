@@ -5,6 +5,17 @@ on:
     branches:
       - main
   workflow_call:
+    inputs:
+      require_windows_signing:
+        description: Fail when the Windows signing certificate is unavailable
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      WINDOWS_CERTIFICATE_BASE64:
+        required: false
+      WINDOWS_CERTIFICATE_PASSWORD:
+        required: false
 
 permissions:
   contents: read
@@ -35,7 +46,7 @@ jobs:
       - name: Run checks
         run: bun run check
 
-  build:
+  build-macos:
     name: Build macOS ${{ matrix.arch }}
     runs-on: macos-latest
     needs: check
@@ -96,7 +107,92 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pine-${{ matrix.arch }}-${{ github.sha }}
+          name: pine-darwin-${{ matrix.arch }}-${{ github.sha }}
           path: release-assets/${{ steps.installer.outputs.name }}
+          if-no-files-found: error
+          retention-days: 14
+
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    needs: check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node for Electron Forge
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Configure Windows signing
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          REQUIRE_SIGNING: ${{ inputs.require_windows_signing || false }}
+        run: |
+          if ($env:REQUIRE_SIGNING -eq "true" -and ([string]::IsNullOrWhiteSpace($env:CERTIFICATE_BASE64) -or [string]::IsNullOrWhiteSpace($env:CERTIFICATE_PASSWORD))) {
+            throw "A Windows signing certificate and password are required for release builds"
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:CERTIFICATE_BASE64)) {
+            $certificatePath = Join-Path $env:RUNNER_TEMP "pine-code-signing.pfx"
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+            "WINDOWS_CERTIFICATE_FILE=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
+      - name: Build Squirrel installer
+        working-directory: apps/desktop
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: >-
+          bunx electron-forge make --platform=win32 --arch=x64
+          --targets @electron-forge/maker-squirrel
+
+      - name: Verify packaged runtime and launch
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem "apps/desktop/out" -Directory -Filter "Pine-win32-x64" | Select-Object -First 1
+          if (-not $package) { throw "Packaged Windows app was not produced" }
+          $sandboxRuntime = Join-Path $package.FullName "resources/app/node_modules/@anthropic-ai/sandbox-runtime/vendor/srt-win/x64/srt-win.exe"
+          if (-not (Test-Path $sandboxRuntime)) { throw "The Windows sandbox helper is missing from the package" }
+          $process = Start-Process -FilePath (Join-Path $package.FullName "Pine.exe") -ArgumentList "--smoke-test" -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "The packaged Windows app did not finish its smoke test"
+          }
+          if ($process.ExitCode -ne 0) { throw "The packaged Windows app exited with code $($process.ExitCode)" }
+
+      - name: Stage Windows update assets
+        id: installer
+        shell: pwsh
+        run: |
+          $version = bun -p "require('./apps/desktop/package.json').version"
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $makeDirectory = "apps/desktop/out/make/squirrel.windows/x64"
+          $setup = Get-ChildItem $makeDirectory -File -Filter "*.exe" | Select-Object -First 1
+          $package = Get-ChildItem $makeDirectory -File -Filter "*.nupkg" | Select-Object -First 1
+          $releases = Join-Path $makeDirectory "RELEASES"
+          if (-not $setup -or -not $package -or -not (Test-Path $releases)) {
+            throw "Squirrel update assets are incomplete"
+          }
+          New-Item -ItemType Directory -Path "release-assets" -Force | Out-Null
+          $asset = "Pine-$version+$shortSha-win32-x64.exe"
+          Copy-Item $setup.FullName (Join-Path "release-assets" $asset)
+          Copy-Item $package.FullName "release-assets"
+          Copy-Item $releases "release-assets"
+          "name=$asset" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pine-win32-x64-${{ github.sha }}
+          path: release-assets/*
           if-no-files-found: error
           retention-days: 14

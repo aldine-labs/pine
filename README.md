@@ -33,18 +33,18 @@ Pine 是这些人的桌面 harness：
 
 | 项目     | 当前情况                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------- |
-| 版本     | `0.1.0`，开发者预览版                                                                         |
+| 版本     | `0.2.0`，开发者预览版                                                                         |
 | 核心闭环 | Project Library → 文件夹授权 → 持久化会话 → Agent 工具调用 → 结果回显                         |
-| 已验证   | `bun run check` 通过；57 个测试文件、395 个测试通过，14 个跳过                                |
-| 打包     | `bun run build` 已在 macOS arm64 完成 Electron Forge 打包流程                                 |
-| 发行     | `main` 每次 push 构建 macOS Apple Silicon / Intel artifacts；正式版本仅通过手动 workflow 发布 |
+| 已验证   | `bun run check` 与平台构建 CI 覆盖格式、Lint、类型、单测及安装包启动冒烟检查                  |
+| 打包     | Electron Forge 构建 macOS Apple Silicon / Intel DMG 与 Windows x64 Squirrel 安装包            |
+| 发行     | `main` 每次 push 构建 macOS / Windows artifacts；正式版本仅通过手动 workflow 发布             |
 
 ## 现在能做什么
 
 - **项目管理**：创建、搜索、打开、删除 Project；一个 Project 可关联多个文件夹，逐个设置只读 / 读写权限和默认工作目录。
 - **Agent 会话**：流式回复、工具调用事件、持久化会话；继续 / 中止 / 重命名 / 删除、全文搜索、steering 消息、上下文用量展示。
 - **文件工作区**：文件树（新建、重命名、移动、删除）、路径复制、多标签浏览。
-- **审批与权限**：Agent 的本地工具（`read` / `write` / `edit` / `bash`）严格限制在授权范围内；越界操作（如访问外部路径）必须走 `privileged_bash` 并单独审批。
+- **审批与权限**：Agent 的本地工具严格限制在授权范围内；macOS 使用 `bash`，Windows 使用 `powershell`，越界操作必须通过对应的 privileged 工具单独审批。
 - **模型与认证**：Provider / model catalog、API key / OAuth 登录、模型切换、thinking level；配置搜索 API key 后还可使用 `web_search` / `web_fetch`（带 URL、域名和大小校验）。
 - **桌面体验**：中英文界面、浅色 / 深色 / 跟随系统主题、多标签、窗口快捷键、macOS 侧栏模糊。
 
@@ -69,6 +69,8 @@ bun run dev
 
 在应用中创建一个 Project，选择 Agent 可以访问的文件夹，然后新建 Session 开始工作。
 
+Windows 首次使用受限 Agent 工具前，在“设置 → 通用 → Windows 沙箱”点击“安装”；系统会弹出一次 UAC 请求，用于创建专用低权限账户并安装网络隔离规则。开发工具建议按机器范围安装，专用沙箱账户无法读取当前用户私有目录中的工具。
+
 ### 常用命令
 
 | 命令                             | 用途                                   |
@@ -90,8 +92,9 @@ Actions 的 `release` workflow。预检会拒绝已被任一 GitHub Release 使�
 
 可选的 Cloudflare R2 latest 镜像在 [`.pine/release.json`](./.pine/release.json)
 配置，其中 `publicBaseUrl` 应使用绑定到 R2 bucket 的生产自定义域名。启用后需在仓库 Secrets 中设置 `R2_ACCESS_KEY_ID` 和
-`R2_SECRET_ACCESS_KEY`。每次正式发布会覆盖配置 prefix 下的
+`R2_SECRET_ACCESS_KEY`。Windows 正式发布还要求 `WINDOWS_CERTIFICATE_BASE64`（PFX 的 Base64）和 `WINDOWS_CERTIFICATE_PASSWORD`，预览构建可保持未签名。每次正式发布会覆盖配置 prefix 下的
 `latest/Pine-darwin-arm64.dmg`、`latest/Pine-darwin-x64.dmg`、
+`latest/Pine-win32-x64.exe`、`latest/win32-x64/RELEASES`、对应 NuGet 包、
 `latest/SHA256SUMS` 和 `latest/update.json`；首次发布时会直接创建这些对象。
 自动更新检查和安装包下载完全通过这个 R2 域名，不依赖 GitHub 可用性。
 发布 workflow 会对 `latest/update.json` 设置 `no-store`，对固定 latest 安装包设置

@@ -5,6 +5,7 @@ import {
   systemPromptWithUserProfile,
   systemPromptWithCurrentMonth,
   systemPromptForApprovalMode,
+  systemPromptForPlatform,
 } from "../system-prompt";
 import { createDefaultPineUserProfile } from "../../shared/userProfile";
 
@@ -36,6 +37,17 @@ describe("PINE_SYSTEM_PROMPT local tool guidance", () => {
     expect(PINE_SYSTEM_PROMPT).toContain(
       "These rules apply to read-only commands too, including ls, find, and cat",
     );
+  });
+
+  it("uses the native Windows shell and permission vocabulary", () => {
+    const prompt = systemPromptForPlatform(PINE_SYSTEM_PROMPT, "win32");
+
+    expect(prompt).toContain("ordinary PowerShell");
+    expect(prompt).toContain("privileged_powershell");
+    expect(prompt).toContain("Windows application or GUI control");
+    expect(prompt).toContain("Windows ACLs, UAC");
+    expect(prompt).toContain("Use $env:PINE_TMPDIR");
+    expect(prompt).not.toContain("privileged_bash");
   });
 
   it("distinguishes sandbox evidence, OS errors, and approval rejection", () => {
