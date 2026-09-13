@@ -131,6 +131,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify Squirrel packaging tools
+        shell: pwsh
+        run: |
+          $sevenZip = "node_modules/electron-winstaller/vendor/7z.exe"
+          if (-not (Test-Path $sevenZip)) {
+            throw "electron-winstaller lifecycle setup did not produce 7z.exe"
+          }
+
       - name: Configure Windows signing
         shell: pwsh
         env:
