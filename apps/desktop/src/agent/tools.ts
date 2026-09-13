@@ -23,6 +23,19 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { Static } from "typebox";
+import {
+  ASK_USER_QUESTION_DESCRIPTION,
+  ASK_USER_QUESTION_PROMPT_GUIDELINES,
+  ASK_USER_QUESTION_PROMPT_SNIPPET,
+  ASK_USER_QUESTION_TOOL_NAME,
+  AskUserQuestionParamsSchema,
+  buildAskUserQuestionToolResult,
+  normalizeAskUserQuestionParams,
+  resolveAskUserQuestionSubmission,
+  validateAskUserQuestion,
+  type AskUserQuestionParams,
+  type AskUserQuestionSubmission,
+} from "@pine/rpiv-ask-user-question";
 import type { AgentSessionLocation } from "./protocol";
 import { createNativeBashEnvironment, resolveLoginPath } from "./bash-env";
 import {
@@ -212,6 +225,11 @@ export interface PineToolPermissionContext {
   getApprovalMode(): PineApprovalMode;
   getGate(): ToolGate | null;
   getTinyFishApiKey?: () => string | undefined;
+  requestQuestionnaire?: (
+    toolCallId: string,
+    params: AskUserQuestionParams,
+    signal?: AbortSignal,
+  ) => Promise<AskUserQuestionSubmission>;
 }
 
 export async function createPineToolDefinitions(
@@ -450,6 +468,44 @@ export async function createPineToolDefinitions(
         outputDirectory: path.join(canonicalBashTemporaryDirectory, "web"),
       } satisfies TinyFishToolFactoryOptions)
     : [];
+  const requestQuestionnaire = permissions?.requestQuestionnaire;
+  const askUserQuestionTool = requestQuestionnaire
+    ? defineTool({
+        name: ASK_USER_QUESTION_TOOL_NAME,
+        label: "Ask User Question",
+        description: ASK_USER_QUESTION_DESCRIPTION,
+        promptSnippet: ASK_USER_QUESTION_PROMPT_SNIPPET,
+        promptGuidelines: [...ASK_USER_QUESTION_PROMPT_GUIDELINES],
+        parameters: AskUserQuestionParamsSchema,
+        prepareArguments: (args) =>
+          args as Static<typeof AskUserQuestionParamsSchema>,
+        execute: async (toolCallId, inputParams, signal) => {
+          const params = normalizeAskUserQuestionParams(
+            structuredClone(inputParams),
+          );
+          const validation = validateAskUserQuestion(params);
+          if (!validation.ok) {
+            return {
+              content: [{ type: "text" as const, text: validation.message }],
+              details: {
+                answers: [],
+                cancelled: true,
+                error: validation.error,
+              },
+            };
+          }
+          const submission = await requestQuestionnaire(
+            toolCallId,
+            params,
+            signal,
+          );
+          return buildAskUserQuestionToolResult(
+            resolveAskUserQuestionSubmission(params, submission),
+            params,
+          );
+        },
+      })
+    : null;
 
   return [
     {
@@ -461,6 +517,7 @@ export async function createPineToolDefinitions(
     gatedEditTool,
     gatedWriteTool,
     ...(privilegedBashTool ? [privilegedBashTool] : []),
+    ...(askUserQuestionTool ? [askUserQuestionTool] : []),
     ...tinyFishTools,
   ] as ToolDefinition[];
 }

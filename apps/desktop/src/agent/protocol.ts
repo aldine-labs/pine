@@ -15,6 +15,7 @@ import type {
 } from "../shared/models";
 import type { PineContextUsage, PineSessionSummary } from "../shared/sessions";
 import type { PineContextCompactionStrategy } from "../shared/preferences";
+import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
 
 export interface AgentFolderGrant {
   access: "read-only" | "read-write";
@@ -40,7 +41,12 @@ export type GateDecision =
 
 export type AgentWorkerInbound =
   | AgentWorkerRequest
-  | { type: "approval:response"; requestId: string; decision: GateDecision };
+  | { type: "approval:response"; requestId: string; decision: GateDecision }
+  | {
+      type: "questionnaire:response";
+      requestId: string;
+      submission: AskUserQuestionSubmission;
+    };
 
 export type PineRuntimeEvent = PineAgentEvent | PineProviderAuthEvent;
 

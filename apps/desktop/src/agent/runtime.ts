@@ -70,6 +70,10 @@ import {
   type UserApprovalRequest,
 } from "./gate";
 import { createPineToolDefinitions, PineAttachedPathAccess } from "./tools";
+import type {
+  AskUserQuestionParams,
+  AskUserQuestionSubmission,
+} from "@pine/rpiv-ask-user-question";
 import { TINYFISH_TOOL_NAMES } from "./tinyfishTools";
 import {
   readPineAgentSettings,
@@ -309,6 +313,14 @@ interface PendingUserApproval {
   live: LiveAgentSession;
   request: UserApprovalRequest;
   actionDigest: string;
+}
+
+interface PendingQuestionnaire {
+  resolve: (submission: AskUserQuestionSubmission) => void;
+  sessionId: string;
+  toolCallId: string;
+  signal?: AbortSignal;
+  onAbort?: () => void;
 }
 
 interface PendingAuthPrompt {
@@ -646,6 +658,10 @@ export class PineAgentRuntime {
   private readonly loginControllers = new Map<string, AbortController>();
   private readonly pendingAuthPrompts = new Map<string, PendingAuthPrompt>();
   private readonly pendingApprovals = new Map<string, PendingUserApproval>();
+  private readonly pendingQuestionnaires = new Map<
+    string,
+    PendingQuestionnaire
+  >();
   private readonly titleGenerationAttempts = new Set<string>();
   private readonly titleGenerationInFlight = new Set<string>();
 
@@ -800,6 +816,21 @@ export class PineAgentRuntime {
       this.pendingApprovals.delete(requestId);
       pending.resolve({ kind: "deny", reason: "The session was closed." });
     }
+    for (const [requestId, pending] of this.pendingQuestionnaires) {
+      if (pending.sessionId !== sessionId) continue;
+      this.pendingQuestionnaires.delete(requestId);
+      if (pending.signal && pending.onAbort) {
+        pending.signal.removeEventListener("abort", pending.onAbort);
+      }
+      pending.resolve({ answers: [], cancelled: true });
+      this.options.emit({
+        type: "questionnaire-decided",
+        sessionId,
+        requestId,
+        toolCallId: pending.toolCallId,
+        cancelled: true,
+      });
+    }
     if (!live.session.isIdle) await live.session.abort();
     live.unsubscribe();
     await live.session.settingsManager.flush();
@@ -814,6 +845,20 @@ export class PineAgentRuntime {
       pending.resolve({
         kind: "deny",
         reason: "The agent runtime was disposed.",
+      });
+    }
+    for (const [requestId, pending] of this.pendingQuestionnaires) {
+      this.pendingQuestionnaires.delete(requestId);
+      if (pending.signal && pending.onAbort) {
+        pending.signal.removeEventListener("abort", pending.onAbort);
+      }
+      pending.resolve({ answers: [], cancelled: true });
+      this.options.emit({
+        type: "questionnaire-decided",
+        sessionId: pending.sessionId,
+        requestId,
+        toolCallId: pending.toolCallId,
+        cancelled: true,
       });
     }
     await Promise.all(
@@ -1144,6 +1189,8 @@ export class PineAgentRuntime {
         getApprovalMode: () => live.approvalMode,
         getGate: () => live.gate,
         getTinyFishApiKey: () => live.tinyFishApiKey,
+        requestQuestionnaire: (toolCallId, params, signal) =>
+          this.requestQuestionnaire(live, toolCallId, params, signal),
       },
     );
     live.availableToolNames = customTools.map((tool) => tool.name);
@@ -1374,6 +1421,71 @@ export class PineAgentRuntime {
       verdict: decision.kind === "allow" ? "approved" : "denied",
       decidedBy: "user",
       reason: decision.kind === "deny" ? decision.reason : undefined,
+    });
+    return { accepted: true };
+  }
+
+  private requestQuestionnaire(
+    live: LiveAgentSession,
+    toolCallId: string,
+    questionnaire: AskUserQuestionParams,
+    signal?: AbortSignal,
+  ): Promise<AskUserQuestionSubmission> {
+    const sessionId = live.session.sessionId;
+    const requestId = randomUUID();
+    return new Promise<AskUserQuestionSubmission>((resolve) => {
+      const pending: PendingQuestionnaire = {
+        resolve,
+        sessionId,
+        toolCallId,
+        signal,
+      };
+      this.pendingQuestionnaires.set(requestId, pending);
+      const onAbort = () => {
+        if (this.pendingQuestionnaires.get(requestId) !== pending) return;
+        this.pendingQuestionnaires.delete(requestId);
+        resolve({ answers: [], cancelled: true });
+        this.options.emit({
+          type: "questionnaire-decided",
+          sessionId,
+          requestId,
+          toolCallId,
+          cancelled: true,
+        });
+      };
+      pending.onAbort = onAbort;
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      this.options.emit({
+        type: "questionnaire-request",
+        sessionId,
+        requestId,
+        toolCallId,
+        questionnaire,
+      });
+    });
+  }
+
+  resolveQuestionnaire(
+    requestId: string,
+    submission: AskUserQuestionSubmission,
+  ): { accepted: boolean } {
+    const pending = this.pendingQuestionnaires.get(requestId);
+    if (!pending) return { accepted: false };
+    this.pendingQuestionnaires.delete(requestId);
+    if (pending.signal && pending.onAbort) {
+      pending.signal.removeEventListener("abort", pending.onAbort);
+    }
+    pending.resolve(structuredClone(submission));
+    this.options.emit({
+      type: "questionnaire-decided",
+      sessionId: pending.sessionId,
+      requestId,
+      toolCallId: pending.toolCallId,
+      cancelled: submission.cancelled,
     });
     return { accepted: true };
   }

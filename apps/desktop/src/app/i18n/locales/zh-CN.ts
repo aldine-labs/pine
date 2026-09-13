@@ -371,6 +371,17 @@ export default {
       reject: "拒绝",
       guide: "拒绝并说明要求",
     },
+    questionnaireRequest: {
+      title: "需要你来决定",
+      description: "选择一个选项，或输入你自己的答案。",
+      progress: "第 {current} 题，共 {total} 题",
+      customAnswer: "输入其他答案…",
+      required: "请先选择或输入答案。",
+      previous: "上一题",
+      next: "下一题",
+      cancel: "取消",
+      submit: "提交",
+    },
     transcript: {
       error: "错误",
       emptyDescription: "从一个问题、一项任务，或一个大胆的想法开始。",

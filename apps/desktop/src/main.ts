@@ -40,6 +40,7 @@ import {
   ABORT_SESSION_CHANNEL,
   COMPACT_SESSION_CHANNEL,
   APPROVAL_RESPONSE_CHANNEL,
+  QUESTIONNAIRE_RESPONSE_CHANNEL,
   DEQUEUE_STEERING_CHANNEL,
   PROMPT_SESSION_CHANNEL,
   SET_APPROVAL_MODE_CHANNEL,
@@ -49,6 +50,7 @@ import {
   type DequeueSteeringResult,
   type PromptSessionResult,
   type RespondApprovalRequest,
+  type RespondQuestionnaireRequest,
   type SetApprovalModeResult,
 } from "./shared/agent";
 import {
@@ -433,6 +435,21 @@ const RespondApprovalRequestSchema = z.object({
   requestId: z.uuid(),
   action: z.enum(["approve", "reject", "guide"]),
   guidance: z.string().trim().min(1).max(10_000).optional(),
+});
+const RespondQuestionnaireRequestSchema = z.object({
+  requestId: z.uuid(),
+  submission: z.object({
+    cancelled: z.boolean(),
+    answers: z
+      .array(
+        z.object({
+          questionIndex: z.number().int().min(0).max(3),
+          selectedOptionIndexes: z.array(z.number().int().min(0).max(3)).max(4),
+          customAnswer: z.string().trim().max(100_000).optional(),
+        }),
+      )
+      .max(4),
+  }),
 });
 const SetApprovalModeRequestSchema = z.object({
   approvalMode: z.enum(["let-me-review", "auto-approve", "YOLO"]),
@@ -1380,6 +1397,17 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
+  QUESTIONNAIRE_RESPONSE_CHANNEL,
+  (event, request: unknown): { accepted: boolean } =>
+    getProjectRuntimes().respondQuestionnaire(
+      event.sender.id,
+      RespondQuestionnaireRequestSchema.parse(
+        request,
+      ) satisfies RespondQuestionnaireRequest,
+    ),
+);
+
+ipcMain.handle(
   SET_SIDEBAR_VIBRANCY_CHANNEL,
   (event, request: unknown): SetSidebarVibrancyResult => {
     const { enabled } = SetSidebarVibrancyRequestSchema.parse(request);
@@ -1466,6 +1494,12 @@ async function initializeApp(): Promise<void> {
       requestApprovalAttention(ownerId);
     } else if (agentEvent.type === "approval-decided") {
       projectRuntimes?.forgetApproval(agentEvent.requestId);
+      clearApprovalAttention();
+    } else if (agentEvent.type === "questionnaire-request") {
+      projectRuntimes?.trackQuestionnaire(agentEvent.requestId, ownerId);
+      requestApprovalAttention(ownerId);
+    } else if (agentEvent.type === "questionnaire-decided") {
+      projectRuntimes?.forgetQuestionnaire(agentEvent.requestId);
       clearApprovalAttention();
     }
     webContents.fromId(ownerId)?.send(SESSION_EVENT_CHANNEL, agentEvent);

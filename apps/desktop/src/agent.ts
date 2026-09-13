@@ -130,6 +130,10 @@ parentPort.on("message", (event) => {
     runtime.resolveApproval(inbound.requestId, inbound.decision);
     return;
   }
+  if (inbound.type === "questionnaire:response") {
+    runtime.resolveQuestionnaire(inbound.requestId, inbound.submission);
+    return;
+  }
   const request = inbound;
   void handleRequest(request).catch((error: unknown) => {
     parentPort.postMessage({

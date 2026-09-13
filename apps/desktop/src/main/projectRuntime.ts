@@ -10,6 +10,7 @@ import type {
   PromptSessionRequest,
   PromptSessionResult,
   RespondApprovalRequest,
+  RespondQuestionnaireRequest,
 } from "../shared/agent";
 import type {
   AddCustomModelRequest,
@@ -95,6 +96,8 @@ export class ProjectRuntimeRegistry {
   private readonly runtimes = new Map<number, ProjectRuntime>();
   /** approval requestId → owning webContentsId, for response validation. */
   private readonly pendingApprovals = new Map<string, number>();
+  /** questionnaire requestId → owning webContentsId, for response validation. */
+  private readonly pendingQuestionnaires = new Map<string, number>();
 
   constructor(
     private readonly agentHost: AgentHost,
@@ -529,6 +532,14 @@ export class ProjectRuntimeRegistry {
     this.pendingApprovals.delete(requestId);
   }
 
+  trackQuestionnaire(requestId: string, webContentsId: number): void {
+    this.pendingQuestionnaires.set(requestId, webContentsId);
+  }
+
+  forgetQuestionnaire(requestId: string): void {
+    this.pendingQuestionnaires.delete(requestId);
+  }
+
   respondApproval(
     webContentsId: number,
     request: RespondApprovalRequest,
@@ -545,12 +556,31 @@ export class ProjectRuntimeRegistry {
     return { accepted: true };
   }
 
+  respondQuestionnaire(
+    webContentsId: number,
+    request: RespondQuestionnaireRequest,
+  ): { accepted: boolean } {
+    const owner = this.pendingQuestionnaires.get(request.requestId);
+    if (owner === undefined) {
+      throw new Error("This questionnaire is no longer pending.");
+    }
+    if (owner !== webContentsId) {
+      throw new Error("Questionnaire does not belong to this window.");
+    }
+    this.pendingQuestionnaires.delete(request.requestId);
+    this.agentHost.respondQuestionnaire(request.requestId, request.submission);
+    return { accepted: true };
+  }
+
   async dispose(webContentsId: number): Promise<void> {
     const runtime = this.runtimes.get(webContentsId);
     if (!runtime) return;
 
     for (const [requestId, owner] of this.pendingApprovals) {
       if (owner === webContentsId) this.pendingApprovals.delete(requestId);
+    }
+    for (const [requestId, owner] of this.pendingQuestionnaires) {
+      if (owner === webContentsId) this.pendingQuestionnaires.delete(requestId);
     }
     this.runtimes.delete(webContentsId);
     await this.releaseSession(runtime);

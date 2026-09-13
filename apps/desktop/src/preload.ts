@@ -5,6 +5,7 @@ import {
   ABORT_SESSION_CHANNEL,
   COMPACT_SESSION_CHANNEL,
   APPROVAL_RESPONSE_CHANNEL,
+  QUESTIONNAIRE_RESPONSE_CHANNEL,
   DEQUEUE_STEERING_CHANNEL,
   PROMPT_SESSION_CHANNEL,
   SET_APPROVAL_MODE_CHANNEL,
@@ -17,6 +18,7 @@ import {
   type PromptSessionRequest,
   type PromptSessionResult,
   type RespondApprovalRequest,
+  type RespondQuestionnaireRequest,
   type SetApprovalModeRequest,
   type SetApprovalModeResult,
   type SessionEventListener,
@@ -352,6 +354,10 @@ const pineApi: PineDesktopApi = {
     request: RespondApprovalRequest,
   ): Promise<{ accepted: boolean }> =>
     ipcRenderer.invoke(APPROVAL_RESPONSE_CHANNEL, request),
+  respondQuestionnaire: (
+    request: RespondQuestionnaireRequest,
+  ): Promise<{ accepted: boolean }> =>
+    ipcRenderer.invoke(QUESTIONNAIRE_RESPONSE_CHANNEL, request),
   setApprovalMode: (
     request: SetApprovalModeRequest,
   ): Promise<SetApprovalModeResult> =>

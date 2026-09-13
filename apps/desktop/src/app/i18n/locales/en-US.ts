@@ -394,6 +394,17 @@ export default {
       reject: "Reject",
       guide: "Reject with guidance",
     },
+    questionnaireRequest: {
+      title: "Your input is needed",
+      description: "Choose an option or enter your own answer.",
+      progress: "Question {current} of {total}",
+      customAnswer: "Type something…",
+      required: "Choose an answer to continue.",
+      previous: "Previous",
+      next: "Next",
+      cancel: "Cancel",
+      submit: "Submit",
+    },
     transcript: {
       error: "Error",
       emptyDescription: "Start with a question, a task, or a bold idea.",

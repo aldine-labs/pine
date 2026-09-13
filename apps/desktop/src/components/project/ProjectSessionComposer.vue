@@ -23,6 +23,7 @@ import ModelCapabilities from "@/components/models/ModelCapabilities.vue";
 import ModelPickerDialog from "@/components/models/ModelPickerDialog.vue";
 import ProviderIcon from "@/components/models/ProviderIcon.vue";
 import ProjectApprovalCard from "@/components/project/ProjectApprovalCard.vue";
+import ProjectQuestionnaireCard from "@/components/project/ProjectQuestionnaireCard.vue";
 import ProjectAttachmentList from "@/components/project/ProjectAttachmentList.vue";
 import SessionSearchOverlay from "@/components/sessions/SessionSearchOverlay.vue";
 import ContextUsageIndicator from "@/components/project/ContextUsageIndicator.vue";
@@ -75,7 +76,11 @@ import {
 } from "@/shared/attachments";
 import type { PineThinkingLevel } from "@/shared/models";
 import type { SessionSearchResult } from "@/shared/sessions";
-import type { PinePendingApproval } from "@/stores/session";
+import type {
+  PinePendingApproval,
+  PinePendingQuestionnaire,
+} from "@/stores/session";
+import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
 import { pineModelKey, useModelsStore } from "@/stores/models";
 
 type ApprovalMode = PineApprovalMode;
@@ -97,6 +102,7 @@ interface ApprovalModeOption {
 const emit = defineEmits<{
   abort: [];
   respond: [action: PineApprovalAction, guidance?: string];
+  respondQuestionnaire: [submission: AskUserQuestionSubmission];
   submit: [message: string];
   withdrawSteering: [message: string];
 }>();
@@ -108,6 +114,8 @@ const props = withDefaults(
     steeringMessages?: readonly string[];
     /** When set, the approval questionnaire replaces the message input. */
     pendingApproval?: PinePendingApproval | null;
+    /** When set, the structured question card replaces the message input. */
+    pendingQuestionnaire?: PinePendingQuestionnaire | null;
   }>(),
   { isRunning: false, steeringMessages: () => [] },
 );
@@ -137,6 +145,9 @@ const isSteering = computed(() => props.isRunning && hasMessage.value);
 const canSubmit = computed(
   () =>
     props.isRunning || (hasMessage.value && selectedModel.value !== undefined),
+);
+const hasPendingInterruption = computed(() =>
+  Boolean(props.pendingQuestionnaire || props.pendingApproval),
 );
 const approvalModes = computed<ApprovalModeOption[]>(() => [
   {
@@ -377,24 +388,36 @@ function openModelPicker(): void {
     isModelPickerOpen.value = true;
   });
 }
+
+function handleRootSubmit(event: Event): void {
+  if (event.target !== event.currentTarget) return;
+  event.preventDefault();
+  submitMessage();
+}
 </script>
 
 <template>
-  <form
+  <component
+    :is="hasPendingInterruption ? 'div' : 'form'"
     :class="
       cn(
         'mx-auto w-full max-w-[var(--session-composer-max-width)] px-[var(--session-composer-gutter)]',
-        props.pendingApproval ? 'pb-4' : 'pb-3',
+        hasPendingInterruption ? 'pb-4' : 'pb-3',
       )
     "
-    @submit.prevent="submitMessage"
+    @submit="handleRootSubmit"
   >
     <label class="sr-only" :for="messageId">
       {{ t("project.composer.label") }}
     </label>
 
+    <ProjectQuestionnaireCard
+      v-if="props.pendingQuestionnaire"
+      :questionnaire="props.pendingQuestionnaire"
+      @respond="(submission) => emit('respondQuestionnaire', submission)"
+    />
     <ProjectApprovalCard
-      v-if="props.pendingApproval"
+      v-else-if="props.pendingApproval"
       :approval="props.pendingApproval"
       @respond="(action, guidance) => emit('respond', action, guidance)"
     />
@@ -528,11 +551,11 @@ function openModelPicker(): void {
       @select="attachSession"
     />
 
-    <!-- While an approval is pending the card owns the whole composer area:
+    <!-- While a user decision is pending the card owns the composer area:
          the mode selector, context ring, and model picker are all moot
          until the decision is made. -->
     <div
-      v-if="!props.pendingApproval"
+      v-if="!hasPendingInterruption"
       class="flex min-w-0 items-center justify-between gap-3 pt-2"
     >
       <div class="flex min-w-0 items-center gap-1">
@@ -762,7 +785,7 @@ function openModelPicker(): void {
       v-model:open="isModelPickerOpen"
       :session-id="props.sessionId"
     />
-  </form>
+  </component>
 </template>
 
 <style scoped>

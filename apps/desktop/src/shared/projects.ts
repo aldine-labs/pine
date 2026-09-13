@@ -6,6 +6,7 @@ import type {
   PromptSessionRequest,
   PromptSessionResult,
   RespondApprovalRequest,
+  RespondQuestionnaireRequest,
   SetApprovalModeRequest,
   SetApprovalModeResult,
   SessionEventListener,
@@ -247,6 +248,9 @@ export interface PineDesktopApi extends PineWindowApi {
   onSessionEvent: (listener: SessionEventListener) => () => void;
   respondApproval: (
     request: RespondApprovalRequest,
+  ) => Promise<{ accepted: boolean }>;
+  respondQuestionnaire: (
+    request: RespondQuestionnaireRequest,
   ) => Promise<{ accepted: boolean }>;
   setApprovalMode: (
     request: SetApprovalModeRequest,

@@ -48,6 +48,7 @@ function createAgentHost(): AgentHost {
       }),
     ),
     respondApproval: vi.fn(),
+    respondQuestionnaire: vi.fn(),
     setApprovalMode: vi.fn().mockResolvedValue({ updated: true }),
     subscribe: vi.fn().mockReturnValue(() => undefined),
   };
@@ -105,6 +106,32 @@ afterEach(async () => {
 });
 
 describe("ProjectRuntimeRegistry", () => {
+  it("routes questionnaire answers only from the owning window", () => {
+    const agentHost = createAgentHost();
+    const respondQuestionnaire = vi.fn();
+    agentHost.respondQuestionnaire = respondQuestionnaire;
+    const registry = new ProjectRuntimeRegistry(agentHost, "/tmp/pine-agent");
+    const requestId = "019cfe51-7166-79b9-a5b9-c652fcca9eab";
+    const submission = {
+      cancelled: false,
+      answers: [
+        {
+          questionIndex: 0,
+          selectedOptionIndexes: [1],
+        },
+      ],
+    };
+    registry.trackQuestionnaire(requestId, 7);
+
+    expect(() =>
+      registry.respondQuestionnaire(8, { requestId, submission }),
+    ).toThrow("Questionnaire does not belong to this window.");
+    expect(registry.respondQuestionnaire(7, { requestId, submission })).toEqual(
+      { accepted: true },
+    );
+    expect(respondQuestionnaire).toHaveBeenCalledWith(requestId, submission);
+  });
+
   it("returns the latest usage when resuming the active session", async () => {
     const registry = new ProjectRuntimeRegistry(
       createAgentHost(),

@@ -11,6 +11,7 @@ import { computed, onMounted, ref, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { toast } from "vue-sonner";
 import type { PineApprovalAction, PineApprovalMode } from "@/shared/agent";
+import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
 import {
   attachmentMessagePreview,
   parseAttachmentMessage,
@@ -68,6 +69,7 @@ const isLoadingMessages = tabValue(liveState.isLoadingMessages);
 const isRunning = tabValue(liveState.isRunning);
 const messages = tabValue(liveState.messages);
 const pendingApprovals = tabValue(liveState.pendingApprovals);
+const pendingQuestionnaires = tabValue(liveState.pendingQuestionnaires);
 const steeringMessages = tabValue(liveState.steeringMessages);
 const reviewingToolCallIds = tabValue(liveState.reviewingToolCallIds);
 const draft = ref("");
@@ -82,6 +84,7 @@ const isDraggingFiles = ref(false);
 let fileDragDepth = 0;
 /** The oldest pending approval renders above the composer. */
 const pendingApproval = computed(() => pendingApprovals.value[0]);
+const pendingQuestionnaire = computed(() => pendingQuestionnaires.value[0]);
 /** Tool calls waiting for the user's decision (Let Me Review mode). */
 const awaitingApprovalToolCallIds = computed(
   () => new Set(pendingApprovals.value.map((approval) => approval.toolCallId)),
@@ -162,6 +165,10 @@ function respondToApproval(
   guidance?: string,
 ): void {
   void sessionStore.respondApproval(action, guidance);
+}
+
+function respondToQuestionnaire(submission: AskUserQuestionSubmission): void {
+  void sessionStore.respondQuestionnaire(submission);
 }
 
 function abort(): void {
@@ -328,10 +335,12 @@ async function handleDrop(event: DragEvent): Promise<void> {
         v-model:approvalMode="approvalMode"
         :is-running="isRunning"
         :pending-approval="pendingApproval"
+        :pending-questionnaire="pendingQuestionnaire"
         :session-id="props.sessionId"
         :steering-messages="steeringMessages"
         @abort="abort"
         @respond="respondToApproval"
+        @respond-questionnaire="respondToQuestionnaire"
         @submit="submit"
         @withdraw-steering="withdrawSteering"
       />

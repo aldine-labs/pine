@@ -21,6 +21,10 @@ import { attachmentMessagePreview } from "@/shared/attachments";
 import { parseMessageBlocks } from "@/shared/sessions";
 import { isAppLocale } from "@/app/i18n";
 import { useModelsStore } from "@/stores/models";
+import type {
+  AskUserQuestionParams,
+  AskUserQuestionSubmission,
+} from "@pine/rpiv-ask-user-question";
 
 function currentAppLocale(): "en-US" | "zh-CN" {
   const locale = document.documentElement.lang;
@@ -43,6 +47,12 @@ export interface PinePendingApproval {
   /** The tool call's imperative summary, shown above the raw arguments. */
   description?: string;
   evidence?: string;
+}
+
+export interface PinePendingQuestionnaire {
+  requestId: string;
+  toolCallId: string;
+  questionnaire: AskUserQuestionParams;
 }
 
 function messageRole(value: PineJsonValue): "assistant" | "user" | null {
@@ -146,6 +156,7 @@ export const useSessionStore = defineStore("session", () => {
   const isRunning = ref(false);
   const contextUsage = ref<PineContextUsage | null>(null);
   const pendingApprovals = ref<PinePendingApproval[]>([]);
+  const pendingQuestionnaires = ref<PinePendingQuestionnaire[]>([]);
   const steeringMessages = ref<string[]>([]);
   /** Tool calls currently held by the auto-reviewer (auto-approve). */
   const reviewingToolCallIds = ref<ReadonlySet<string>>(new Set());
@@ -484,6 +495,22 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
+  async function respondQuestionnaire(
+    submission: AskUserQuestionSubmission,
+  ): Promise<void> {
+    const pending = pendingQuestionnaires.value[0];
+    if (!pending) return;
+    pendingQuestionnaires.value = pendingQuestionnaires.value.slice(1);
+    try {
+      await window.pine.respondQuestionnaire({
+        requestId: pending.requestId,
+        submission,
+      });
+    } catch {
+      // The run may have been aborted while the user submitted the card.
+    }
+  }
+
   async function deleteSession(sessionId: string): Promise<boolean> {
     const { deleted } = await window.pine.deleteSession({ sessionId });
     if (!deleted) return false;
@@ -550,6 +577,7 @@ export const useSessionStore = defineStore("session", () => {
       // Aborted turns resolve pending approvals without a decided event.
       if (event.state === "idle") {
         pendingApprovals.value = [];
+        pendingQuestionnaires.value = [];
         reviewingToolCallIds.value = new Set();
         steeringMessages.value = [];
       }
@@ -623,6 +651,25 @@ export const useSessionStore = defineStore("session", () => {
           ...(event.reason ? { reason: event.reason } : {}),
         },
       });
+      return;
+    }
+    if (event.type === "questionnaire-request") {
+      if (currentSessionId !== event.sessionId) return;
+      pendingQuestionnaires.value = [
+        ...pendingQuestionnaires.value,
+        {
+          requestId: event.requestId,
+          toolCallId: event.toolCallId,
+          questionnaire: event.questionnaire,
+        },
+      ];
+      return;
+    }
+    if (event.type === "questionnaire-decided") {
+      if (currentSessionId !== event.sessionId) return;
+      pendingQuestionnaires.value = pendingQuestionnaires.value.filter(
+        (questionnaire) => questionnaire.requestId !== event.requestId,
+      );
       return;
     }
     if (event.type === "session-updated") {
@@ -840,6 +887,7 @@ export const useSessionStore = defineStore("session", () => {
     contextUsage.value = null;
     steeringMessages.value = [];
     pendingApprovals.value = [];
+    pendingQuestionnaires.value = [];
     reviewingToolCallIds.value = new Set();
     isRunning.value = false;
     isLoadingMessages.value = false;
@@ -862,6 +910,7 @@ export const useSessionStore = defineStore("session", () => {
     isRunning.value = false;
     isStartingPrompt = false;
     pendingApprovals.value = [];
+    pendingQuestionnaires.value = [];
     reviewingToolCallIds.value = new Set();
     hasEarlierMessages.value = false;
     nextBefore.value = undefined;
@@ -887,11 +936,13 @@ export const useSessionStore = defineStore("session", () => {
     loadEarlierMessages,
     messages,
     pendingApprovals,
+    pendingQuestionnaires,
     prompt,
     recentSessions,
     renameSession,
     reset,
     respondApproval,
+    respondQuestionnaire,
     resume,
     reviewingToolCallIds,
     search,

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { PineApprovalMode } from "../shared/agent";
 import type { PineContextCompactionStrategy } from "../shared/preferences";
+import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
 import type {
   AddCustomModelRequest,
   LoginProviderRequest,
@@ -95,6 +96,11 @@ export interface AgentHost {
   subscribe(listener: (event: PineRuntimeEvent) => void): () => void;
   /** Resolve a pending user-approval round trip inside the agent worker. */
   respondApproval(requestId: string, decision: GateDecision): void;
+  /** Resolve a pending structured-question round trip inside the worker. */
+  respondQuestionnaire(
+    requestId: string,
+    submission: AskUserQuestionSubmission,
+  ): void;
   setApprovalMode(
     sessionId: string,
     approvalMode: PineApprovalMode,
@@ -296,6 +302,17 @@ export class AgentProcessHost implements AgentHost {
       type: "approval:response",
       requestId,
       decision,
+    });
+  }
+
+  respondQuestionnaire(
+    requestId: string,
+    submission: AskUserQuestionSubmission,
+  ): void {
+    this.process?.postMessage({
+      type: "questionnaire:response",
+      requestId,
+      submission,
     });
   }
 

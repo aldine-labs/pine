@@ -1,4 +1,8 @@
 import type { PineSessionSummary } from "./sessions";
+import type {
+  AskUserQuestionParams,
+  AskUserQuestionSubmission,
+} from "@pine/rpiv-ask-user-question";
 
 export const PROMPT_SESSION_CHANNEL = "sessions:prompt" as const;
 export const ABORT_SESSION_CHANNEL = "sessions:abort" as const;
@@ -43,6 +47,13 @@ export interface SetApprovalModeResult {
 }
 
 export const APPROVAL_RESPONSE_CHANNEL = "sessions:approval-response" as const;
+export const QUESTIONNAIRE_RESPONSE_CHANNEL =
+  "sessions:questionnaire-response" as const;
+
+export interface RespondQuestionnaireRequest {
+  requestId: string;
+  submission: AskUserQuestionSubmission;
+}
 
 /**
  * Stable marker that a bash call was blocked by the project sandbox rather
@@ -178,6 +189,20 @@ export type PineAgentEvent =
       /** Who decided: the user (Let Me Review) or the model judge (Auto Approve). */
       decidedBy: "user" | "judge";
       reason?: string;
+    }
+  | {
+      type: "questionnaire-request";
+      sessionId: string;
+      requestId: string;
+      toolCallId: string;
+      questionnaire: AskUserQuestionParams;
+    }
+  | {
+      type: "questionnaire-decided";
+      sessionId: string;
+      requestId: string;
+      toolCallId: string;
+      cancelled: boolean;
     }
   | {
       type: "tool-review";
