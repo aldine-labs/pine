@@ -166,7 +166,10 @@ export interface ProviderLoginResult {
   credentialType: PineAuthType;
 }
 
-export type SelectModelRequest = PineModelSelection;
+export type SelectModelRequest = PineModelSelection & {
+  /** The conversation whose persisted model should change. Omit for defaults. */
+  sessionId?: string;
+};
 export type SelectUtilityModelRequest = PineUtilityModelSelection;
 
 export interface LogoutProviderRequest {

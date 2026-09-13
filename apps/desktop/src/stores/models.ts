@@ -78,6 +78,7 @@ export const useModelsStore = defineStore("models", () => {
   );
   const isLoading = ref(false);
   const login = ref<ProviderLoginState | null>(null);
+  const sessionSelections = ref<Record<string, PineModelSelection>>({});
   let stopAuthEvents: (() => void) | null = null;
 
   const models = computed(() => catalog.value.models);
@@ -97,6 +98,44 @@ export const useModelsStore = defineStore("models", () => {
         )
       : undefined;
   });
+
+  function selectionFor(sessionId?: string): PineModelSelection | undefined {
+    return sessionId ? sessionSelections.value[sessionId] : selection.value;
+  }
+
+  function selectedModelFor(
+    sessionId?: string,
+  ): PineModelDescriptor | undefined {
+    const selected = selectionFor(sessionId);
+    return selected
+      ? models.value.find(
+          (model) =>
+            model.providerId === selected.providerId &&
+            model.id === selected.modelId,
+        )
+      : undefined;
+  }
+
+  function setSessionSelection(
+    sessionId: string,
+    nextSelection: PineModelSelection | undefined,
+  ): void {
+    if (nextSelection) {
+      sessionSelections.value = {
+        ...sessionSelections.value,
+        [sessionId]: nextSelection,
+      };
+      return;
+    }
+    const next = { ...sessionSelections.value };
+    delete next[sessionId];
+    sessionSelections.value = next;
+  }
+
+  function clearSessionSelections(): void {
+    sessionSelections.value = {};
+  }
+
   const utilitySelectedModel = computed(() => {
     const selected = utilitySelection.value;
     return selected
@@ -199,31 +238,33 @@ export const useModelsStore = defineStore("models", () => {
   async function select(
     model: PineModelDescriptor,
     thinkingLevel?: PineModelSelection["thinkingLevel"],
+    sessionId?: string,
   ): Promise<void> {
     const nextThinkingLevel =
       thinkingLevel ?? defaultThinkingLevel(model.supportedThinkingLevels);
     await window.pine.selectModel({
       providerId: model.providerId,
       modelId: model.id,
+      ...(sessionId ? { sessionId } : {}),
       thinkingLevel: nextThinkingLevel,
     });
-    catalog.value = {
-      ...catalog.value,
-      selection: {
-        providerId: model.providerId,
-        modelId: model.id,
-        thinkingLevel: nextThinkingLevel,
-      },
+    const nextSelection: PineModelSelection = {
+      providerId: model.providerId,
+      modelId: model.id,
+      thinkingLevel: nextThinkingLevel,
     };
+    if (sessionId) setSessionSelection(sessionId, nextSelection);
+    else catalog.value = { ...catalog.value, selection: nextSelection };
     recordRecent(model);
   }
 
   async function setThinkingLevel(
     thinkingLevel: PineModelSelection["thinkingLevel"],
+    sessionId?: string,
   ): Promise<void> {
-    const model = selectedModel.value;
+    const model = selectedModelFor(sessionId);
     if (!model) return;
-    await select(model, thinkingLevel);
+    await select(model, thinkingLevel, sessionId);
   }
 
   async function selectUtilityModel(model: PineModelDescriptor): Promise<void> {
@@ -307,6 +348,7 @@ export const useModelsStore = defineStore("models", () => {
     beginLogin,
     cancelLogin,
     catalog,
+    clearSessionSelections,
     clearLogin,
     configuredProviders,
     connectAuthEvents,
@@ -326,7 +368,11 @@ export const useModelsStore = defineStore("models", () => {
     select,
     selectUtilityModel,
     selectedModel,
+    selectedModelFor,
     selection,
+    selectionFor,
+    sessionSelections,
+    setSessionSelection,
     setThinkingLevel,
     toggleFavorite,
     utilitySelectedModel,

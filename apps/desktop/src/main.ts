@@ -505,6 +505,7 @@ const ProviderAuthLoginIdSchema = z.object({ loginId: z.uuid() });
 const SelectModelRequestSchema = z.object({
   modelId: z.string().trim().min(1).max(500),
   providerId: z.string().trim().min(1).max(200),
+  sessionId: z.uuid().optional(),
   thinkingLevel: z.enum([
     "off",
     "minimal",

@@ -50,6 +50,7 @@ const props = withDefaults(
   defineProps<{
     open: boolean;
     purpose?: "session" | "utility";
+    sessionId?: string;
   }>(),
   { purpose: "session" },
 );
@@ -57,8 +58,11 @@ const emit = defineEmits<{ "update:open": [open: boolean] }>();
 
 const { t } = useI18n();
 const modelsStore = useModelsStore();
-const { isLoading, models, providers, selection, utilitySelection } =
+const { isLoading, models, providers, utilitySelection } =
   storeToRefs(modelsStore);
+const sessionSelection = computed(() =>
+  modelsStore.selectionFor(props.sessionId),
+);
 const view = ref<PickerView>("models");
 const isAuthOpen = ref(false);
 const selectedProvider = ref<PineProviderDescriptor | null>(null);
@@ -127,7 +131,9 @@ watch(
 
 function isSelected(model: PineModelDescriptor): boolean {
   const selected =
-    props.purpose === "utility" ? utilitySelection.value : selection.value;
+    props.purpose === "utility"
+      ? utilitySelection.value
+      : sessionSelection.value;
   return (
     selected?.providerId === model.providerId && selected.modelId === model.id
   );
@@ -169,7 +175,7 @@ async function selectModel(model: PineModelDescriptor): Promise<void> {
     if (props.purpose === "utility") {
       await modelsStore.selectUtilityModel(model);
     } else {
-      await modelsStore.select(model);
+      await modelsStore.select(model, undefined, props.sessionId);
     }
     emit("update:open", false);
   } catch (error) {

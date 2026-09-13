@@ -453,16 +453,19 @@ export class ProjectRuntimeRegistry {
     return this.agentHost.logoutProvider(this.agentDir, providerId);
   }
 
-  selectModel(
+  async selectModel(
     webContentsId: number,
     request: SelectModelRequest,
   ): Promise<{ disposed: boolean }> {
+    if (request.sessionId) {
+      await this.resume(webContentsId, request.sessionId);
+    }
     return this.agentHost.selectModel(
       this.agentDir,
       request.providerId,
       request.modelId,
       request.thinkingLevel,
-      this.activeSessionId(this.runtimes.get(webContentsId)),
+      request.sessionId,
     );
   }
 

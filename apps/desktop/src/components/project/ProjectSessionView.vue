@@ -328,6 +328,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
         v-model:approvalMode="approvalMode"
         :is-running="isRunning"
         :pending-approval="pendingApproval"
+        :session-id="props.sessionId"
         :steering-messages="steeringMessages"
         @abort="abort"
         @respond="respondToApproval"

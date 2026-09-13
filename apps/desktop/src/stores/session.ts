@@ -20,6 +20,7 @@ import type {
 import { attachmentMessagePreview } from "@/shared/attachments";
 import { parseMessageBlocks } from "@/shared/sessions";
 import { isAppLocale } from "@/app/i18n";
+import { useModelsStore } from "@/stores/models";
 
 function currentAppLocale(): "en-US" | "zh-CN" {
   const locale = document.documentElement.lang;
@@ -134,6 +135,7 @@ function compactionMessage(
 }
 
 export const useSessionStore = defineStore("session", () => {
+  const modelsStore = useModelsStore();
   const activeSession = shallowRef<PineSessionSummary | null>(null);
   const messages = ref<PineTranscriptMessage[]>([]);
   const recentSessions = shallowRef<SessionSearchResult[]>([]);
@@ -306,6 +308,7 @@ export const useSessionStore = defineStore("session", () => {
       const session = upsertRecentSession(result.session);
       if (sequence !== activationSequence) return result.session;
 
+      modelsStore.setSessionSelection(session.id, session.modelSelection);
       activeSession.value = session;
       currentSessionId = session.id;
       contextUsage.value = result.contextUsage ?? null;
@@ -405,6 +408,10 @@ export const useSessionStore = defineStore("session", () => {
       const nextSession = upsertRecentSession(session);
       if (sequence !== activationSequence) return nextSession;
 
+      modelsStore.setSessionSelection(
+        nextSession.id,
+        nextSession.modelSelection,
+      );
       isStartingPrompt = false;
       activeSession.value = nextSession;
       currentSessionId = nextSession.id;
@@ -490,6 +497,7 @@ export const useSessionStore = defineStore("session", () => {
       (session) => session.id !== sessionId,
     );
     dropSessionCache(sessionId);
+    modelsStore.setSessionSelection(sessionId, undefined);
     if (currentSessionId === sessionId) startDraft();
     return true;
   }
@@ -626,6 +634,7 @@ export const useSessionStore = defineStore("session", () => {
               (session) => session.id === event.sessionId,
             );
       const summary = mergeSessionSummary(event.summary, previous);
+      modelsStore.setSessionSelection(event.sessionId, summary.modelSelection);
       activeSession.value = summary;
       upsertRecentSession(summary);
       return;
@@ -846,6 +855,7 @@ export const useSessionStore = defineStore("session", () => {
     recentSessions.value = [];
     searchResults.value = [];
     sessionCache.clear();
+    modelsStore.clearSessionSelections();
     isLoadingRecent.value = false;
     isSearching.value = false;
     isLoadingMessages.value = false;

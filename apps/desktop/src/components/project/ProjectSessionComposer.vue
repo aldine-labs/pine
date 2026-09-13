@@ -104,6 +104,7 @@ const emit = defineEmits<{
 const props = withDefaults(
   defineProps<{
     isRunning?: boolean;
+    sessionId?: string;
     steeringMessages?: readonly string[];
     /** When set, the approval questionnaire replaces the message input. */
     pendingApproval?: PinePendingApproval | null;
@@ -117,8 +118,11 @@ const approvalMode = defineModel<ApprovalMode>("approvalMode", {
 });
 const { t } = useI18n();
 const modelsStore = useModelsStore();
-const { favoriteModels, featuredModels, selectedModel, selection } =
-  storeToRefs(modelsStore);
+const { favoriteModels, featuredModels } = storeToRefs(modelsStore);
+const selection = computed(() => modelsStore.selectionFor(props.sessionId));
+const selectedModel = computed(() =>
+  modelsStore.selectedModelFor(props.sessionId),
+);
 const messageId = useId();
 const isModelPickerOpen = ref(false);
 const isSessionPickerOpen = ref(false);
@@ -344,7 +348,10 @@ function updateThinkingLevel(value: unknown): void {
   ) {
     return;
   }
-  void modelsStore.setThinkingLevel(value as PineThinkingLevel);
+  void modelsStore.setThinkingLevel(
+    value as PineThinkingLevel,
+    props.sessionId,
+  );
 }
 
 function thinkingLevelTextClass(level: PineThinkingLevel): string | undefined {
@@ -362,7 +369,7 @@ function selectFeaturedModel(value: unknown): void {
   const model = featuredModels.value.find(
     (candidate) => pineModelKey(candidate) === value,
   );
-  if (model) void modelsStore.select(model);
+  if (model) void modelsStore.select(model, undefined, props.sessionId);
 }
 
 function openModelPicker(): void {
@@ -751,7 +758,10 @@ function openModelPicker(): void {
       </AlertDialogContent>
     </AlertDialog>
 
-    <ModelPickerDialog v-model:open="isModelPickerOpen" />
+    <ModelPickerDialog
+      v-model:open="isModelPickerOpen"
+      :session-id="props.sessionId"
+    />
   </form>
 </template>
 

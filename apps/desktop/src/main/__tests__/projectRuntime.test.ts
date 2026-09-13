@@ -178,6 +178,57 @@ describe("ProjectRuntimeRegistry", () => {
     }
   });
 
+  it("keeps draft defaults separate from an active conversation model", async () => {
+    const agentHost = createAgentHost();
+    const selectModel = vi.spyOn(agentHost, "selectModel");
+    const registry = new ProjectRuntimeRegistry(agentHost, "/pine/agent");
+    const { dataRoot, project } = await createRuntimeFixture();
+
+    try {
+      await registry.open(1, project, {
+        attachmentsRoot: path.join(dataRoot, "attachments"),
+        cacheRoot: path.join(dataRoot, "cache"),
+        projectRoot: dataRoot,
+        sessionsRoot: path.join(dataRoot, "sessions"),
+      });
+      await registry.prompt(1, {
+        message: "Conversation A",
+        target: { kind: "new" },
+      });
+
+      await registry.selectModel(1, {
+        providerId: "provider",
+        modelId: "model-b",
+        thinkingLevel: "high",
+      });
+      await registry.selectModel(1, {
+        providerId: "provider",
+        modelId: "model-c",
+        sessionId: sessionSummary.id,
+        thinkingLevel: "medium",
+      });
+
+      expect(selectModel).toHaveBeenNthCalledWith(
+        1,
+        "/pine/agent",
+        "provider",
+        "model-b",
+        "high",
+        undefined,
+      );
+      expect(selectModel).toHaveBeenNthCalledWith(
+        2,
+        "/pine/agent",
+        "provider",
+        "model-c",
+        "medium",
+        sessionSummary.id,
+      );
+    } finally {
+      await registry.dispose(1);
+    }
+  });
+
   it("dequeues steering from the active agent session", async () => {
     const agentHost = createAgentHost();
     const dequeueSteering = vi

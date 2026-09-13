@@ -1,4 +1,5 @@
 import { parseAttachmentMessage, type PineAttachment } from "./attachments";
+import type { PineModelSelection } from "./models";
 
 export const SEARCH_SESSIONS_CHANNEL = "sessions:search" as const;
 export const RESUME_SESSION_CHANNEL = "sessions:resume" as const;
@@ -174,6 +175,7 @@ export interface PineSessionSummary {
   createdAt: string;
   id: string;
   messageCount: number;
+  modelSelection?: PineModelSelection;
   name?: string;
   preview?: string;
   updatedAt: string;

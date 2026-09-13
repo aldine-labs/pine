@@ -87,6 +87,37 @@ describe("models store lists", () => {
     ).toEqual([pineModelKey(alpha)]);
   });
 
+  it("targets model changes to one conversation without changing defaults", async () => {
+    const store = useModelsStore();
+    store.catalog = {
+      ...catalog,
+      selection: {
+        providerId: alpha.providerId,
+        modelId: alpha.id,
+        thinkingLevel: "high",
+      },
+    };
+
+    await store.select(beta, "off", "019cfe51-7166-79b9-a5b9-c652fcca9eab");
+
+    expect(window.pine.selectModel).toHaveBeenCalledWith({
+      providerId: beta.providerId,
+      modelId: beta.id,
+      sessionId: "019cfe51-7166-79b9-a5b9-c652fcca9eab",
+      thinkingLevel: "off",
+    });
+    expect(store.selection).toEqual({
+      providerId: alpha.providerId,
+      modelId: alpha.id,
+      thinkingLevel: "high",
+    });
+    expect(store.selectionFor("019cfe51-7166-79b9-a5b9-c652fcca9eab")).toEqual({
+      providerId: beta.providerId,
+      modelId: beta.id,
+      thinkingLevel: "off",
+    });
+  });
+
   it("restores favorites from Pine local storage", () => {
     localStorage.setItem(
       MODEL_FAVORITES_STORAGE_KEY,

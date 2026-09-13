@@ -6,6 +6,7 @@ import {
   type PineJsonValue,
 } from "@/shared/agent";
 import type { PineContextUsage, PineSessionSummary } from "@/shared/sessions";
+import { useModelsStore } from "../models";
 import { useSessionStore } from "../session";
 
 const session: PineSessionSummary = {
@@ -54,6 +55,14 @@ describe("session store", () => {
   });
 
   it("activates a resumed session", async () => {
+    const sessionWithModel: PineSessionSummary = {
+      ...session,
+      modelSelection: {
+        providerId: "anthropic",
+        modelId: "claude-sonnet",
+        thinkingLevel: "high",
+      },
+    };
     Object.defineProperty(window, "pine", {
       configurable: true,
       value: {
@@ -61,14 +70,19 @@ describe("session store", () => {
           hasMore: false,
           messages: [],
         }),
-        resumeSession: vi.fn().mockResolvedValue({ session, contextUsage }),
+        resumeSession: vi
+          .fn()
+          .mockResolvedValue({ session: sessionWithModel, contextUsage }),
       },
     });
     const store = useSessionStore();
 
-    await expect(store.resume(session.id)).resolves.toEqual(session);
-    expect(store.activeSession).toEqual(session);
+    await expect(store.resume(session.id)).resolves.toEqual(sessionWithModel);
+    expect(store.activeSession).toEqual(sessionWithModel);
     expect(store.contextUsage).toEqual(contextUsage);
+    expect(useModelsStore().selectionFor(session.id)).toEqual(
+      sessionWithModel.modelSelection,
+    );
   });
 
   it("reuses the cached transcript array across resumes without re-fetching", async () => {
@@ -99,6 +113,12 @@ describe("session store", () => {
     expect(store.isLoadingMessages).toBe(false);
     expect(store.contextUsage).toEqual(contextUsage);
 
+    useModelsStore().setSessionSelection(session.id, {
+      providerId: "provider-b",
+      modelId: "model-b",
+      thinkingLevel: "high",
+    });
+
     // Switching back to the same session restores the same array reference and
     // its persisted usage snapshot without re-fetching from disk.
     store.startDraft();
@@ -106,6 +126,11 @@ describe("session store", () => {
     await store.resume(session.id);
     expect(store.messages).toBe(firstArray);
     expect(store.contextUsage).toEqual(contextUsage);
+    expect(useModelsStore().selectionFor(session.id)).toEqual({
+      providerId: "provider-b",
+      modelId: "model-b",
+      thinkingLevel: "high",
+    });
     expect(loadSessionMessages).toHaveBeenCalledTimes(1);
     expect(store.isLoadingMessages).toBe(false);
   });

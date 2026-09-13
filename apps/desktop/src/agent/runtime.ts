@@ -340,6 +340,15 @@ function sessionSummary(session: AgentSession): PineSessionSummary {
     createdAt,
     updatedAt: lastEntry?.timestamp ?? createdAt,
     messageCount: messages.length,
+    ...(session.model
+      ? {
+          modelSelection: {
+            providerId: session.model.provider,
+            modelId: session.model.id,
+            thinkingLevel: session.thinkingLevel,
+          },
+        }
+      : {}),
     ...(session.sessionName ? { name: session.sessionName } : {}),
   };
 }
@@ -1001,6 +1010,7 @@ export class PineAgentRuntime {
       ? thinkingLevel
       : (supported.at(-1) ?? "off");
     const live = sessionId ? this.liveSessions.get(sessionId) : undefined;
+    if (sessionId && !live) throw new Error("Session is not active.");
     if (live) {
       await live.session.setModel(model);
       live.session.setThinkingLevel(normalizedThinkingLevel);
