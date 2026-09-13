@@ -85,7 +85,7 @@ jobs:
         working-directory: apps/desktop
         run: >-
           bunx electron-forge make --platform=darwin --arch=${{ matrix.arch }}
-          --targets @electron-forge/maker-dmg
+          --targets dmg
 
       - name: Name installer
         id: installer
@@ -153,7 +153,7 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: >-
           bunx electron-forge make --platform=win32 --arch=x64
-          --targets @electron-forge/maker-squirrel
+          --targets squirrel
 
       - name: Verify packaged runtime and launch
         shell: pwsh
