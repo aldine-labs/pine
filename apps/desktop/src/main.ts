@@ -724,7 +724,11 @@ const createWindow = () => {
     titleBarStyle: "hidden",
     ...(process.platform === "darwin"
       ? { trafficLightPosition: { x: 21, y: 21 } }
-      : { titleBarOverlay: true }),
+      : {
+          // Keep the native Windows controls aligned with the custom title
+          // bar instead of falling back to the shorter system overlay.
+          titleBarOverlay: { height: 56 },
+        }),
     width: 1120,
     height: 840,
     minWidth: 720,

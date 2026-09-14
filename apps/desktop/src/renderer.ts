@@ -27,6 +27,7 @@ const i18n = createAppI18n(locale);
 const router = createAppRouter(pinia);
 
 document.documentElement.lang = locale;
+document.documentElement.dataset.platform = window.pine?.platform ?? "darwin";
 useAppearanceStore(pinia).initialize();
 useUpdaterStore(pinia).initialize();
 

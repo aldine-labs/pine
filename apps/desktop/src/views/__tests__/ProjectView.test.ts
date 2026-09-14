@@ -26,10 +26,13 @@ const project: PineProject = {
   updatedAt: "2026-08-19T12:00:00.000Z",
 };
 
-async function mountView(closeProject = vi.fn().mockResolvedValue(undefined)) {
+async function mountView(
+  closeProject = vi.fn().mockResolvedValue(undefined),
+  platform: "darwin" | "win32" = "darwin",
+) {
   Object.defineProperty(window, "pine", {
     configurable: true,
-    value: { closeProject },
+    value: { closeProject, platform },
   });
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -58,7 +61,9 @@ async function mountView(closeProject = vi.fn().mockResolvedValue(undefined)) {
     global: {
       plugins: [pinia, router, createAppI18n("zh-CN")],
       stubs: {
-        PinePreferencesDialog: { template: "<div />" },
+        PinePreferencesDialog: {
+          template: '<button data-pine-preferences type="button" />',
+        },
         ProjectContentTabs: { template: "<div />" },
         ProjectDialog: {
           props: ["open"],
@@ -102,6 +107,23 @@ it("still opens project settings from the sidebar", async () => {
 
   expect(wrapper.get("[data-project-dialog]").attributes("data-open")).toBe(
     "true",
+  );
+  wrapper.unmount();
+});
+
+it("places the Windows logo and preferences before navigation controls", async () => {
+  const { wrapper } = await mountView(
+    vi.fn().mockResolvedValue(undefined),
+    "win32",
+  );
+  const leading = wrapper.get('[data-slot="window-titlebar-leading"]');
+
+  expect(leading.find('[data-testid="windows-titlebar-logo"]').exists()).toBe(
+    true,
+  );
+  expect(leading.find("[data-pine-preferences]").exists()).toBe(true);
+  expect(leading.element.firstElementChild?.getAttribute("data-testid")).toBe(
+    "windows-titlebar-logo",
   );
   wrapper.unmount();
 });

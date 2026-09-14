@@ -16,7 +16,7 @@ vi.mock("@/components/project/ProjectDialog.vue", () => ({
 vi.mock("@/components/window/WindowTitleBar.vue", () => ({
   default: {
     template:
-      '<header><slot name="leading" /><slot name="trailing" /></header>',
+      '<header><div data-slot="window-titlebar-leading"><slot name="leading" /></div><div data-slot="window-titlebar-trailing"><slot name="trailing" /></div></header>',
   },
 }));
 
@@ -38,12 +38,15 @@ const project: PineProject = {
   updatedAt: "2026-08-19T12:00:00.000Z",
 };
 
-async function mountView(projects: PineProject[]) {
+async function mountView(
+  projects: PineProject[],
+  platform: "darwin" | "win32" = "darwin",
+) {
   Object.defineProperty(window, "pine", {
     configurable: true,
     value: {
       listProjects: vi.fn().mockResolvedValue({ projects }),
-      platform: "darwin",
+      platform,
     },
   });
   const pinia = createPinia();
@@ -104,5 +107,19 @@ describe("ProjectsView", () => {
     await wrapper.vm.$nextTick();
 
     expect(wrapper.findAll('[data-testid="project-card"]')).toHaveLength(0);
+  });
+
+  it("places the project search beside the logo on Windows", async () => {
+    const wrapper = await mountView([], "win32");
+    const leading = wrapper.get('[data-slot="window-titlebar-leading"]');
+    const trailing = wrapper.get('[data-slot="window-titlebar-trailing"]');
+
+    expect(leading.find('[data-testid="windows-titlebar-logo"]').exists()).toBe(
+      true,
+    );
+    expect(leading.find('[data-testid="project-search"]').exists()).toBe(true);
+    expect(trailing.find('[data-testid="project-search"]').exists()).toBe(
+      false,
+    );
   });
 });

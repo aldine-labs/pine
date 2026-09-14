@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { House } from "@lucide/vue";
 import { onKeyStroke } from "@vueuse/core";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { handleError } from "@/app/errors/errorHandler";
+import { PineLogo } from "@/components/pine";
 import PinePreferencesDialog from "@/components/preferences/PinePreferencesDialog.vue";
 import SessionSearchOverlay from "@/components/sessions/SessionSearchOverlay.vue";
 import ProjectContentTabs from "@/components/project/ProjectContentTabs.vue";
@@ -27,6 +28,7 @@ const isSessionSearchOpen = ref(false);
 const isProjectSettingsOpen = ref(false);
 const isUpdateOpen = ref(false);
 const projectStore = useProjectStore();
+const isWindowsPlatform = computed(() => window.pine?.platform === "win32");
 
 async function closeProject(): Promise<void> {
   try {
@@ -69,6 +71,13 @@ onKeyStroke("k", (event) => {
          Register window controls after the content titlebar's drag region. -->
     <WindowTitleBar controls-only>
       <template #leading>
+        <PineLogo
+          v-if="isWindowsPlatform"
+          data-testid="windows-titlebar-logo"
+          aria-hidden="true"
+          class="pointer-events-none size-5 shrink-0 fill-current text-foreground select-none"
+        />
+        <PinePreferencesDialog v-if="isWindowsPlatform" />
         <SidebarTrigger />
         <Button
           variant="ghost"
@@ -81,7 +90,7 @@ onKeyStroke("k", (event) => {
         </Button>
       </template>
       <template #trailing>
-        <PinePreferencesDialog />
+        <PinePreferencesDialog v-if="!isWindowsPlatform" />
       </template>
     </WindowTitleBar>
 

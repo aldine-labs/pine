@@ -32,6 +32,9 @@
   /* Width of the icon-sm home button that follows the sidebar toggle. */
   --window-titlebar-home-action-width: 1.75rem;
   --window-titlebar-leading-offset: 5.5625rem;
+  --window-titlebar-leading-extra: 0rem;
+  /* Approximate width reserved for the native Windows control overlay. */
+  --window-titlebar-controls-width: 3rem;
   --window-titlebar-height: calc(
     var(--window-titlebar-control-height) +
       var(--window-titlebar-padding-block) +
@@ -90,6 +93,14 @@
   --shadow-xl:
     0 1px 3px 0px oklch(0 0 0 / 0.1), 0 8px 10px -1px oklch(0 0 0 / 0.1);
   --shadow-2xl: 0 1px 3px 0px oklch(0 0 0 / 0.25);
+}
+
+/* Windows has no traffic lights on the leading edge. Keep the custom
+   controls clear of the full-height native overlay on the trailing edge. */
+[data-platform="win32"] {
+  --window-titlebar-leading-offset: 0.75rem;
+  --window-titlebar-leading-extra: 3.5rem;
+  --window-titlebar-controls-width: 10.5rem;
 }
 
 .dark {

@@ -64,6 +64,7 @@ const deletingProject = ref<PineProject | null>(null);
 const openingProjectId = ref<string | null>(null);
 const searchQuery = ref("");
 const isMacOSPlatform = computed(() => window.pine?.platform === "darwin");
+const isWindowsPlatform = computed(() => window.pine?.platform === "win32");
 
 const filteredProjects = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase();
@@ -173,14 +174,33 @@ onMounted(() => {
     <WindowTitleBar>
       <template #leading>
         <PineLogo
-          v-if="isMacOSPlatform"
-          data-testid="macos-titlebar-logo"
+          v-if="isMacOSPlatform || isWindowsPlatform"
+          :data-testid="
+            isWindowsPlatform ? 'windows-titlebar-logo' : 'macos-titlebar-logo'
+          "
           aria-hidden="true"
-          class="pointer-events-none ml-2 size-5 shrink-0 fill-current text-muted-foreground select-none"
+          class="pointer-events-none size-5 shrink-0 fill-current text-foreground select-none"
         />
+        <InputGroup
+          v-if="isWindowsPlatform"
+          class="h-8 w-40 transition-[width] duration-200 focus-within:w-56"
+        >
+          <InputGroupInput
+            v-model="searchQuery"
+            data-testid="project-search"
+            type="search"
+            :disabled="isLoadingProjects"
+            :aria-label="t('projects.searchLabel')"
+            :placeholder="t('projects.searchPlaceholder')"
+          />
+          <InputGroupAddon>
+            <Search />
+          </InputGroupAddon>
+        </InputGroup>
       </template>
       <template #trailing>
         <InputGroup
+          v-if="!isWindowsPlatform"
           class="h-8 w-40 transition-[width] duration-200 focus-within:w-56"
         >
           <InputGroupInput
