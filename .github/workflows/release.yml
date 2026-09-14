@@ -78,7 +78,7 @@ jobs:
       contents: read
     secrets: inherit
     with:
-      require_windows_signing: true
+      require_windows_signing: false
 
   publish:
     name: Publish release
