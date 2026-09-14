@@ -7,10 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-14
+
+### Added
+
+- Bundled Sarasa Gothic SC CJK subsets as the global UI fallback after Inter,
+  with Regular, SemiBold, and Bold weights.
+- Documented platform support levels for macOS, Windows, and Linux.
+
 ### Changed
 
 - Coalesced redundant sandbox file operations so Windows read/write calls launch one file worker
   and edit calls launch two, without weakening path authorization or final-file checks.
+- Windows startup now completes required sandbox provisioning before opening the main window.
+
+### Fixed
+
+- Prevented repeated Windows sandbox setup prompts and access-denied process launches by granting
+  the sandbox broker read and execute access while keeping its runtime directory protected.
+- Kept Windows title-bar controls aligned with Pine's custom layout.
+- Kept macOS sandbox control sockets on a short system path so deeply nested project temporary
+  directories no longer break shell commands and file tools.
 
 ### Known issues
 
@@ -22,18 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Windows x64 desktop distribution with Squirrel installation and update support.
-
-### Changed
-
-- Windows startup now completes required sandbox provisioning before opening the main window.
-
-### Fixed
-
-- Prevented repeated Windows sandbox setup prompts and access-denied process launches by granting
-  the sandbox broker read and execute access while keeping its runtime directory protected.
-- Kept Windows title-bar controls aligned with Pine's custom layout.
-- Kept macOS sandbox control sockets on a short system path so deeply nested project temporary
-  directories no longer break shell commands and file tools.
 
 ## [0.2.0] - 2026-09-13
 
@@ -76,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/phosphoros-works/pine/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/phosphoros-works/pine/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/phosphoros-works/pine/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/phosphoros-works/pine/compare/v0.1.1...v0.1.2
