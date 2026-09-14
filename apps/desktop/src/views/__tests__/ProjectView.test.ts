@@ -122,8 +122,8 @@ it("places the Windows logo and preferences before navigation controls", async (
     true,
   );
   expect(leading.find("[data-pine-preferences]").exists()).toBe(true);
-  expect(leading.element.firstElementChild?.getAttribute("data-testid")).toBe(
-    "windows-titlebar-logo",
+  expect(leading.element.firstElementChild?.getAttribute("data-slot")).toBe(
+    "window-titlebar-logo-slot",
   );
   wrapper.unmount();
 });

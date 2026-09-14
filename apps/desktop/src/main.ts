@@ -727,7 +727,10 @@ const createWindow = () => {
       : {
           // Keep the native Windows controls aligned with the custom title
           // bar instead of falling back to the shorter system overlay.
-          titleBarOverlay: { height: 56 },
+          titleBarOverlay: {
+            color: "rgba(0, 0, 0, 0)",
+            height: 56,
+          },
         }),
     width: 1120,
     height: 840,

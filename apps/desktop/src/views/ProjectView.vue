@@ -71,12 +71,17 @@ onKeyStroke("k", (event) => {
          Register window controls after the content titlebar's drag region. -->
     <WindowTitleBar controls-only>
       <template #leading>
-        <PineLogo
+        <span
           v-if="isWindowsPlatform"
-          data-testid="windows-titlebar-logo"
-          aria-hidden="true"
-          class="pointer-events-none size-5 shrink-0 fill-current text-foreground select-none"
-        />
+          data-slot="window-titlebar-logo-slot"
+          class="window-titlebar-icon-slot"
+        >
+          <PineLogo
+            data-testid="windows-titlebar-logo"
+            aria-hidden="true"
+            class="pointer-events-none size-4 fill-current text-foreground select-none"
+          />
+        </span>
         <PinePreferencesDialog v-if="isWindowsPlatform" />
         <SidebarTrigger />
         <Button

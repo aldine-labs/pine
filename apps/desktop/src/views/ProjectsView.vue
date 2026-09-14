@@ -173,13 +173,22 @@ onMounted(() => {
   >
     <WindowTitleBar>
       <template #leading>
+        <span
+          v-if="isWindowsPlatform"
+          data-slot="window-titlebar-logo-slot"
+          class="window-titlebar-icon-slot"
+        >
+          <PineLogo
+            data-testid="windows-titlebar-logo"
+            aria-hidden="true"
+            class="pointer-events-none size-4 fill-current text-foreground select-none"
+          />
+        </span>
         <PineLogo
-          v-if="isMacOSPlatform || isWindowsPlatform"
-          :data-testid="
-            isWindowsPlatform ? 'windows-titlebar-logo' : 'macos-titlebar-logo'
-          "
+          v-else-if="isMacOSPlatform"
+          data-testid="macos-titlebar-logo"
           aria-hidden="true"
-          class="pointer-events-none size-5 shrink-0 fill-current text-foreground select-none"
+          class="pointer-events-none ml-2 size-5 shrink-0 fill-current text-muted-foreground select-none"
         />
         <InputGroup
           v-if="isWindowsPlatform"

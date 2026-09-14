@@ -18,6 +18,15 @@
   app-region: no-drag;
 }
 
+@utility window-titlebar-icon-slot {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
 :root {
   --session-composer-max-width: 48rem;
   --session-composer-gutter: 1rem;
@@ -33,7 +42,7 @@
   --window-titlebar-home-action-width: 1.75rem;
   --window-titlebar-leading-offset: 5.5625rem;
   --window-titlebar-leading-extra: 0rem;
-  /* Approximate width reserved for the native Windows control overlay. */
+  /* Width reserved for the native Windows control overlay. */
   --window-titlebar-controls-width: 3rem;
   --window-titlebar-height: calc(
     var(--window-titlebar-control-height) +
@@ -100,7 +109,9 @@
 [data-platform="win32"] {
   --window-titlebar-leading-offset: 0.75rem;
   --window-titlebar-leading-extra: 3.5rem;
-  --window-titlebar-controls-width: 10.5rem;
+  --window-titlebar-controls-width: calc(
+    100vw - env(titlebar-area-width, 100vw)
+  );
 }
 
 .dark {
