@@ -51,6 +51,76 @@
   justify-content: center;
 }
 
+/*
+ * Reusable attention signal.
+ *
+ * Apply `attention-flash` to any element that must pull the user's eye
+ * without stealing focus. Set `--attention-flash-color` on that element to
+ * override the default warning tone. The ring lives on the element itself and
+ * the tint is painted by an overlay pseudo-element, so the signal stays
+ * visible even when opaque children fill the box; the overlay never receives
+ * pointer events, and its peak opacity stays low so text remains legible.
+ * `prefers-reduced-motion` degrades the pulse to a steady highlight.
+ */
+@keyframes attention-flash-ring {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--attention-flash-color),
+      0 0 0 1px
+        color-mix(in oklab, var(--attention-flash-color) 20%, transparent);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 1px var(--attention-flash-color),
+      0 0 0 6px
+        color-mix(in oklab, var(--attention-flash-color) 36%, transparent);
+  }
+}
+
+@keyframes attention-flash-tint {
+  0%,
+  100% {
+    opacity: 0.05;
+  }
+
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@utility attention-flash {
+  --attention-flash-color: var(--color-warning);
+  position: relative;
+  animation: attention-flash-ring 1.4s ease-in-out infinite;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    background-color: var(--attention-flash-color);
+    opacity: 0.05;
+    pointer-events: none;
+    animation: attention-flash-tint 1.4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    box-shadow:
+      0 0 0 1px var(--attention-flash-color),
+      0 0 0 3px
+        color-mix(in oklab, var(--attention-flash-color) 28%, transparent);
+
+    &::after {
+      animation: none;
+      opacity: 0.15;
+    }
+  }
+}
+
 :root {
   --session-composer-max-width: 48rem;
   --session-composer-gutter: 1rem;
