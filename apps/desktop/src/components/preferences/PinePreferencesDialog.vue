@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { handleError } from "@/app/errors/errorHandler";
-import {
-  CircleHelpIcon,
-  PencilIcon,
-  SettingsIcon,
-  ShieldCheckIcon,
-} from "@lucide/vue";
+import { CircleHelpIcon, PencilIcon, SettingsIcon } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -45,7 +40,6 @@ import {
   isPineContextCompactionStrategy,
   type PineContextCompactionStrategy,
 } from "@/shared/preferences";
-import type { WindowsSandboxStatus } from "@/shared/windowsSandbox";
 
 const { locale, t } = useI18n();
 const appearanceStore = useAppearanceStore();
@@ -64,16 +58,6 @@ const contextCompactionStrategy = ref<PineContextCompactionStrategy>(
   DEFAULT_CONTEXT_COMPACTION_STRATEGY,
 );
 const isSavingContextCompactionStrategy = ref(false);
-const windowsSandboxStatus = ref<WindowsSandboxStatus>({
-  state: "not-installed",
-});
-const isInstallingWindowsSandbox = ref(false);
-const isWindows = window.pine?.platform === "win32";
-const windowsSandboxStatusLabel = computed(() =>
-  windowsSandboxStatus.value.state === "ready"
-    ? t("preferences.windowsSandboxReady")
-    : t("preferences.windowsSandboxRequired"),
-);
 const canSaveTinyFishApiKey = computed(
   () => tinyFishApiKey.value.trim().length > 0 && !isSavingTinyFishApiKey.value,
 );
@@ -83,42 +67,12 @@ watch(isOpen, (open) => {
   void modelsStore.load();
   void loadTinyFishCredentialStatus();
   void loadContextCompactionStrategy();
-  if (isWindows) void loadWindowsSandboxStatus();
 });
 
 onMounted(() => {
   void loadTinyFishCredentialStatus();
   void loadContextCompactionStrategy();
-  if (isWindows) void loadWindowsSandboxStatus();
 });
-
-async function loadWindowsSandboxStatus(): Promise<void> {
-  try {
-    windowsSandboxStatus.value = await window.pine.getWindowsSandboxStatus();
-  } catch (error) {
-    handleError(error, {
-      id: "windows-sandbox-status",
-      title: t("errors.windowsSandbox.title"),
-      description: t("errors.windowsSandbox.description"),
-    });
-  }
-}
-
-async function setupWindowsSandbox(): Promise<void> {
-  if (isInstallingWindowsSandbox.value) return;
-  isInstallingWindowsSandbox.value = true;
-  try {
-    windowsSandboxStatus.value = await window.pine.installWindowsSandbox();
-  } catch (error) {
-    handleError(error, {
-      id: "windows-sandbox-install",
-      title: t("errors.windowsSandbox.title"),
-      description: t("errors.windowsSandbox.description"),
-    });
-  } finally {
-    isInstallingWindowsSandbox.value = false;
-  }
-}
 
 async function loadContextCompactionStrategy(): Promise<void> {
   if (typeof window.pine?.getContextCompactionStrategy !== "function") return;
@@ -256,42 +210,6 @@ function updateSidebarVibrancy(value: boolean): void {
               {{ t("preferences.languageEnglish") }}
             </ToggleGroupItem>
           </ToggleGroup>
-        </Field>
-
-        <Field v-if="isWindows" orientation="horizontal">
-          <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <FieldTitle id="pine-windows-sandbox-setting">
-              {{ t("preferences.windowsSandbox") }}
-            </FieldTitle>
-            <FieldDescription>
-              {{ t("preferences.windowsSandboxDescription") }}
-            </FieldDescription>
-          </div>
-          <div class="flex items-center gap-2">
-            <Badge
-              :variant="
-                windowsSandboxStatus.state === 'ready' ? 'secondary' : 'outline'
-              "
-            >
-              {{ windowsSandboxStatusLabel }}
-            </Badge>
-            <Button
-              v-if="windowsSandboxStatus.state !== 'ready'"
-              data-testid="pine-windows-sandbox-install-button"
-              variant="outline"
-              size="sm"
-              :disabled="isInstallingWindowsSandbox"
-              aria-labelledby="pine-windows-sandbox-setting"
-              @click="setupWindowsSandbox"
-            >
-              <ShieldCheckIcon data-icon="inline-start" />
-              {{
-                isInstallingWindowsSandbox
-                  ? t("preferences.windowsSandboxInstalling")
-                  : t("preferences.windowsSandboxInstall")
-              }}
-            </Button>
-          </div>
         </Field>
 
         <Field orientation="horizontal">
