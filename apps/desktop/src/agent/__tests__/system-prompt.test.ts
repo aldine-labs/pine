@@ -47,6 +47,9 @@ describe("PINE_SYSTEM_PROMPT local tool guidance", () => {
     expect(prompt).toContain("Windows application or GUI control");
     expect(prompt).toContain("Windows ACLs, UAC");
     expect(prompt).toContain("Use $env:PINE_TMPDIR");
+    expect(prompt).toContain("dedicated sandbox account");
+    expect(prompt).toContain("Windows PowerShell 5.1");
+    expect(prompt).toContain("does not establish a sandbox escape");
     expect(prompt).not.toContain("privileged_bash");
   });
 

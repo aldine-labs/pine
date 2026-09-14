@@ -10,6 +10,23 @@ import {
 import type { PineToolAccessPolicy } from "../tool-access-policy";
 import { resolveSpawnableResourcePath } from "./runtime-path";
 
+export function windowsRequiredDenyWritePaths(
+  writableFolders: readonly string[],
+  protectedPaths: readonly string[],
+): string[] {
+  return protectedPaths.filter((protectedPath) =>
+    writableFolders.some((writableFolder) => {
+      const relativePath = path.win32.relative(writableFolder, protectedPath);
+      return (
+        relativePath === "" ||
+        (!relativePath.startsWith(`..${path.win32.sep}`) &&
+          relativePath !== ".." &&
+          !path.win32.isAbsolute(relativePath))
+      );
+    }),
+  );
+}
+
 /** Authority snapshot; no project-controlled config or implicit HOME grants. */
 export function createSandboxConfig(
   policy: PineToolAccessPolicy,
@@ -64,6 +81,11 @@ export function createSandboxConfig(
     }
   }
   if (platform === "win32") {
+    const writableFolders = policy.writableFolders();
+    const protectedRuntimePaths = [
+      ...runtimeFiles,
+      ...(windowsSrtWinPath ? [path.dirname(windowsSrtWinPath)] : []),
+    ];
     return {
       network: {
         allowedDomains: [],
@@ -82,13 +104,13 @@ export function createSandboxConfig(
             ...policy.readablePaths(),
           ]),
         ],
-        allowWrite: policy.writableFolders(),
-        denyWrite: [
-          ...new Set([
-            ...runtimeFiles,
-            ...(windowsSrtWinPath ? [path.dirname(windowsSrtWinPath)] : []),
-          ]),
-        ],
+        allowWrite: writableFolders,
+        // An explicit deny is only needed when a broader write grant contains
+        // the runtime. Stamping unrelated paths below a Windows user profile
+        // is both redundant and exceptionally slow in srt-win.
+        denyWrite: windowsRequiredDenyWritePaths(writableFolders, [
+          ...new Set(protectedRuntimePaths),
+        ]),
         allowGitConfig: false,
       },
       enableWeakerNestedSandbox: false,

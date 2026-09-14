@@ -2,7 +2,7 @@
 // loaded from a project-writable file. Each process owns one SRT singleton.
 import { spawn } from "node:child_process";
 import { writeSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -43,6 +43,22 @@ try {
     await import(request.runtimeUrl);
   manager = SandboxManager;
   const config = SandboxRuntimeConfigSchema.parse(request.config);
+  if (
+    process.platform === "win32" &&
+    request.windowsDirect?.stdinFileEnvironment
+  ) {
+    const requestFile = path.join(controlDirectory, "request.json");
+    await writeFile(requestFile, request.stdin ?? "", {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+    config.filesystem.allowRead.push(controlDirectory);
+    request.windowsDirect.env = {
+      ...request.windowsDirect.env,
+      [request.windowsDirect.stdinFileEnvironment]: requestFile,
+    };
+  }
   // SRT adds these paths even with an explicit allowWrite list. Turn off
   // implicit application scratch grants while retaining device I/O.
   if (process.platform !== "win32") {
@@ -53,14 +69,26 @@ try {
   await SandboxManager.initialize(config, undefined, false);
   if (cancelled) throw new Error("aborted");
   if (process.platform === "win32") {
+    const direct = request.windowsDirect;
     const wrapped = await SandboxManager.wrapWithSandboxArgv(
       request.command,
-      request.shell ?? "powershell",
+      direct
+        ? { exe: direct.executable, args: direct.args }
+        : (request.shell ?? "powershell"),
       undefined,
       undefined,
       request.cwd,
       { commandId: request.id },
     );
+    if (direct?.env) {
+      const separator = wrapped.argv.lastIndexOf("--");
+      if (separator < 0)
+        throw new Error("Windows sandbox command delimiter is missing.");
+      const environmentArguments = Object.entries(direct.env).flatMap(
+        ([name, value]) => ["--env", `${name}=${value}`],
+      );
+      wrapped.argv.splice(separator, 0, ...environmentArguments);
+    }
     if (cancelled) throw new Error("aborted");
     child = spawn(wrapped.argv[0], wrapped.argv.slice(1), {
       cwd: request.cwd,

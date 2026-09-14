@@ -1,9 +1,14 @@
 // Runs inside the same kernel boundary as bash, with networking denied.
-import { access, mkdir, open } from "node:fs/promises";
+import { access, mkdir, open, readFile } from "node:fs/promises";
 import { constants } from "node:fs";
+import path from "node:path";
 
 let input = "";
-for await (const chunk of process.stdin) input += chunk;
+if (process.env.PINE_FILE_REQUEST) {
+  input = await readFile(process.env.PINE_FILE_REQUEST, "utf8");
+} else {
+  for await (const chunk of process.stdin) input += chunk;
+}
 const request = JSON.parse(input);
 try {
   let data;
@@ -12,6 +17,12 @@ try {
   } else if (request.operation === "mkdir") {
     await mkdir(request.path, { recursive: true });
   } else if (["read", "header", "write"].includes(request.operation)) {
+    if (request.operation === "write" && request.createParent) {
+      await mkdir(path.dirname(request.path), { recursive: true });
+    }
+    if (request.operation === "read" && request.mode !== undefined) {
+      await access(request.path, request.mode);
+    }
     // Refuse final symlink substitution and multi-linked files. The OS
     // sandbox still guards parent-directory races at the actual syscall.
     const flags =

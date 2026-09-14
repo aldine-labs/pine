@@ -286,6 +286,10 @@ export async function createPineToolDefinitions(
     ...(canonicalBunPath ? [bunPath, canonicalBunPath] : []),
     process.execPath,
     await realpath(process.execPath),
+    // Electron's Windows Node mode loads ICU and runtime data beside the exe.
+    // Grant this once for all ordinary tools so shell and file calls can share
+    // one persistent SRT authority snapshot.
+    ...(isWindows ? [path.dirname(process.execPath)] : []),
   ];
   const sandboxFiles = createSandboxFileIO(
     policy,

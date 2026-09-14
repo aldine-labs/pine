@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { createServer as createSocketServer } from "node:net";
+import { constants } from "node:fs";
 import {
   link,
   mkdir,
@@ -16,9 +17,21 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PineToolAccessPolicy } from "../tool-access-policy";
 import { createBashEnvironment } from "../bash-env";
-import { quoteShell, runSandbox } from "../sandbox/backend";
-import { createSandboxConfig } from "../sandbox/policy";
-import { createSandboxFileIO } from "../sandbox/files";
+import {
+  createSandboxSupervisorEnvironment,
+  quoteShell,
+  runSandbox,
+} from "../sandbox/backend";
+import {
+  createSandboxConfig,
+  windowsRequiredDenyWritePaths,
+} from "../sandbox/policy";
+import {
+  createCoalescedFileIO,
+  createSandboxFileIO,
+  fileWorkerRuntimePaths,
+  withFileExecutionSignal,
+} from "../sandbox/files";
 
 const roots: string[] = [];
 async function fixture() {
@@ -60,6 +73,86 @@ afterEach(async () => {
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
   );
+});
+
+describe("sandbox file operation coalescing", () => {
+  it("reuses one full read for access, header detection, and content", async () => {
+    const calls: Array<{
+      operation: string;
+      extra?: Record<string, unknown>;
+    }> = [];
+    const content = Buffer.from("hello world");
+    const io = createCoalescedFileIO((operation, _target, extra) => {
+      calls.push({ operation, extra });
+      return Promise.resolve(content);
+    });
+
+    await withFileExecutionSignal(undefined, async () => {
+      await io.access("/project/file.txt", constants.R_OK);
+      expect(await io.readHeader("/project/file.txt")).toEqual(content);
+      expect(await io.readFile("/project/file.txt")).toBe(content);
+    });
+
+    expect(calls).toEqual([
+      { operation: "read", extra: { mode: constants.R_OK } },
+    ]);
+  });
+
+  it("combines recursive parent creation with a write", async () => {
+    const calls: Array<{
+      operation: string;
+      target: string;
+      extra?: Record<string, unknown>;
+    }> = [];
+    const target = path.join("project", "nested", "file.txt");
+    const io = createCoalescedFileIO((operation, calledTarget, extra) => {
+      calls.push({ operation, target: calledTarget, extra });
+      return Promise.resolve(Buffer.alloc(0));
+    });
+
+    await withFileExecutionSignal(undefined, async () => {
+      await io.mkdir(path.dirname(target));
+      await io.writeFile(target, "created");
+    });
+
+    expect(calls).toEqual([
+      {
+        operation: "write",
+        target,
+        extra: { content: "created", createParent: true },
+      },
+    ]);
+  });
+
+  it("reuses edit access as its read but keeps the final write separate", async () => {
+    const calls: Array<{
+      operation: string;
+      extra?: Record<string, unknown>;
+    }> = [];
+    const io = createCoalescedFileIO((operation, _target, extra) => {
+      calls.push({ operation, extra });
+      return Promise.resolve(Buffer.from("before"));
+    });
+
+    await withFileExecutionSignal(undefined, async () => {
+      await io.access("/project/file.txt", constants.R_OK | constants.W_OK);
+      expect((await io.readFile("/project/file.txt")).toString()).toBe(
+        "before",
+      );
+      await io.writeFile("/project/file.txt", "after");
+    });
+
+    expect(calls).toEqual([
+      {
+        operation: "read",
+        extra: { mode: constants.R_OK | constants.W_OK },
+      },
+      {
+        operation: "write",
+        extra: { content: "after", createParent: false },
+      },
+    ]);
+  });
 });
 
 describe.runIf(process.platform === "darwin" && !process.env.CODEX_SANDBOX)(
@@ -211,11 +304,70 @@ describe("sandbox policy compilation", () => {
     expect(config.network.allowLocalBinding).toBe(false);
     expect(config.filesystem.allowWrite).toEqual(policy.writableFolders());
     expect(config.filesystem.allowRead).toContain(config.windows?.srtWin?.path);
-    expect(config.filesystem.denyWrite).toContain(
-      path.dirname(config.windows?.srtWin?.path ?? ""),
+    expect(config.filesystem.denyWrite).toEqual([]);
+  });
+
+  it("only deny-stamps Windows runtime paths covered by a write grant", () => {
+    expect(
+      windowsRequiredDenyWritePaths(
+        ["C:\\Users\\dev\\project"],
+        [
+          "C:\\Program Files\\Pine\\Pine.exe",
+          "C:\\Users\\dev\\project\\node_modules",
+          "C:\\Users\\dev\\project-other\\runtime.exe",
+        ],
+      ),
+    ).toEqual(["C:\\Users\\dev\\project\\node_modules"]);
+  });
+});
+
+describe("sandbox supervisor environment", () => {
+  it("restores trusted local application data for the Windows ACL broker", () => {
+    const requestEnvironment = {
+      LOCALAPPDATA: "C:\\untrusted",
+      PATH: "C:\\Windows\\System32",
+      TMPDIR: "C:\\Pine\\tmp",
+    };
+    const environment = createSandboxSupervisorEnvironment(
+      requestEnvironment,
+      "win32",
+      { LOCALAPPDATA: "C:\\Users\\dev\\AppData\\Local" },
     );
-    expect(config.filesystem.denyWrite).not.toContain(
-      config.windows?.srtWin?.path,
+
+    expect(environment).toMatchObject({
+      CLAUDE_CODE_TMPDIR: "C:\\Pine\\tmp",
+      ELECTRON_RUN_AS_NODE: "1",
+      LOCALAPPDATA: "C:\\Users\\dev\\AppData\\Local",
+      PATH: "C:\\Windows\\System32",
+    });
+    expect(requestEnvironment.LOCALAPPDATA).toBe("C:\\untrusted");
+  });
+
+  it("does not expose Windows local application data on other platforms", () => {
+    const environment = createSandboxSupervisorEnvironment(
+      { TMPDIR: "/pine/tmp" },
+      "darwin",
+      { LOCALAPPDATA: "C:\\Users\\dev\\AppData\\Local" },
     );
+
+    expect(environment.LOCALAPPDATA).toBeUndefined();
+  });
+});
+
+describe("sandbox file worker runtime", () => {
+  it("grants the Windows Electron runtime directory for ICU data", () => {
+    expect(
+      fileWorkerRuntimePaths(
+        ["C:\\Pine\\runtime.js"],
+        "C:\\Pine\\Pine.exe",
+        "win32",
+      ),
+    ).toEqual(["C:\\Pine\\runtime.js", "C:\\Pine\\Pine.exe", "C:\\Pine"]);
+  });
+
+  it("keeps the executable-only grant on macOS", () => {
+    expect(
+      fileWorkerRuntimePaths(["/Pine/runtime.js"], "/Pine/Pine", "darwin"),
+    ).toEqual(["/Pine/runtime.js", "/Pine/Pine"]);
   });
 });

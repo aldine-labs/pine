@@ -1,16 +1,92 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { constants } from "node:fs";
+import path from "node:path";
 import type { PineToolAccessPolicy } from "../tool-access-policy";
 import { createBashEnvironment, sandboxShell } from "../bash-env";
 import { createSandboxConfig } from "./policy";
 import { quoteShell, runSandbox } from "./backend";
 import fileSource from "./file-worker.mjs?raw";
 
-const execution = new AsyncLocalStorage<{ signal?: AbortSignal }>();
+interface FileExecutionContext {
+  signal?: AbortSignal;
+  reads: Map<string, { mode: number; value: Promise<Buffer> }>;
+  pendingDirectories: Set<string>;
+}
+
+type FileWorkerInvoke = (
+  operation: string,
+  targetPath: string,
+  extra?: Record<string, unknown>,
+) => Promise<Buffer>;
+
+const execution = new AsyncLocalStorage<FileExecutionContext>();
+
+export function fileWorkerRuntimePaths(
+  runtimeFiles: readonly string[],
+  executable: string = process.execPath,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  return [
+    ...runtimeFiles,
+    executable,
+    // Electron's Windows Node mode loads icudtl.dat and other runtime data
+    // beside the executable. Grant the installation directory read-only;
+    // createSandboxConfig still deny-protects it if a project write grant
+    // happens to contain the runtime during development.
+    ...(platform === "win32" ? [path.win32.dirname(executable)] : []),
+  ];
+}
+
 export function withFileExecutionSignal<T>(
   signal: AbortSignal | undefined,
   operation: () => Promise<T>,
 ): Promise<T> {
-  return execution.run({ signal }, operation);
+  return execution.run(
+    { signal, reads: new Map(), pendingDirectories: new Set() },
+    operation,
+  );
+}
+
+/** Coalesce the low-level calls made by one read/edit/write tool execution. */
+export function createCoalescedFileIO(invoke: FileWorkerInvoke) {
+  const readOnce = (targetPath: string, mode = constants.R_OK) => {
+    const context = execution.getStore();
+    if (!context) return invoke("read", targetPath, { mode });
+    const cached = context.reads.get(targetPath);
+    if (cached && (cached.mode & mode) === mode) return cached.value;
+    const value = invoke("read", targetPath, { mode });
+    context.reads.set(targetPath, { mode, value });
+    return value;
+  };
+
+  return {
+    access: (targetPath: string, mode: number) => {
+      if (!execution.getStore())
+        return invoke("access", targetPath, { mode }).then(() => undefined);
+      return readOnce(targetPath, mode).then(() => undefined);
+    },
+    readFile: (targetPath: string) => readOnce(targetPath),
+    readHeader: (targetPath: string) => {
+      if (!execution.getStore()) return invoke("header", targetPath);
+      return readOnce(targetPath).then((content) => content.subarray(0, 12));
+    },
+    writeFile: async (targetPath: string, content: string) => {
+      const context = execution.getStore();
+      const createParent =
+        context?.pendingDirectories.delete(path.dirname(targetPath)) ?? false;
+      await invoke("write", targetPath, { content, createParent });
+      context?.reads.set(targetPath, {
+        mode: constants.R_OK | constants.W_OK,
+        value: Promise.resolve(Buffer.from(content, "utf8")),
+      });
+    },
+    mkdir: (targetPath: string) => {
+      const context = execution.getStore();
+      if (!context) return invoke("mkdir", targetPath).then(() => undefined);
+      context.pendingDirectories.add(targetPath);
+      return Promise.resolve();
+    },
+  };
 }
 
 export function createSandboxFileIO(
@@ -29,7 +105,7 @@ export function createSandboxFileIO(
     const source = quoteShell(fileSource, shell.kind);
     const command =
       shell.kind === "powershell"
-        ? `$env:ELECTRON_RUN_AS_NODE='1'; & ${executable} --input-type=module -e ${source}`
+        ? fileSource
         : `exec /usr/bin/env ELECTRON_RUN_AS_NODE=1 ${executable} --input-type=module -e ${source}`;
     let output = "";
     let overflow = false;
@@ -43,12 +119,21 @@ export function createSandboxFileIO(
           loginPath,
           policy.cwd,
         ),
-        config: createSandboxConfig(policy, [
-          ...runtimeFiles,
-          process.execPath,
-        ]),
+        config: createSandboxConfig(
+          policy,
+          fileWorkerRuntimePaths(runtimeFiles),
+        ),
         shell: shell.executable,
         stdin: JSON.stringify({ operation, path: targetPath, ...extra }),
+        windowsDirect:
+          shell.kind === "powershell"
+            ? {
+                executable: process.execPath,
+                args: ["--input-type=module", "-e"],
+                env: { ELECTRON_RUN_AS_NODE: "1" },
+                stdinFileEnvironment: "PINE_FILE_REQUEST",
+              }
+            : undefined,
       },
       {
         timeout: 30,
@@ -77,14 +162,5 @@ export function createSandboxFileIO(
       );
     return Buffer.from(response.data ?? "", "base64");
   };
-  return {
-    access: (targetPath: string, mode: number) =>
-      invoke("access", targetPath, { mode }).then(() => undefined),
-    readFile: (targetPath: string) => invoke("read", targetPath),
-    readHeader: (targetPath: string) => invoke("header", targetPath),
-    writeFile: (targetPath: string, content: string) =>
-      invoke("write", targetPath, { content }).then(() => undefined),
-    mkdir: (targetPath: string) =>
-      invoke("mkdir", targetPath).then(() => undefined),
-  };
+  return createCoalescedFileIO(invoke);
 }

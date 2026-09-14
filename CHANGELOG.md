@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Coalesced redundant sandbox file operations so Windows read/write calls launch one file worker
+  and edit calls launch two, without weakening path authorization or final-file checks.
+
+### Known issues
+
+- Windows sandboxed file workers still have roughly 1.7 seconds of measured startup latency per
+  process; persistent file workers require a follow-up design before sub-second file tools are possible.
+
 ## [0.2.1] - 2026-09-13
 
 ### Added

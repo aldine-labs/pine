@@ -39,6 +39,8 @@ export function createScopedBashOperations(
       await policy.authorize(cwd, "write");
       const shell = sandboxShell();
       const windowsCommand = [
+        "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+        "$OutputEncoding = [Console]::OutputEncoding",
         `$env:PINE_TMPDIR=${quoteShell(temporaryDirectory, "powershell")}`,
         `$env:BUN_INSTALL_CACHE_DIR=${quoteShell(path.join(temporaryDirectory, "bun-cache"), "powershell")}`,
         `$env:XDG_CACHE_HOME=${quoteShell(path.join(temporaryDirectory, "xdg-cache"), "powershell")}`,

@@ -54,7 +54,7 @@ export function systemPromptForPlatform(
   platform: NodeJS.Platform = process.platform,
 ): string {
   if (platform !== "win32") return systemPrompt;
-  return systemPrompt
+  const adapted = systemPrompt
     .replaceAll("privileged_bash", "privileged_powershell")
     .replaceAll("ordinary bash", "ordinary PowerShell")
     .replaceAll("Ordinary bash", "Ordinary PowerShell")
@@ -71,6 +71,13 @@ export function systemPromptForPlatform(
       "here-documents are supported",
       "PowerShell here-strings are supported",
     );
+  return `${adapted}
+
+## Windows sandbox details
+
+- Ordinary PowerShell intentionally runs as a dedicated sandbox account. USERPROFILE, USERNAME, HOME, and temporary-directory environment variables describe that sandbox identity, not the signed-in Windows user. Judge whether a path is inside the shared project boundary from its literal resolved path; do not infer access to the real Desktop or profile from these variables.
+- The ordinary shell may be Windows PowerShell 5.1. Avoid PowerShell 7-only syntax such as && and the ternary operator unless the reported version supports it.
+- Windows delete APIs can request different ACL rights for the same already-authorized file. A cmdlet failure followed by success through another API does not establish a sandbox escape. Never use that difference to probe or cross Pine's shared-folder boundary.`;
 }
 
 const COMMUNICATION_STYLE_PROMPTS: Record<

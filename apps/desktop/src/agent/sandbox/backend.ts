@@ -3,8 +3,12 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
+import os from "node:os";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import hostSource from "./host.mjs?raw";
+import windowsHostSource from "./windows-host.mjs?raw";
+import { windowsRequiredDenyWritePaths } from "./policy";
 
 export function quoteShell(
   value: string,
@@ -22,20 +26,325 @@ export interface SandboxRequest {
   config: SandboxRuntimeConfig;
   shell?: string;
   stdin?: string;
+  windowsDirect?: {
+    executable: string;
+    args: string[];
+    env?: Record<string, string>;
+    stdinFileEnvironment?: string;
+  };
 }
 
 export class SandboxSetupError extends Error {}
 
-/** A fresh host process per invocation prevents global SRT policy/proxy races. */
+interface SandboxRunOptions {
+  onData: (data: Buffer) => void;
+  onStderr?: (data: Buffer) => void;
+  signal?: AbortSignal;
+  timeout?: number;
+}
+
+interface SandboxHostResult {
+  id?: string;
+  kind?: string;
+  message?: string;
+  exitCode?: number | null;
+  signal?: string;
+  timing?: {
+    coldStart: boolean;
+    initializeMs: number;
+    requestFileMs: number;
+    wrapMs: number;
+    childMs: number;
+    totalMs: number;
+  };
+}
+
+export function createSandboxSupervisorEnvironment(
+  requestEnvironment: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+  hostEnvironment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {
+    ...requestEnvironment,
+    ELECTRON_RUN_AS_NODE: "1",
+    // SRT's own temp override is scoped to this supervisor, never global.
+    CLAUDE_CODE_TMPDIR: requestEnvironment.TMPDIR,
+  };
+
+  // srt-win stores its per-process ACL holds below the real user's local
+  // application data directory. Ordinary tool environments are deliberately
+  // sparse, so restore this single broker dependency from the trusted Pine
+  // process instead of exposing the complete host environment.
+  if (platform === "win32" && hostEnvironment.LOCALAPPDATA) {
+    environment.LOCALAPPDATA = hostEnvironment.LOCALAPPDATA;
+  }
+
+  return environment;
+}
+
+function validateHostResult(result: SandboxHostResult): { exitCode: number } {
+  if (result.kind !== "exit")
+    throw new SandboxSetupError(
+      `Sandbox setup failed: ${result.message ?? "unknown error"}`,
+    );
+  if (typeof result.exitCode !== "number")
+    throw new Error(
+      `Shell terminated by signal ${result.signal ?? "unknown"}.`,
+    );
+  return { exitCode: result.exitCode };
+}
+
+class PersistentWindowsSandboxHost {
+  private readonly child;
+  private active:
+    | {
+        id: string;
+        options: SandboxRunOptions;
+        resolve: (result: SandboxHostResult) => void;
+        reject: (error: Error) => void;
+        cleanup: () => void;
+      }
+    | undefined;
+  private status = "";
+  private idleTimer: NodeJS.Timeout | undefined;
+  private closed = false;
+  private readonly closedPromise: Promise<void>;
+
+  constructor(
+    readonly key: string,
+    cwd: string,
+    environment: NodeJS.ProcessEnv,
+  ) {
+    this.child = spawn(
+      process.execPath,
+      ["--input-type=module", "-e", windowsHostSource],
+      {
+        cwd,
+        env: environment,
+        detached: true,
+        stdio: ["pipe", "pipe", "pipe", "pipe"],
+      },
+    );
+    this.child.stdin.on("error", () => undefined);
+    this.child.stdout.on("data", (chunk: Buffer) =>
+      this.active?.options.onData(chunk),
+    );
+    this.child.stderr.on("data", (chunk: Buffer) =>
+      (this.active?.options.onStderr ?? this.active?.options.onData)?.(chunk),
+    );
+    this.child.stdio[3]!.on("data", (chunk: Buffer) => {
+      this.status += chunk.toString();
+      for (;;) {
+        const newline = this.status.indexOf("\n");
+        if (newline < 0) break;
+        const line = this.status.slice(0, newline);
+        this.status = this.status.slice(newline + 1);
+        if (!line) continue;
+        let result: SandboxHostResult;
+        try {
+          result = JSON.parse(line) as SandboxHostResult;
+        } catch {
+          this.failActive(
+            new SandboxSetupError("Sandbox supervisor returned invalid data."),
+          );
+          void this.dispose();
+          continue;
+        }
+        const active = this.active;
+        if (!active || result.id !== active.id) continue;
+        this.active = undefined;
+        active.cleanup();
+        active.resolve(result);
+      }
+    });
+    this.closedPromise = new Promise((resolve) => {
+      this.child.once("close", () => {
+        this.closed = true;
+        this.failActive(
+          new SandboxSetupError(
+            "Sandbox supervisor exited without a result. The command was not retried natively.",
+          ),
+        );
+        resolve();
+      });
+    });
+    this.child.once("error", (error) => this.failActive(error));
+  }
+
+  async run(
+    request: SandboxRequest & {
+      config: SandboxRuntimeConfig;
+      runtimeUrl: string;
+      id: string;
+    },
+    options: SandboxRunOptions,
+  ): Promise<SandboxHostResult> {
+    if (this.closed)
+      throw new SandboxSetupError("Sandbox supervisor is unavailable.");
+    if (options.signal?.aborted) throw new Error("aborted");
+    if (this.active)
+      throw new SandboxSetupError(
+        "Sandbox supervisor received overlapping work.",
+      );
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+
+    return await new Promise<SandboxHostResult>((resolve, reject) => {
+      let timedOut = false;
+      const abort = () => {
+        const error = timedOut
+          ? new Error(`timeout:${options.timeout}`)
+          : new Error("aborted");
+        this.failActive(error);
+        void this.dispose();
+      };
+      const timer =
+        options.timeout === undefined
+          ? undefined
+          : setTimeout(
+              () => {
+                timedOut = true;
+                abort();
+              },
+              Math.min(options.timeout * 1_000, 2_147_483_647),
+            );
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        options.signal?.removeEventListener("abort", abort);
+      };
+      this.active = { id: request.id, options, resolve, reject, cleanup };
+      options.signal?.addEventListener("abort", abort, { once: true });
+      this.child.stdin.write(`${JSON.stringify(request)}\n`, (error) => {
+        if (!error) return;
+        this.failActive(error);
+        void this.dispose();
+      });
+    });
+  }
+
+  scheduleIdle(dispose: () => void): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(dispose, 60_000);
+  }
+
+  async dispose(): Promise<void> {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    if (this.closed) return await this.closedPromise;
+    this.child.kill("SIGTERM");
+    const killTimer = setTimeout(() => this.child.kill("SIGKILL"), 2_000);
+    await this.closedPromise;
+    clearTimeout(killTimer);
+  }
+
+  private failActive(error: Error): void {
+    const active = this.active;
+    if (!active) return;
+    this.active = undefined;
+    active.cleanup();
+    active.reject(error);
+  }
+}
+
+let windowsHost: PersistentWindowsSandboxHost | undefined;
+let windowsQueue: Promise<void> = Promise.resolve();
+
+function windowsHostKey(
+  request: SandboxRequest,
+  config: SandboxRuntimeConfig,
+  runtimeUrl: string,
+  environment: NodeJS.ProcessEnv,
+): string {
+  return JSON.stringify({
+    cwd: request.cwd,
+    config,
+    runtimeUrl,
+    environment: Object.entries(environment).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  });
+}
+
+async function runPersistentWindowsSandbox(
+  request: SandboxRequest,
+  config: SandboxRuntimeConfig,
+  runtimeUrl: string,
+  options: SandboxRunOptions,
+  prepareStartedAt: number,
+): Promise<{ exitCode: number }> {
+  const queuedAt = performance.now();
+  const environment = createSandboxSupervisorEnvironment(request.env);
+  const key = windowsHostKey(request, config, runtimeUrl, environment);
+  let resolveTurn: () => void;
+  const previous = windowsQueue;
+  windowsQueue = new Promise<void>((resolve) => {
+    resolveTurn = resolve;
+  });
+  await previous;
+  const dequeuedAt = performance.now();
+  try {
+    const createdHost = !windowsHost || windowsHost.key !== key;
+    if (!windowsHost || windowsHost.key !== key) {
+      await windowsHost?.dispose();
+      windowsHost = new PersistentWindowsSandboxHost(
+        key,
+        request.cwd,
+        environment,
+      );
+    }
+    const host = windowsHost;
+    const roundTripStartedAt = performance.now();
+    const result = await host.run(
+      { ...request, config, runtimeUrl, id: randomUUID() },
+      options,
+    );
+    const completedAt = performance.now();
+    const performanceRecord = {
+      timestamp: new Date().toISOString(),
+      tool: request.windowsDirect ? "file" : "shell",
+      createdHost,
+      prepareMs: Math.round((queuedAt - prepareStartedAt) * 10) / 10,
+      queueMs: Math.round((dequeuedAt - queuedAt) * 10) / 10,
+      roundTripMs: Math.round((completedAt - roundTripStartedAt) * 10) / 10,
+      ...result.timing,
+    };
+    if (process.env.PINE_SANDBOX_PERF === "1") {
+      console.info("[Pine sandbox perf]", JSON.stringify(performanceRecord));
+      try {
+        appendFileSync(
+          path.join(os.tmpdir(), "pine-sandbox-perf.jsonl"),
+          `${JSON.stringify(performanceRecord)}\n`,
+        );
+      } catch {
+        // Diagnostics must never change the tool result.
+      }
+    }
+    if (result.kind !== "exit") {
+      await host.dispose();
+      if (windowsHost === host) windowsHost = undefined;
+    } else {
+      host.scheduleIdle(() => {
+        if (windowsHost === host) windowsHost = undefined;
+        void host.dispose();
+      });
+    }
+    return validateHostResult(result);
+  } catch (error) {
+    const host = windowsHost;
+    if (host) {
+      windowsHost = undefined;
+      await host.dispose();
+    }
+    throw error;
+  } finally {
+    resolveTurn!();
+  }
+}
+
+/** macOS isolates each call; Windows reuses one serialized authority snapshot. */
 export async function runSandbox(
   request: SandboxRequest,
-  options: {
-    onData: (data: Buffer) => void;
-    onStderr?: (data: Buffer) => void;
-    signal?: AbortSignal;
-    timeout?: number;
-  },
+  options: SandboxRunOptions,
 ): Promise<{ exitCode: number }> {
+  const prepareStartedAt = performance.now();
   if (process.platform !== "darwin" && process.platform !== "win32") {
     throw new SandboxSetupError(
       "The sandbox backend has not been validated on this platform. Native execution requires explicit approval.",
@@ -64,18 +373,29 @@ export async function runSandbox(
   const config = structuredClone(request.config);
   // A project can contain Pine's development dependency tree. Sandboxed code
   // must never rewrite the supervisor's next import into an unsandboxed host.
-  config.filesystem.denyWrite.push(dependencyRoot, process.execPath);
+  const protectedSupervisorPaths = [dependencyRoot, process.execPath];
+  config.filesystem.denyWrite.push(
+    ...(process.platform === "win32"
+      ? windowsRequiredDenyWritePaths(
+          config.filesystem.allowWrite,
+          protectedSupervisorPaths,
+        )
+      : protectedSupervisorPaths),
+  );
+  if (process.platform === "win32")
+    return await runPersistentWindowsSandbox(
+      request,
+      config,
+      runtimeUrl,
+      options,
+      prepareStartedAt,
+    );
   const child = spawn(
     process.execPath,
     ["--input-type=module", "-e", hostSource],
     {
       cwd: request.cwd,
-      env: {
-        ...request.env,
-        ELECTRON_RUN_AS_NODE: "1",
-        // SRT's own temp override is scoped to this supervisor, never global.
-        CLAUDE_CODE_TMPDIR: request.env.TMPDIR,
-      },
+      env: createSandboxSupervisorEnvironment(request.env),
       detached: true,
       stdio: ["pipe", "pipe", "pipe", "pipe"],
     },
@@ -123,12 +443,7 @@ export async function runSandbox(
     });
     if (options.signal?.aborted) throw new Error("aborted");
     if (timedOut) throw new Error(`timeout:${options.timeout}`);
-    let result: {
-      kind?: string;
-      message?: string;
-      exitCode?: number | null;
-      signal?: string;
-    };
+    let result: SandboxHostResult;
     try {
       result = JSON.parse(status) as typeof result;
     } catch {
@@ -136,15 +451,7 @@ export async function runSandbox(
         "Sandbox supervisor exited without a result. The command was not retried natively.",
       );
     }
-    if (result.kind !== "exit")
-      throw new SandboxSetupError(
-        `Sandbox setup failed: ${result.message ?? "unknown error"}`,
-      );
-    if (typeof result.exitCode !== "number")
-      throw new Error(
-        `Shell terminated by signal ${result.signal ?? "unknown"}.`,
-      );
-    return { exitCode: result.exitCode };
+    return validateHostResult(result);
   } finally {
     if (timer) clearTimeout(timer);
     if (killTimer) clearTimeout(killTimer);
