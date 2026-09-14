@@ -2,6 +2,7 @@ import type {
   ProjectEntryReference,
   ProjectFileOperation,
   ProjectEntry,
+  FilePreviewTarget,
 } from "../shared/projectFiles";
 import type { PineProject, PineProjectFolder } from "../shared/projects";
 import type { PineContextCompactionStrategy } from "../shared/preferences";
@@ -44,6 +45,7 @@ import {
   parseAttachmentMessage,
   type PineAttachment,
 } from "../shared/attachments";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
 
 function pathContains(parentPath: string, candidatePath: string): boolean {
@@ -57,6 +59,11 @@ function pathContains(parentPath: string, candidatePath: string): boolean {
       relativePath !== ".." &&
       !path.isAbsolute(relativePath))
   );
+}
+
+/** Folder references are portable inside a project, so never leak `path.sep`. */
+function toPortableRelativePath(parentPath: string, filePath: string): string {
+  return path.relative(parentPath, filePath).split(path.sep).join("/");
 }
 
 /** Maps the renderer's approval action to the worker-side gate decision. */
@@ -493,10 +500,45 @@ export class ProjectRuntimeRegistry {
   }
 
   ownerOfSession(sessionId: string): number | undefined {
-    for (const [webContentsId, runtime] of this.runtimes) {
-      if (this.activeSessionId(runtime) === sessionId) return webContentsId;
+    return this.entryForSession(sessionId)?.webContentsId;
+  }
+
+  /**
+   * Resolve an absolute path the agent asked to present into a tab target.
+   *
+   * A path inside a project folder becomes an ordinary project-relative
+   * reference, so it keeps flowing through the already validated project-entry
+   * channel. Everything else is reported as presented: the caller records it in
+   * the window's presented-file grants before the renderer may read it, because
+   * nothing else authorizes an absolute path from the agent's side.
+   */
+  async resolvePresentTarget(
+    sessionId: string,
+    filePath: string,
+  ): Promise<FilePreviewTarget | null> {
+    const runtime = this.entryForSession(sessionId)?.runtime;
+    if (!runtime) return null;
+    if (!path.isAbsolute(filePath) || filePath.includes("\0")) return null;
+
+    // Match against canonical roots so a symlinked folder cannot be escaped
+    // with a lexically-contained path.
+    const canonicalPath = await realpath(filePath).catch(() => null);
+    if (!canonicalPath) return null;
+
+    for (const folder of runtime.project.folders) {
+      if (!folder.isAvailable) continue;
+      const canonicalRoot = await realpath(folder.path).catch(() => null);
+      if (!canonicalRoot) continue;
+      if (!pathContains(canonicalRoot, canonicalPath)) continue;
+      return {
+        folderId: folder.id,
+        projectId: runtime.project.id,
+        relativePath: toPortableRelativePath(canonicalRoot, canonicalPath),
+        source: "project",
+      };
     }
-    return undefined;
+
+    return { path: canonicalPath, source: "presented" };
   }
 
   updateContextUsage(sessionId: string, contextUsage: PineContextUsage): void {
@@ -587,10 +629,18 @@ export class ProjectRuntimeRegistry {
     await runtime.sessions.dispose();
   }
 
-  private activeSessionId(runtime?: ProjectRuntime): string | undefined {
-    return runtime?.session.status === "active"
-      ? runtime.session.summary.id
-      : undefined;
+  private entryForSession(
+    sessionId: string,
+  ): { runtime: ProjectRuntime; webContentsId: number } | undefined {
+    for (const [webContentsId, runtime] of this.runtimes) {
+      if (
+        runtime.session.status === "active" &&
+        runtime.session.summary.id === sessionId
+      ) {
+        return { runtime, webContentsId };
+      }
+    }
+    return undefined;
   }
 
   private async releaseSession(runtime: ProjectRuntime): Promise<void> {

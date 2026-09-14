@@ -41,6 +41,7 @@ import type {
   ProjectEntryReference,
   ProjectFilePreview,
   ProjectFilePreviewRequest,
+  PresentedFilePreviewRequest,
   ProjectFileOperation,
   ListProjectDirectoryRequest,
   ListProjectDirectoryResult,
@@ -149,6 +150,9 @@ export interface PickProjectFoldersRequest {
 export interface PineDesktopApi extends PineWindowApi {
   readProjectFilePreview: (
     request: ProjectFilePreviewRequest,
+  ) => Promise<ProjectFilePreview>;
+  readPresentedFilePreview: (
+    request: PresentedFilePreviewRequest,
   ) => Promise<ProjectFilePreview>;
   abortSession: () => Promise<AbortSessionResult>;
   attachSession: (

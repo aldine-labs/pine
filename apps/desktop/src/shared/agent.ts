@@ -1,8 +1,16 @@
 import type { PineSessionSummary } from "./sessions";
+import type { FilePreviewTarget } from "./projectFiles";
 import type {
   AskUserQuestionParams,
   AskUserQuestionSubmission,
 } from "@pine/rpiv-ask-user-question";
+
+/**
+ * Lets the agent open a file for the user to read. The main process resolves
+ * the path into a tab target before the renderer sees it, so the request never
+ * carries a raw path across the boundary.
+ */
+export const UI_PRESENT_FILE_TOOL_NAME = "ui_present_file" as const;
 
 export const PROMPT_SESSION_CHANNEL = "sessions:prompt" as const;
 export const ABORT_SESSION_CHANNEL = "sessions:abort" as const;
@@ -211,7 +219,32 @@ export type PineAgentEvent =
       toolName: string;
       /** The auto-reviewer is holding the call before it may execute. */
       state: "reviewing";
+    }
+  | {
+      type: "present-file";
+      sessionId: string;
+      toolCallId: string;
+      /** Absolute path the agent asked to present, before main resolves it. */
+      path: string;
     };
+
+/**
+ * A presented file after the main process resolved its absolute path into a
+ * tab target this window is allowed to read. The renderer only ever observes
+ * this resolved form, never the raw worker request.
+ */
+export interface PinePresentFileEvent {
+  type: "present-file";
+  sessionId: string;
+  toolCallId: string;
+  /** Absolute path main resolved the tab target from. */
+  path: string;
+  target: FilePreviewTarget;
+}
+
+/** Events the renderer receives: worker events, plus main-resolved additions. */
+export type PineSessionEvent =
+  Exclude<PineAgentEvent, { type: "present-file" }> | PinePresentFileEvent;
 
 export interface PromptSessionRequest {
   locale?: "en-US" | "zh-CN";
@@ -251,4 +284,4 @@ export interface DequeueSteeringResult {
   removed: boolean;
 }
 
-export type SessionEventListener = (event: PineAgentEvent) => void;
+export type SessionEventListener = (event: PineSessionEvent) => void;

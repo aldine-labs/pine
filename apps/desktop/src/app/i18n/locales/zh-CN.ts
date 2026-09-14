@@ -508,6 +508,11 @@ export default {
           error: "准备问题失败",
           running: "正在准备询问一些问题",
         },
+        presentFile: {
+          complete: "已打开 ",
+          error: "无法打开 ",
+          running: "正在打开 ",
+        },
         reviewing: "正在审核 {tool}：",
         writeLines: "（{count} 行）",
         denied: "已拒绝 {tool}：",

@@ -531,6 +531,11 @@ export default {
           error: "Couldn’t prepare the questions",
           running: "Preparing some questions",
         },
+        presentFile: {
+          complete: "Presented ",
+          error: "Couldn’t present ",
+          running: "Presenting ",
+        },
         reviewing: "Reviewing {tool}: ",
         writeLines: "({count} lines)",
         denied: "Denied {tool}: ",

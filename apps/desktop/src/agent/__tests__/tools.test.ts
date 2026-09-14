@@ -364,6 +364,158 @@ describeSandbox("createPineToolDefinitions", () => {
     expect(config.network.allowedDomains).toEqual([]);
   });
 
+  describe("ui_present_file", () => {
+    const TOOL_NAME = "ui_present_file";
+
+    async function setup(
+      overrides: {
+        approvalMode?: "let-me-review" | "auto-approve" | "YOLO";
+        attachedPaths?: PineAttachedPathAccess;
+        gate?: ReturnType<typeof createFakeGate>;
+      } = {},
+    ) {
+      const fixture = await createFixture();
+      const gate = overrides.gate ?? createFakeGate();
+      const presentFile = vi.fn();
+      const approvalMode = overrides.approvalMode ?? "auto-approve";
+      const tools = await createPineToolDefinitions(
+        fixture.location,
+        gate,
+        overrides.attachedPaths,
+        {
+          getApprovalMode: () => approvalMode,
+          getGate: () => gate,
+          presentFile,
+        },
+      );
+      const tool = tools.find((candidate) => candidate.name === TOOL_NAME);
+      const present = (filePath: string) =>
+        tool!.execute(
+          "present-call",
+          { path: filePath },
+          undefined,
+          undefined,
+          undefined as never,
+        );
+      return { ...fixture, approvalMode, gate, present, presentFile, tools };
+    }
+
+    it("is only offered when the host can open a tab", async () => {
+      const { location } = await createFixture();
+      const withoutHost = await createPineToolDefinitions(location);
+      expect(withoutHost.map((tool) => tool.name)).not.toContain(TOOL_NAME);
+
+      const { tools } = await setup();
+      expect(tools.map((tool) => tool.name)).toContain(TOOL_NAME);
+    });
+
+    it("presents a project file by its canonical absolute path", async () => {
+      const { present, presentFile, readOnly } = await setup();
+      const target = path.join(readOnly, "notes.md");
+      await writeFile(target, "# Notes");
+
+      const result = await present(target);
+
+      // The path is realpath'd, so the renderer is handed the same canonical
+      // path the access policy approved.
+      const canonical = path.join(await realpath(readOnly), "notes.md");
+      expect(presentFile).toHaveBeenCalledWith("present-call", canonical);
+      expect(result.content[0]).toMatchObject({
+        text: `Opened ${canonical} in a new background tab. The user was not switched to it.`,
+      });
+    });
+
+    it("resolves a relative path against the session folder", async () => {
+      const { present, presentFile, readWrite } = await setup();
+      await writeFile(path.join(readWrite, "notes.md"), "# Notes");
+
+      await present("notes.md");
+
+      expect(presentFile).toHaveBeenCalledWith(
+        "present-call",
+        path.join(await realpath(readWrite), "notes.md"),
+      );
+    });
+
+    it("presents an attached file without approval", async () => {
+      const { present, gate, outside } = await setup();
+      const attached = path.join(outside, "attached.txt");
+      await writeFile(attached, "attached");
+      // Grants canonicalize their targets, so the file must exist first.
+      const attachments = new PineAttachedPathAccess();
+      await attachments.grant([attached]);
+      const withAttachment = await setup({ attachedPaths: attachments });
+
+      await withAttachment.present(attached);
+
+      expect(withAttachment.presentFile).toHaveBeenCalledWith(
+        "present-call",
+        await realpath(attached),
+      );
+      expect(withAttachment.gate.reviewDenial).not.toHaveBeenCalled();
+      // Presenting the same path without the grant is what needs approval.
+      await present(attached);
+      expect(gate.reviewDenial).toHaveBeenCalledTimes(1);
+    });
+
+    it("escalates an outside path to the gate and presents it once approved", async () => {
+      const { present, presentFile, gate, outside } = await setup();
+      const external = path.join(outside, "report.pdf");
+      await writeFile(external, "pdf");
+
+      await present(external);
+
+      expect(gate.reviewDenial).toHaveBeenCalledWith(
+        "authorize",
+        expect.objectContaining({ toolName: TOOL_NAME }),
+      );
+      expect(presentFile).toHaveBeenCalledWith(
+        "present-call",
+        await realpath(external),
+      );
+    });
+
+    it("keeps an unapproved outside path out of the renderer", async () => {
+      const denied = createFakeGate({
+        reviewDenial: () => Promise.resolve({ kind: "deny" as const }),
+      });
+      const { present, presentFile, outside } = await setup({ gate: denied });
+      await writeFile(path.join(outside, "secret.txt"), "secret");
+
+      await expect(present(path.join(outside, "secret.txt"))).rejects.toThrow(
+        "outside the folders shared with Pine",
+      );
+      expect(presentFile).not.toHaveBeenCalled();
+    });
+
+    it("asks the user before presenting in let-me-review mode", async () => {
+      const rejected = createFakeGate({
+        reviewFileCall: () =>
+          Promise.resolve({ kind: "deny" as const, reason: "not now" }),
+      });
+      const { present, presentFile, readWrite } = await setup({
+        approvalMode: "let-me-review",
+        gate: rejected,
+      });
+      await writeFile(path.join(readWrite, "notes.md"), "# Notes");
+
+      await expect(present("notes.md")).rejects.toThrow("not now");
+      expect(presentFile).not.toHaveBeenCalled();
+    });
+
+    it("rejects directories, missing files, and empty paths", async () => {
+      const { present, presentFile, readWrite } = await setup();
+      await mkdir(path.join(readWrite, "folder"));
+
+      await expect(present("folder")).rejects.toThrow(
+        "Expected a readable file",
+      );
+      await expect(present("missing.md")).rejects.toThrow();
+      await expect(present("   ")).rejects.toThrow("A file path is required.");
+      expect(presentFile).not.toHaveBeenCalled();
+    });
+  });
+
   it("tells the agent to use privileged bash for external reads", async () => {
     const { location } = await createFixture();
     const tools = await createPineToolDefinitions(location, createFakeGate());

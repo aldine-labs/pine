@@ -1,5 +1,12 @@
 // @vitest-environment node
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -162,6 +169,84 @@ describe("ProjectRuntimeRegistry", () => {
         session: prompted.session,
         contextUsage,
       });
+    } finally {
+      await registry.dispose(1);
+    }
+  });
+
+  it("resolves a presented path into a project or presented tab target", async () => {
+    const registry = new ProjectRuntimeRegistry(
+      createAgentHost(),
+      "/pine/agent",
+    );
+    const { dataRoot, project } = await createRuntimeFixture();
+    const folderPath = project.folders[0].path;
+    const externalPath = path.join(dataRoot, "report.pdf");
+
+    try {
+      await registry.open(1, project, {
+        attachmentsRoot: path.join(dataRoot, "attachments"),
+        cacheRoot: path.join(dataRoot, "cache"),
+        projectRoot: dataRoot,
+        sessionsRoot: path.join(dataRoot, "sessions"),
+      });
+      const prompted = await registry.prompt(1, {
+        message: "Start",
+        target: { kind: "new" },
+      });
+      const sessionId = prompted.session.id;
+
+      await mkdir(path.join(folderPath, "docs"));
+      await Promise.all([
+        writeFile(path.join(folderPath, "docs", "notes.md"), "# Notes"),
+        writeFile(externalPath, "pdf"),
+      ]);
+
+      // A project file stays inside the validated project-entry channel.
+      await expect(
+        registry.resolvePresentTarget(
+          sessionId,
+          path.join(folderPath, "docs", "notes.md"),
+        ),
+      ).resolves.toEqual({
+        folderId: project.defaultFolderId,
+        projectId: project.id,
+        relativePath: "docs/notes.md",
+        source: "project",
+      });
+
+      // Anything else is reported as presented, with the canonical path main
+      // will have to grant before the renderer can read it.
+      await expect(
+        registry.resolvePresentTarget(sessionId, externalPath),
+      ).resolves.toEqual({
+        path: await realpath(externalPath),
+        source: "presented",
+      });
+
+      // A symlink inside the folder must not launder an outside file.
+      const linkPath = path.join(folderPath, "escape.md");
+      await symlink(externalPath, linkPath);
+      await expect(
+        registry.resolvePresentTarget(sessionId, linkPath),
+      ).resolves.toEqual({
+        path: await realpath(externalPath),
+        source: "presented",
+      });
+
+      // Deleted files and unknown sessions never become a tab.
+      await expect(
+        registry.resolvePresentTarget(
+          sessionId,
+          path.join(folderPath, "gone.md"),
+        ),
+      ).resolves.toBeNull();
+      await expect(
+        registry.resolvePresentTarget(
+          "0198e338-fb55-7e18-a23e-a7028500f999",
+          externalPath,
+        ),
+      ).resolves.toBeNull();
     } finally {
       await registry.dispose(1);
     }

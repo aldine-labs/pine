@@ -20,12 +20,15 @@ import { PINE_RELEASES_URL, PINE_REPOSITORY_URL } from "@/shared/window";
 import { Separator } from "@/components/ui/separator";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
+import { usePresentedFiles } from "@/composables/usePresentedFiles";
 import { cn } from "@/lib/utils";
 import { fileIcon } from "@/lib/fileIcon";
+import { fileTargetPath } from "@/lib/filePreviewTarget";
 import {
   CONTENT_TAB_DRAG_TYPE,
   writeContentTabDrag,
 } from "@/lib/contentTabDrag";
+import { useAttentionFlashStore } from "@/stores/attentionFlash";
 import type { ProjectContentTab } from "@/stores/contentTabs";
 import { useContentTabsStore } from "@/stores/contentTabs";
 import { useSessionStore } from "@/stores/session";
@@ -38,6 +41,7 @@ import WindowShortcutHints from "@/components/window/WindowShortcutHints.vue";
 const { t } = useI18n();
 const { state: sidebarState, isMobile } = useSidebar();
 const contentTabsStore = useContentTabsStore();
+const attentionFlash = useAttentionFlashStore();
 const tabNavigation = useContentTabNavigation();
 const sessionStore = useSessionStore();
 const { activeTab: activeContentTab, activeTabId, tabs } = tabNavigation;
@@ -164,12 +168,17 @@ function dropTab(event: DragEvent): void {
     dropPosition.value.side,
   );
   endTabDrag();
-  void nextTick(revealActiveTab);
+  void nextTick(() => revealTab(activeTabId.value));
 }
 
-function revealActiveTab(): void {
+/**
+ * Scroll one tab fully into view without changing which tab is active. Called
+ * for the active tab and for a tab the agent just presented, so a flash that
+ * would otherwise happen off-screen behind the tab list's overflow is seen.
+ */
+function revealTab(tabId: string): void {
   const viewport = tabList.value;
-  const button = tabButtons.get(activeTabId.value);
+  const button = tabButtons.get(tabId);
   if (!viewport || !button || viewport.clientWidth === 0) return;
 
   const viewportRect = viewport.getBoundingClientRect();
@@ -178,8 +187,8 @@ function revealActiveTab(): void {
   const right = left + viewport.clientWidth;
   if (buttonRect.left >= left && buttonRect.right <= right) return;
 
-  // Center clipped tabs so the edge fade does not obscure the active label.
-  // Scroll only this viewport; scrollIntoView can also move its ancestors.
+  // Center clipped tabs so the edge fade does not obscure the label. Scroll
+  // only this viewport; scrollIntoView can also move its ancestors.
   const target =
     viewport.scrollLeft +
     (buttonRect.left + buttonRect.right - left - right) / 2;
@@ -197,11 +206,23 @@ function revealActiveTab(): void {
 watch(
   [activeTabId, tabList, tabs],
   () => {
-    revealActiveTab();
+    revealTab(activeTabId.value);
     updateTabListOverflow();
   },
   { flush: "post" },
 );
+
+// Opening a flashing tab is the user's acknowledgement; hovering it counts
+// too, and `usePresentedFiles` prunes the rest when a tab is closed.
+watch(activeTabId, (tabId) => attentionFlash.stop(tabId), { immediate: true });
+
+usePresentedFiles({
+  reveal: (tabId) => {
+    // The tab may not be mounted yet when the presentation arrives.
+    void nextTick(() => revealTab(tabId));
+  },
+  isActive: (tabId) => tabId === activeTabId.value,
+});
 
 function getTabLabel(tab: ProjectContentTab): string {
   return "label" in tab && tab.label
@@ -212,7 +233,7 @@ function getTabLabel(tab: ProjectContentTab): string {
 function tabIcon(tab: ProjectContentTab) {
   return tab.kind === "session"
     ? SquareTerminalIcon
-    : fileIcon(tab.relativePath);
+    : fileIcon(fileTargetPath(tab));
 }
 
 function shouldShowSeparator(index: number): boolean {
@@ -336,13 +357,21 @@ watch(activeSession, (session) => {
 
             <div
               data-slot="project-content-tab"
-              class="window-no-drag group/tab relative flex h-8 w-40 min-w-40 items-center rounded-2xl"
+              :class="
+                cn(
+                  'window-no-drag group/tab relative flex h-8 w-40 min-w-40 items-center rounded-2xl',
+                  // Reusable attention signal: a tab the agent presented keeps
+                  // pulsing until the user hovers, opens, or closes it.
+                  attentionFlash.isFlashing(tab.id) && 'attention-flash',
+                )
+              "
               :data-tab-id="tab.id"
               :draggable="true"
               @dragstart="startTabDrag($event, tab)"
               @dragend="endTabDrag"
               @dragover="dragOverTab($event, tab.id)"
               @drop="dropTab"
+              @pointerenter="attentionFlash.stop(tab.id)"
             >
               <span
                 v-if="

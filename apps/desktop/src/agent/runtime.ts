@@ -1199,6 +1199,8 @@ export class PineAgentRuntime {
         getTinyFishApiKey: () => live.tinyFishApiKey,
         requestQuestionnaire: (toolCallId, params, signal) =>
           this.requestQuestionnaire(live, toolCallId, params, signal),
+        presentFile: (toolCallId, filePath) =>
+          this.presentFile(live, toolCallId, filePath),
       },
     );
     live.availableToolNames = customTools.map((tool) => tool.name);
@@ -1431,6 +1433,25 @@ export class PineAgentRuntime {
       reason: decision.kind === "deny" ? decision.reason : undefined,
     });
     return { accepted: true };
+  }
+
+  /**
+   * Ask the renderer to open a file the user should look at. Main resolves the
+   * absolute path into a tab target, so this stays fire-and-forget: the tool
+   * already proved the path readable, and no part of opening a tab can fail in
+   * a way the agent needs to act on.
+   */
+  private presentFile(
+    live: LiveAgentSession,
+    toolCallId: string,
+    filePath: string,
+  ): void {
+    this.options.emit({
+      type: "present-file",
+      sessionId: live.session.sessionId,
+      toolCallId,
+      path: filePath,
+    });
   }
 
   private requestQuestionnaire(

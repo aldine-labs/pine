@@ -14,7 +14,7 @@ import {
   type CompactSessionResult,
   type DequeueSteeringRequest,
   type DequeueSteeringResult,
-  type PineAgentEvent,
+  type PineSessionEvent,
   type PromptSessionRequest,
   type PromptSessionResult,
   type RespondApprovalRequest,
@@ -114,6 +114,7 @@ import {
   PROJECT_FILE_ATTACHMENTS_CHANNEL,
   LIST_PROJECT_DIRECTORY_CHANNEL,
   READ_PROJECT_FILE_PREVIEW_CHANNEL,
+  READ_PRESENTED_FILE_PREVIEW_CHANNEL,
   PROJECT_FILES_CHANGED_CHANNEL,
   SET_WATCHED_PROJECT_DIRECTORIES_CHANNEL,
   type ListProjectDirectoryRequest,
@@ -161,6 +162,8 @@ const pineApi: PineDesktopApi = {
     ipcRenderer.invoke(CHECK_FOR_UPDATE_CHANNEL),
   readProjectFilePreview: (request) =>
     ipcRenderer.invoke(READ_PROJECT_FILE_PREVIEW_CHANNEL, request),
+  readPresentedFilePreview: (request) =>
+    ipcRenderer.invoke(READ_PRESENTED_FILE_PREVIEW_CHANNEL, request),
   closeWindow: () => ipcRenderer.invoke(CLOSE_WINDOW_CHANNEL),
   getAppVersion: (): Promise<string> =>
     ipcRenderer.invoke(GET_APP_VERSION_CHANNEL),
@@ -345,7 +348,9 @@ const pineApi: PineDesktopApi = {
   onSessionEvent: (listener: SessionEventListener): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      event: PineAgentEvent,
+      // Main enriches present-file events with the resolved tab target before
+      // forwarding, so the renderer never sees an unresolved request.
+      event: PineSessionEvent,
     ) => listener(event);
     ipcRenderer.on(SESSION_EVENT_CHANNEL, handler);
     return () => ipcRenderer.removeListener(SESSION_EVENT_CHANNEL, handler);

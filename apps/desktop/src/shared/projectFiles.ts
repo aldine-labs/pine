@@ -52,10 +52,29 @@ export type ProjectEntryReference = ListProjectDirectoryRequest;
 
 export const READ_PROJECT_FILE_PREVIEW_CHANNEL =
   "project-files:preview" as const;
+export const READ_PRESENTED_FILE_PREVIEW_CHANNEL =
+  "project-files:preview-presented" as const;
 export const PROJECT_MEDIA_PROTOCOL = "pine-project-media" as const;
 export interface ProjectFilePreviewRequest extends ProjectEntryReference {
   projectId: string;
 }
+/**
+ * A file the agent asked the user to look at, addressed by absolute path
+ * because it lives outside every project folder. The main process only serves
+ * paths it already authorized for this window, so an external file tab never
+ * widens what this window may read.
+ */
+export interface PresentedFilePreviewRequest {
+  path: string;
+}
+/**
+ * Where a file tab reads its content from. Project files keep the portable
+ * folder-relative reference; presented files carry the absolute path the main
+ * process approved when the agent presented them.
+ */
+export type FilePreviewTarget =
+  | ({ source: "project" } & ProjectFilePreviewRequest)
+  | ({ source: "presented" } & PresentedFilePreviewRequest);
 export interface ProjectFileMetadata {
   size: number;
   modifiedAt: string;

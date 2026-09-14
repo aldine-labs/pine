@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fileTargetKey } from "@/lib/filePreviewTarget";
 import type { ProjectContentTab } from "@/stores/contentTabs";
 
 export const CONTENT_TABS_STORAGE_PREFIX = "pine.content-tabs.v1:";
@@ -10,10 +11,20 @@ const stateSchema = z.object({
       z.object({
         id,
         kind: z.literal("file"),
+        source: z.literal("project"),
         label: z.string(),
         projectId: id,
         folderId: id,
         relativePath: id,
+      }),
+      // Accepted so a single presented tab cannot invalidate the whole saved
+      // state; the restore pass below drops it deliberately.
+      z.object({
+        id,
+        kind: z.literal("file"),
+        source: z.literal("presented"),
+        label: z.string(),
+        path: z.string().min(1),
       }),
       z.object({
         id,
@@ -49,6 +60,10 @@ export function readContentTabs(projectId: string): ContentTabState | null {
     const entries = new Set<string>();
     const tabs: ProjectContentTab[] = [];
     for (const saved of parsed.data.tabs) {
+      // A presented file's access grant only covers the run that presented it,
+      // so a restart cannot resume that tab without widening what this window
+      // may read. Drop it instead of restoring a tab that could never load.
+      if (saved.kind === "file" && saved.source === "presented") continue;
       if (
         ids.has(saved.id) ||
         (saved.kind === "file" && saved.projectId !== projectId)
@@ -61,7 +76,7 @@ export function readContentTabs(projectId: string): ContentTabState | null {
           : saved;
       const identity =
         tab.kind === "file"
-          ? JSON.stringify([tab.folderId, tab.relativePath])
+          ? fileTargetKey(tab)
           : tab.state === "bound"
             ? `session:${tab.sessionId}`
             : `draft:${tab.id}`;

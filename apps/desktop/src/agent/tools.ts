@@ -7,6 +7,7 @@ import {
   open,
   readFile,
   realpath,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -39,6 +40,7 @@ import {
   type AskUserQuestionSubmission,
 } from "@pine/rpiv-ask-user-question";
 import type { AgentSessionLocation } from "./protocol";
+import { UI_PRESENT_FILE_TOOL_NAME } from "../shared/agent";
 import {
   createNativeBashEnvironment,
   resolveLoginPath,
@@ -236,6 +238,8 @@ export interface PineToolPermissionContext {
     params: AskUserQuestionParams,
     signal?: AbortSignal,
   ) => Promise<AskUserQuestionSubmission>;
+  /** Opens a file tab for the user without moving their focus. */
+  presentFile?: (toolCallId: string, filePath: string) => void;
 }
 
 export async function createPineToolDefinitions(
@@ -490,6 +494,68 @@ export async function createPineToolDefinitions(
       } satisfies TinyFishToolFactoryOptions)
     : [];
   const requestQuestionnaire = permissions?.requestQuestionnaire;
+  const presentFile = permissions?.presentFile;
+
+  /**
+   * File paths are resolved and checked by Pine's access policy before main is
+   * told to open a tab, so a presented file can never point the renderer at a
+   * path the agent could not read itself. Paths outside the shared folders and
+   * attachments raise a normal access denial, which the gate can then approve.
+   */
+  const createPresentFileTool = (accessPolicy: PineToolAccessPolicy) => {
+    const params = Type.Object({
+      path: Type.String({
+        description:
+          "Path of the file to open for the user. A project-relative path is preferred; an absolute path is required for files outside the shared project folders.",
+      }),
+    });
+    return defineTool({
+      name: UI_PRESENT_FILE_TOOL_NAME,
+      label: "Present File",
+      description:
+        "Open a file in a new tab so the user can read it, without switching them to that tab. The tab pulses until the user looks at it, so the user keeps control of what they are reading. Use this when the user asks to see a file or when showing the file is clearer than describing it. Presenting a path outside the shared project folders and the user's attachments needs approval, because Pine must read that path to display it.",
+      promptSnippet: `Use ${UI_PRESENT_FILE_TOOL_NAME} to open a file the user should look at, instead of only naming it in prose`,
+      promptGuidelines: [
+        `${UI_PRESENT_FILE_TOOL_NAME} opens a tab in the background: the user is not switched to it, so say what you presented and why rather than assuming they saw it.`,
+        `Pass the file's project-relative path when it has one. Directories, missing files, and unsupported content are reported back to you.`,
+        `Present only the files that matter to the current request; opening several tabs at once costs the user attention.`,
+      ],
+      parameters: params,
+      prepareArguments: (args) => args as Static<typeof params>,
+      execute: async (toolCallId, inputParams, signal) => {
+        const requested = inputParams.path.trim();
+        if (!requested) throw new Error("A file path is required.");
+        const authorizedPath = await accessPolicy.authorize(
+          path.resolve(location.cwd, requested),
+          "read",
+        );
+        const metadata = await stat(authorizedPath).catch(() => null);
+        if (!metadata?.isFile()) {
+          throw new Error(`Expected a readable file, not: ${requested}`);
+        }
+        if (signal?.aborted) throw new Error("aborted");
+        presentFile?.(toolCallId, authorizedPath);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Opened ${authorizedPath} in a new background tab. The user was not switched to it.`,
+            },
+          ],
+          details: { path: authorizedPath },
+        };
+      },
+    });
+  };
+
+  const uiPresentFileTool = presentFile
+    ? gateFileTool(
+        createPresentFileTool(policy),
+        createPresentFileTool(permissivePolicy),
+        getGate,
+        getApprovalMode,
+      )
+    : null;
   const askUserQuestionTool = requestQuestionnaire
     ? defineTool({
         name: ASK_USER_QUESTION_TOOL_NAME,
@@ -538,6 +604,7 @@ export async function createPineToolDefinitions(
     gatedEditTool,
     gatedWriteTool,
     ...(privilegedShellTool ? [privilegedShellTool] : []),
+    ...(uiPresentFileTool ? [uiPresentFileTool] : []),
     ...(askUserQuestionTool ? [askUserQuestionTool] : []),
     ...tinyFishTools,
   ] as ToolDefinition[];

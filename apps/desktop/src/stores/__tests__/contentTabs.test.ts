@@ -133,6 +133,41 @@ describe("content tabs store", () => {
     expect(store.tabs).toEqual([]);
   });
 
+  it("drops presented file tabs on restore because their grant is per-run", () => {
+    localStorage.setItem(
+      CONTENT_TABS_STORAGE_PREFIX + "one",
+      JSON.stringify({
+        activeTabId: "file-2",
+        tabs: [
+          {
+            id: "file-1",
+            kind: "file",
+            source: "project",
+            label: "main.ts",
+            projectId: "one",
+            folderId: "root",
+            relativePath: "src/main.ts",
+          },
+          {
+            id: "file-2",
+            kind: "file",
+            source: "presented",
+            label: "report.pdf",
+            path: "/Users/me/Downloads/report.pdf",
+          },
+          { id: "session-1", kind: "session", state: "bound", sessionId: "s1" },
+        ],
+      }),
+    );
+    const store = useContentTabsStore();
+    store.restore("one");
+
+    // The project file and session survive; the presented file cannot be read
+    // without the grant the run that presented it owned.
+    expect(store.tabs.map((tab) => tab.id)).toEqual(["file-1", "session-1"]);
+    expect(store.fallbackActiveTabId).toBe("file-1");
+  });
+
   it("restores interrupted creation and keeps independent drafts", () => {
     const store = useContentTabsStore();
     store.restore("one");
@@ -260,6 +295,36 @@ describe("content tabs store", () => {
     expect(store.tabs).toEqual([
       { id: "session-1", kind: "session", state: "draft" },
     ]);
+  });
+
+  it("opens presented files as their own tabs and reuses them by path", () => {
+    const store = useContentTabsStore();
+    const project = store.openFile({
+      projectId: "p1",
+      folderId: "f1",
+      relativePath: "src/main.ts",
+    });
+    const presented = store.presentFile({
+      source: "presented",
+      path: "/Users/me/Downloads/report.pdf",
+    });
+    expect(presented).toMatchObject({
+      kind: "file",
+      label: "report.pdf",
+      source: "presented",
+      path: "/Users/me/Downloads/report.pdf",
+    });
+    // Presenting the same file twice highlights one tab instead of two.
+    expect(
+      store.presentFile({
+        source: "presented",
+        path: "/Users/me/Downloads/report.pdf",
+      }).id,
+    ).toBe(presented.id);
+    expect(store.tabs).toHaveLength(3);
+    // A presented path never collides with a project-relative file.
+    expect(presented.id).not.toBe(project.id);
+    expect(store.tabs.some((tab) => tab.id === presented.id)).toBe(true);
   });
 
   it("opens an existing session tab instead of duplicating it", () => {

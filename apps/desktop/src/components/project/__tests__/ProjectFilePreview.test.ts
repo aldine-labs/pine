@@ -61,9 +61,30 @@ vi.mock("@vue-office/pptx", () => ({
   },
 }));
 const info = { size: 2048, modifiedAt: "2026-09-04T12:00:00Z" };
-const file = { projectId: "p1", folderId: "f1", relativePath: "src/main.py" };
+const fileRequest = {
+  projectId: "p1",
+  folderId: "f1",
+  relativePath: "src/main.py",
+};
+const file = {
+  id: "file-1",
+  kind: "file" as const,
+  label: "main.py",
+  source: "project" as const,
+  ...fileRequest,
+};
+const presentedFile = {
+  id: "file-2",
+  kind: "file" as const,
+  label: "report.md",
+  source: "presented" as const,
+  path: "/tmp/report.md",
+};
 const wrappers: ReturnType<typeof mount>[] = [];
-function render(read: (request: unknown) => Promise<Preview>) {
+function render(
+  read: (request: unknown) => Promise<Preview>,
+  readPresented: (request: unknown) => Promise<Preview> = vi.fn(),
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const router = createRouter({
@@ -74,6 +95,7 @@ function render(read: (request: unknown) => Promise<Preview>) {
     configurable: true,
     value: {
       readProjectFilePreview: read,
+      readPresentedFilePreview: readPresented,
       operateProjectFile: vi.fn().mockResolvedValue(undefined),
     },
   });
@@ -289,7 +311,7 @@ describe("ProjectFilePreview", () => {
     });
     const wrapper = render(read);
     await flushPromises();
-    expect(read).toHaveBeenCalledWith(file);
+    expect(read).toHaveBeenCalledWith(fileRequest);
     expect(codeToHtml).toHaveBeenCalledWith(
       "print(1)\n",
       expect.objectContaining({ lang: "python" }),
@@ -306,6 +328,38 @@ describe("ProjectFilePreview", () => {
       false,
     );
     expect(wrapper.find("pre.shiki").exists()).toBe(true);
+  });
+
+  it("previews a presented file through the presented-file channel", async () => {
+    const readProject = vi.fn();
+    const readPresented = vi.fn().mockResolvedValue({
+      ...info,
+      kind: "text",
+      text: "# Report\n",
+      encoding: "UTF-8",
+    });
+    const wrapper = render(readProject, readPresented);
+    await wrapper.setProps({ file: presentedFile });
+    await flushPromises();
+
+    expect(readPresented).toHaveBeenCalledWith({ path: "/tmp/report.md" });
+    const metadata = wrapper.get('[aria-label="File metadata"]');
+    expect(metadata.text()).toContain("2 KB");
+    // The project-only actions cannot address a file outside every folder.
+    expect(wrapper.find('[data-action="open-default"]').exists()).toBe(false);
+    expect(wrapper.find('footer button[aria-haspopup="menu"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("reports a presented file that can no longer be read", async () => {
+    const wrapper = render(
+      vi.fn(),
+      vi.fn().mockRejectedValue(new Error("not presented")),
+    );
+    await wrapper.setProps({ file: presentedFile });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Unable to preview file");
   });
 
   it("lists only open session tabs and attaches the file through the footer menu", async () => {
@@ -327,7 +381,7 @@ describe("ProjectFilePreview", () => {
     };
     store.bindSession("session-1", session);
     const draft = store.createSessionTab();
-    store.openFile(file);
+    store.openFile(fileRequest);
     useProjectStore().activeProject = {
       id: "p1",
       name: "Project",

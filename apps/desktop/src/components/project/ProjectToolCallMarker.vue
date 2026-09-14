@@ -3,11 +3,13 @@ import {
   AlertCircleIcon,
   CheckIcon,
   CircleHelpIcon,
+  EyeIcon,
   ShieldBanIcon,
 } from "@lucide/vue";
 import { computed, ref, type Component, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { UI_PRESENT_FILE_TOOL_NAME } from "@/shared/agent";
 import type { PineToolCall } from "@/shared/sessions";
 import ProjectToolCallDialog from "./ProjectToolCallDialog.vue";
 import {
@@ -40,9 +42,18 @@ function isAskUserQuestionTool(name: string): boolean {
   );
 }
 
-const kindIcon: Component = isAskUserQuestionTool(props.toolCall.name)
-  ? CircleHelpIcon
-  : TOOL_KIND_ICON[toolKind(props.toolCall.name)];
+function isPresentFileTool(name: string): boolean {
+  return normalizedToolName(name) === UI_PRESENT_FILE_TOOL_NAME;
+}
+
+/** Tools whose meaning is more specific than their generic kind. */
+function toolIcon(name: string): Component {
+  if (isAskUserQuestionTool(name)) return CircleHelpIcon;
+  if (isPresentFileTool(name)) return EyeIcon;
+  return TOOL_KIND_ICON[toolKind(name)];
+}
+
+const kindIcon: Component = toolIcon(props.toolCall.name);
 
 const isRunning = computed(() => isRunningTool(props.toolCall));
 const isDenied = computed(() => isDeniedTool(props.toolCall));
@@ -450,6 +461,19 @@ const presentation = computed(() => {
       target,
       purpose: compactPurpose,
       faviconDataUrl,
+      after: "",
+    };
+  }
+  if (isPresentFileTool(props.toolCall.name)) {
+    // The filename is rendered separately as the target, so the label only
+    // carries the tense: "Presented report.pdf".
+    return {
+      before: t(`project.transcript.tools.presentFile.${state}`),
+      operation: undefined,
+      separator: "",
+      target,
+      purpose: undefined,
+      faviconDataUrl: undefined,
       after: "",
     };
   }

@@ -13,7 +13,11 @@ export function writeContentTabDrag(
   tab: ProjectContentTab,
 ): void {
   transfer.setData(CONTENT_TAB_DRAG_TYPE, tab.id);
-  if (tab.kind === "file") transfer.setData(FILE_TAB_DRAG_TYPE, tab.id);
+  // Only project files can be attached to a session: a presented file lives
+  // outside every project folder, so there is nothing to inspect.
+  if (tab.kind === "file" && tab.source === "project") {
+    transfer.setData(FILE_TAB_DRAG_TYPE, tab.id);
+  }
   if (tab.kind === "session" && tab.state === "bound") {
     transfer.setData(SESSION_DRAG_TYPE, tab.sessionId);
   }

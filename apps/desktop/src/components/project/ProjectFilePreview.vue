@@ -49,12 +49,14 @@ import { useFileToSession } from "@/composables/useFileToSession";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fileLanguage } from "@/lib/fileLanguage";
+import {
+  fileName as pathBaseName,
+  fileTargetPath,
+} from "@/lib/filePreviewTarget";
 import { filePreviewSelection } from "@/lib/filePreviewSelection";
 import type { AttachmentSelection } from "@/shared/attachments";
-import type {
-  ProjectFilePreview,
-  ProjectFilePreviewRequest,
-} from "@/shared/projectFiles";
+import type { ProjectFilePreview } from "@/shared/projectFiles";
+import type { FileContentTab } from "@/stores/contentTabs";
 
 const ProjectPdfPreview = defineAsyncComponent(
   () => import("./ProjectPdfPreview.vue"),
@@ -64,10 +66,16 @@ const ProjectOfficePreview = defineAsyncComponent(
 );
 
 const props = withDefaults(
-  defineProps<{ file: ProjectFilePreviewRequest; active?: boolean }>(),
+  defineProps<{ file: FileContentTab; active?: boolean }>(),
   { active: true },
 );
 const { t, locale } = useI18n();
+// Presented files live outside the project, so the project-entry actions
+// (open with the default app, reveal, send to a session) are not available.
+const projectTarget = computed(() =>
+  props.file.source === "project" ? props.file : null,
+);
+const filePath = computed(() => fileTargetPath(props.file));
 const preview = ref<ProjectFilePreview>();
 const viewMode = ref<"code" | "rendered">("rendered");
 const renderSwitchId = useId();
@@ -75,12 +83,11 @@ const invertSwitchId = useId();
 const isMarkdown = computed(
   () =>
     preview.value?.kind === "text" &&
-    fileLanguage(props.file.relativePath) === "markdown",
+    fileLanguage(filePath.value) === "markdown",
 );
 const isHtml = computed(
   () =>
-    preview.value?.kind === "text" &&
-    fileLanguage(props.file.relativePath) === "html",
+    preview.value?.kind === "text" && fileLanguage(filePath.value) === "html",
 );
 const canRenderText = computed(() => isMarkdown.value || isHtml.value);
 const rendered = computed(
@@ -142,9 +149,7 @@ const { isSending, sendFile, sendFileToNewSession } = useFileToSession();
 const failed = ref(false);
 const revision = ref(0);
 const video = useTemplateRef<HTMLVideoElement>("video");
-const fileName = computed(
-  () => props.file.relativePath.split("/").at(-1) ?? "",
-);
+const fileName = computed(() => pathBaseName(filePath.value));
 const mediaDetails = ref<{
   width: number;
   height: number;
@@ -227,12 +232,14 @@ function commitZoom(value: number[]): void {
 }
 
 async function openWithDefaultApplication(): Promise<void> {
+  const target = projectTarget.value;
+  if (!target) return;
   try {
     await window.pine.operateProjectFile({
       action: "open",
       target: {
-        folderId: props.file.folderId,
-        relativePath: props.file.relativePath,
+        folderId: target.folderId,
+        relativePath: target.relativePath,
       },
     });
   } catch (error) {
@@ -244,13 +251,7 @@ async function openWithDefaultApplication(): Promise<void> {
 }
 
 watch(
-  () =>
-    [
-      props.file.projectId,
-      props.file.folderId,
-      props.file.relativePath,
-      revision.value,
-    ] as const,
+  () => [props.file.id, revision.value] as const,
   async (_value, _previous, onCleanup) => {
     let active = true;
     onCleanup(() => {
@@ -269,11 +270,15 @@ watch(
     pendingZoom = 100;
     failed.value = false;
     try {
-      const result = await window.pine.readProjectFilePreview({
-        projectId: props.file.projectId,
-        folderId: props.file.folderId,
-        relativePath: props.file.relativePath,
-      });
+      const file = props.file;
+      const result =
+        file.source === "project"
+          ? await window.pine.readProjectFilePreview({
+              projectId: file.projectId,
+              folderId: file.folderId,
+              relativePath: file.relativePath,
+            })
+          : await window.pine.readPresentedFilePreview({ path: file.path });
       if (active) {
         preview.value = result;
         previewInverted.value =
@@ -377,9 +382,7 @@ onBeforeUnmount(() => {
             type: 'code_block',
             code: preview.text,
             language:
-              preview.text.length > 200_000
-                ? 'text'
-                : fileLanguage(file.relativePath),
+              preview.text.length > 200_000 ? 'text' : fileLanguage(filePath),
           }"
         />
       </div>
@@ -434,7 +437,7 @@ onBeforeUnmount(() => {
     </div>
     <footer
       class="mt-auto flex min-h-12 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 pl-5 pr-2 py-2 text-sm text-muted-foreground"
-      :title="file.relativePath"
+      :title="filePath"
       :aria-label="t('project.preview.metadata')"
     >
       <template v-if="preview">
@@ -486,7 +489,7 @@ onBeforeUnmount(() => {
         />
         <Label :for="renderSwitchId">{{ t("project.preview.rendered") }}</Label>
       </div>
-      <div class="ml-auto flex items-center gap-3">
+      <div v-if="projectTarget" class="ml-auto flex items-center gap-3">
         <Button
           v-if="preview"
           data-action="open-default"
@@ -523,7 +526,7 @@ onBeforeUnmount(() => {
               <DropdownMenuItem
                 v-for="tab in sessionTabs"
                 :key="tab.id"
-                @select="sendFile(file, tab.id, menuSelection)"
+                @select="sendFile(projectTarget, tab.id, menuSelection)"
               >
                 <SquareTerminal />
                 <span class="truncate">{{
@@ -540,7 +543,7 @@ onBeforeUnmount(() => {
             <DropdownMenuGroup>
               <DropdownMenuItem
                 data-action="new-session"
-                @select="sendFileToNewSession(file, menuSelection)"
+                @select="sendFileToNewSession(projectTarget, menuSelection)"
               >
                 <Plus />{{ t("project.preview.newSession") }}
               </DropdownMenuItem>

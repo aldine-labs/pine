@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils";
-import { CircleHelpIcon } from "@lucide/vue";
+import { CircleHelpIcon, EyeIcon } from "@lucide/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAppI18n } from "@/app/i18n";
 import ProjectCompactionMarker from "../ProjectCompactionMarker.vue";
@@ -231,6 +231,31 @@ describe("project transcript markers", () => {
 
     expect(content.text()).toBe("已获得 2 个问题的答案");
     expect(content.classes()).not.toContain("shimmer");
+  });
+
+  it("shows the presented filename instead of the raw tool name", async () => {
+    const wrapper = mount(ProjectToolCallMarker, {
+      props: {
+        toolCall: {
+          id: "tool-present",
+          input: { path: "/Users/kw/project/reports/quarterly.md" },
+          name: "ui_present_file",
+          status: "running",
+        },
+      },
+      global: { plugins: [createAppI18n("zh-CN")] },
+    });
+
+    const content = wrapper.get('[data-slot="marker-content"]');
+    expect(content.text()).toBe("正在打开 quarterly.md");
+    expect(content.find("code").text()).toBe("quarterly.md");
+    expect(content.text()).not.toContain("ui_present_file");
+    expect(wrapper.findComponent(EyeIcon).exists()).toBe(true);
+
+    await wrapper.setProps({
+      toolCall: { ...wrapper.props("toolCall"), status: "complete" },
+    });
+    expect(content.text()).toBe("已打开 quarterly.md");
   });
 
   it("shows the filename when a read completes", () => {

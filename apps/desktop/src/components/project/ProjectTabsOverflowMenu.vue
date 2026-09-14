@@ -48,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
 import { useProjectFileChanges } from "@/composables/useProjectFileChanges";
 import { useSessionExport } from "@/composables/useSessionExport";
+import { fileTargetPath } from "@/lib/filePreviewTarget";
 import type { ProjectFileOperation } from "@/shared/projectFiles";
 import type { PineSessionSummary } from "@/shared/sessions";
 import { useProjectStore } from "@/stores/project";
@@ -88,16 +89,18 @@ const targetSession = computed<PineSessionSummary | null>(() => {
 const activeFileTab = computed(() =>
   activeTab.value?.kind === "file" ? activeTab.value : null,
 );
+// Project-entry actions only apply to files inside the project. A presented
+// file lives outside every folder, so the whole menu group is unavailable.
 const fileTarget = computed(() =>
-  activeFileTab.value
+  activeFileTab.value?.source === "project"
     ? {
         folderId: activeFileTab.value.folderId,
         relativePath: activeFileTab.value.relativePath,
       }
     : null,
 );
-const fileTabName = computed(
-  () => activeFileTab.value?.label ?? activeFileTab.value?.relativePath ?? "",
+const fileTabName = computed(() =>
+  activeFileTab.value ? fileTargetPath(activeFileTab.value) : "",
 );
 
 const isSessionRenameOpen = ref(false);
@@ -225,15 +228,24 @@ async function trashActiveFile(): Promise<void> {
 
     <DropdownMenuContent align="end" class="w-56">
       <DropdownMenuGroup v-if="activeFileTab">
-        <DropdownMenuItem @select="runFileOperation('open')">
+        <DropdownMenuItem
+          :disabled="!fileTarget"
+          @select="runFileOperation('open')"
+        >
           <ExternalLinkIcon aria-hidden="true" />
           {{ t("project.files.open") }}
         </DropdownMenuItem>
-        <DropdownMenuItem @select="runFileOperation('reveal')">
+        <DropdownMenuItem
+          :disabled="!fileTarget"
+          @select="runFileOperation('reveal')"
+        >
           <FolderOpenIcon aria-hidden="true" />
           {{ t("project.files.reveal") }}
         </DropdownMenuItem>
-        <DropdownMenuItem @select="runFileOperation('copy-path')">
+        <DropdownMenuItem
+          :disabled="!fileTarget"
+          @select="runFileOperation('copy-path')"
+        >
           <CopyIcon aria-hidden="true" />
           {{ t("project.files.copyPath") }}
         </DropdownMenuItem>
@@ -241,7 +253,7 @@ async function trashActiveFile(): Promise<void> {
           <FolderPlusIcon aria-hidden="true" />
           {{ t("project.files.newFolder") }}
         </DropdownMenuItem>
-        <DropdownMenuItem @select="requestFileRename">
+        <DropdownMenuItem :disabled="!fileTarget" @select="requestFileRename">
           <PencilIcon aria-hidden="true" />
           {{ t("project.files.rename") }}
         </DropdownMenuItem>
@@ -251,6 +263,7 @@ async function trashActiveFile(): Promise<void> {
         </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"
+          :disabled="!fileTarget"
           @select="isTrashConfirmOpen = true"
         >
           <Trash2Icon aria-hidden="true" />

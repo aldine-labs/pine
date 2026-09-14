@@ -17,10 +17,11 @@ import {
 } from "electron";
 import started from "electron-squirrel-startup";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { ProjectRuntimeRegistry } from "./main/projectRuntime";
+import { PresentedFileRegistry } from "./main/presentedFiles";
 import { TinyFishCredentialStore } from "./main/tinyfishCredentials";
 import {
   readProjectFilePreview,
@@ -54,6 +55,8 @@ import {
   type AbortSessionResult,
   type CompactSessionResult,
   type DequeueSteeringResult,
+  type PineAgentEvent,
+  type PinePresentFileEvent,
   type PromptSessionResult,
   type RespondApprovalRequest,
   type RespondQuestionnaireRequest,
@@ -343,6 +346,7 @@ let pineAgentDirectory: string | null = null;
 const modelRecommendations = new ModelRecommendationService();
 const modelMetadata = new ModelMetadataService();
 let projectRuntimes: ProjectRuntimeRegistry | null = null;
+let presentedFiles: PresentedFileRegistry | null = null;
 let projectFileWatchers: ProjectFileWatcherRegistry | null = null;
 let projectRepository: ProjectRepository | null = null;
 let appUpdater: AppUpdater | null = null;
@@ -381,6 +385,15 @@ const ProjectIdRequestSchema = z.object({ id: z.uuid() });
 const ProjectFilePreviewRequestSchema = ProjectEntryReferenceSchema.extend({
   projectId: z.uuid(),
 });
+const PresentedFilePreviewRequestSchema = z.object({
+  path: z.string().min(1).max(4096),
+});
+/**
+ * Marks a project-media URL that serves a presented file rather than a project
+ * entry. These URLs are minted by main, and the protocol re-checks the window's
+ * presented-file grants on every request.
+ */
+const PRESENTED_MEDIA_PARAM = "presented";
 
 async function previewPath(ownerId: number, request: unknown): Promise<string> {
   const entry = ProjectFilePreviewRequestSchema.parse(request);
@@ -394,6 +407,50 @@ async function previewPath(ownerId: number, request: unknown): Promise<string> {
   return filePath;
 }
 
+/**
+ * Resolve a presented file for content serving. The path must still be an
+ * absolute path this window presented, so a tab can never turn the media
+ * protocol into a generic disk read.
+ */
+async function presentedFilePath(
+  ownerId: number,
+  request: unknown,
+): Promise<string> {
+  const { path: requestedPath } =
+    PresentedFilePreviewRequestSchema.parse(request);
+  const canonicalPath = await realpath(requestedPath).catch(() => null);
+  if (!canonicalPath || !presentedFiles?.allows(ownerId, canonicalPath)) {
+    throw new Error("This file was not presented to this window.");
+  }
+  return canonicalPath;
+}
+
+/**
+ * Resolve a presented file into a tab target and forward it to its window. The
+ * renderer only ever sees the resolved target: main is the only place that
+ * knows which project folder a path belongs to, and the only place allowed to
+ * grant a window read access to a file outside those folders.
+ */
+async function forwardPresentedFile(
+  event: Extract<PineAgentEvent, { type: "present-file" }>,
+  ownerId: number,
+): Promise<void> {
+  const target = await projectRuntimes?.resolvePresentTarget(
+    event.sessionId,
+    event.path,
+  );
+  // An unresolvable path (folder removed, file deleted, project gone) never
+  // becomes a tab, so the renderer cannot be handed a raw absolute path.
+  if (!target) return;
+  if (target.source === "presented") {
+    presentedFiles?.remember(ownerId, target.path);
+  }
+  webContents.fromId(ownerId)?.send(SESSION_EVENT_CHANNEL, {
+    ...event,
+    target,
+  } satisfies PinePresentFileEvent);
+}
+
 function registerProjectMediaProtocol(): void {
   protocol.handle(PROJECT_MEDIA_PROTOCOL, async (request) => {
     try {
@@ -405,10 +462,13 @@ function registerProjectMediaProtocol(): void {
         .int()
         .positive()
         .parse(url.searchParams.get("owner"));
-      const filePath = await previewPath(
-        ownerId,
-        Object.fromEntries(url.searchParams),
-      );
+      const filePath =
+        url.searchParams.get(PRESENTED_MEDIA_PARAM) === "1"
+          ? await presentedFilePath(
+              ownerId,
+              Object.fromEntries(url.searchParams),
+            )
+          : await previewPath(ownerId, Object.fromEntries(url.searchParams));
       return await serveProjectMedia(request, filePath);
     } catch {
       return new Response(null, { status: 404 });
@@ -815,6 +875,7 @@ const createWindow = () => {
   });
   mainWindow.webContents.once("destroyed", () => {
     attachedPreviewPaths.delete(webContentsId);
+    presentedFiles?.forget(webContentsId);
     projectFileWatchers?.disposeSender(webContentsId);
     void projectRuntimes?.dispose(webContentsId);
   });
@@ -1216,6 +1277,9 @@ ipcMain.handle(
 );
 
 ipcMain.handle(CLOSE_PROJECT_CHANNEL, async (event): Promise<void> => {
+  // Presenting a file is authorized per run, so closing the project that ran
+  // the agent ends those grants with it.
+  presentedFiles?.forget(event.sender.id);
   await getProjectRuntimes().dispose(event.sender.id);
 });
 
@@ -1256,6 +1320,7 @@ ipcMain.handle(
   async (event, request: unknown): Promise<DeleteProjectResult> => {
     const { id } = ProjectIdRequestSchema.parse(request);
     if (getProjectRuntimes().isOpen(event.sender.id, id)) {
+      presentedFiles?.forget(event.sender.id);
       await getProjectRuntimes().dispose(event.sender.id);
     }
     return { deleted: await getProjectRepository().delete(id) };
@@ -1557,6 +1622,7 @@ async function initializeApp(): Promise<void> {
   });
   registerAttachmentImageProtocol();
   registerProjectMediaProtocol();
+  presentedFiles = new PresentedFileRegistry();
   projectRuntimes = new ProjectRuntimeRegistry(
     agentHost,
     pineAgentDirectory,
@@ -1574,6 +1640,10 @@ async function initializeApp(): Promise<void> {
     }
     const ownerId = projectRuntimes?.ownerOfSession(agentEvent.sessionId);
     if (ownerId === undefined) return;
+    if (agentEvent.type === "present-file") {
+      void forwardPresentedFile(agentEvent, ownerId);
+      return;
+    }
     if (agentEvent.type === "context-usage") {
       projectRuntimes?.updateContextUsage(agentEvent.sessionId, {
         tokens: agentEvent.tokens,

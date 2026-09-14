@@ -107,7 +107,11 @@ function dropOnSession(event: DragEvent, session: PineSessionSummary): void {
   const file = contentTabsStore.tabs.find(
     (tab) => tab.id === tabId && tab.kind === "file",
   );
-  if (file?.kind === "file") void sendFile(file, session);
+  // Only project files carry a drag payload, so a presented tab never lands
+  // here; the guard also keeps the file reference project-shaped.
+  if (file?.kind === "file" && file.source === "project") {
+    void sendFile(file, session);
+  }
 }
 const { activeSessionTab } = tabNavigation;
 const { activeProject } = storeToRefs(projectStore);

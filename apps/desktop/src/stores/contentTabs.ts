@@ -2,14 +2,18 @@ import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { readContentTabs, writeContentTabs } from "@/lib/contentTabStorage";
 import type { PineSessionSummary } from "@/shared/sessions";
-import type { ProjectFilePreviewRequest } from "@/shared/projectFiles";
+import type {
+  FilePreviewTarget,
+  ProjectFilePreviewRequest,
+} from "@/shared/projectFiles";
 import type { PineAttachment } from "@/shared/attachments";
+import { fileName, fileTargetKey } from "@/lib/filePreviewTarget";
 
-export interface FileContentTab extends ProjectFilePreviewRequest {
+export type FileContentTab = {
   id: string;
   kind: "file";
   label: string;
-}
+} & FilePreviewTarget;
 
 export interface DraftSessionTab {
   id: string;
@@ -134,23 +138,37 @@ export const useContentTabsStore = defineStore("content-tabs", () => {
       fallbackActiveTabId.value = tabId;
   }
 
-  function openFile(file: ProjectFilePreviewRequest): FileContentTab {
+  function ensureFileTab(target: FilePreviewTarget): FileContentTab {
+    const key = fileTargetKey(target);
     const existing = tabs.value.find(
       (tab): tab is FileContentTab =>
-        tab.kind === "file" &&
-        tab.projectId === file.projectId &&
-        tab.folderId === file.folderId &&
-        tab.relativePath === file.relativePath,
+        tab.kind === "file" && fileTargetKey(tab) === key,
     );
     if (existing) return existing;
+    const path =
+      target.source === "project" ? target.relativePath : target.path;
     const tab: FileContentTab = {
-      ...file,
+      ...target,
       id: `file-${crypto.randomUUID()}`,
       kind: "file",
-      label: file.relativePath.split("/").at(-1) ?? file.relativePath,
+      label: fileName(path),
     };
     tabs.value = [...tabs.value, tab];
     return tab;
+  }
+
+  /** Open or reuse the tab for a file the user selected in the project. */
+  function openFile(file: ProjectFilePreviewRequest): FileContentTab {
+    return ensureFileTab({ ...file, source: "project" });
+  }
+
+  /**
+   * Open or reuse the tab for a file the agent presented. Reuses the existing
+   * tab for the same file so presenting twice refreshes attention instead of
+   * duplicating the view.
+   */
+  function presentFile(target: FilePreviewTarget): FileContentTab {
+    return ensureFileTab(target);
   }
 
   function makeDraftTab(): DraftSessionTab {
@@ -368,6 +386,7 @@ export const useContentTabsStore = defineStore("content-tabs", () => {
     moveTab,
     openFile,
     openSession,
+    presentFile,
     projectId,
     removeSession,
     reset,

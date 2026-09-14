@@ -27,6 +27,9 @@ const sidebar = vi.hoisted(() => ({
 const sessionView = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
 enableAutoUnmount(afterEach);
 
+/** Session-event listeners the mounted tabs registered, for driving events. */
+let sessionEventListeners: ((event: unknown) => void)[] = [];
+
 vi.mock("@/components/ui/sidebar", () => ({
   useSidebar: () => ({
     state: computed(() => sidebar.state),
@@ -59,6 +62,7 @@ async function mountTabs(withFile = false) {
   await router.isReady();
   sessionView.mounts = 0;
   sessionView.unmounts = 0;
+  sessionEventListeners = [];
   Object.defineProperty(window, "pine", {
     configurable: true,
     value: {
@@ -66,6 +70,10 @@ async function mountTabs(withFile = false) {
       exportSession: vi.fn().mockResolvedValue({
         path: "/tmp/First prompt.md",
         saved: true,
+      }),
+      onSessionEvent: vi.fn().mockImplementation((listener) => {
+        sessionEventListeners.push(listener);
+        return () => undefined;
       }),
       openExternalUrl: vi.fn().mockResolvedValue(undefined),
       readProjectFilePreview: vi.fn().mockResolvedValue({
@@ -568,6 +576,51 @@ describe("ProjectContentTabs", () => {
     await flushPromises();
 
     expect(exportSession).toHaveBeenCalledWith({ sessionId: firstSession.id });
+    wrapper.unmount();
+  });
+
+  it("flashes a presented file tab until the user hovers or opens it", async () => {
+    const { wrapper, router } = await mountTabs();
+    const store = useContentTabsStore();
+
+    for (const listener of sessionEventListeners) {
+      listener({
+        type: "present-file",
+        sessionId: firstSession.id,
+        toolCallId: "tool-1",
+        path: "/tmp/report.pdf",
+        target: { source: "presented", path: "/tmp/report.pdf" },
+      });
+    }
+    await flushPromises();
+
+    const tab = store.tabs.at(-1)!;
+    const element = wrapper.get<HTMLElement>(
+      `[data-tab-id="${tab.id}"]`,
+    ).element;
+    expect(element.classList.contains("attention-flash")).toBe(true);
+    // The active session tab is untouched: presenting must not steal focus.
+    expect(router.currentRoute.value.query.tab).toBe("session-1");
+
+    await wrapper.get(`[data-tab-id="${tab.id}"]`).trigger("pointerenter");
+    expect(element.classList.contains("attention-flash")).toBe(false);
+
+    // Presenting again re-arms the signal, and opening the tab clears it.
+    for (const listener of sessionEventListeners) {
+      listener({
+        type: "present-file",
+        sessionId: firstSession.id,
+        toolCallId: "tool-2",
+        path: "/tmp/report.pdf",
+        target: { source: "presented", path: "/tmp/report.pdf" },
+      });
+    }
+    await flushPromises();
+    expect(element.classList.contains("attention-flash")).toBe(true);
+
+    await router.push({ query: { tab: tab.id } });
+    await flushPromises();
+    expect(element.classList.contains("attention-flash")).toBe(false);
     wrapper.unmount();
   });
 });
