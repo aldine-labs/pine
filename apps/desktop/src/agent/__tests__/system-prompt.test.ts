@@ -7,7 +7,10 @@ import {
   systemPromptForApprovalMode,
   systemPromptForPlatform,
 } from "../system-prompt";
-import { createDefaultPineUserProfile } from "../../shared/userProfile";
+import {
+  createDefaultPineUserProfile,
+  type PineUserProfile,
+} from "../../shared/userProfile";
 
 describe("systemPromptWithCurrentMonth", () => {
   it("appends the current year and month after the stable prompt prefix", () => {
@@ -36,6 +39,28 @@ describe("PINE_SYSTEM_PROMPT local tool guidance", () => {
     );
     expect(PINE_SYSTEM_PROMPT).toContain(
       "These rules apply to read-only commands too, including ls, find, and cat",
+    );
+  });
+
+  it("plans implicit resources and cross-backend handoffs", () => {
+    expect(PINE_SYSTEM_PROMPT).toContain(
+      "account for both explicit and implicit resources",
+    );
+    expect(PINE_SYSTEM_PROMPT).toContain(
+      "Their temporary-directory variables are not interchangeable handoff locations",
+    );
+    expect(PINE_SYSTEM_PROMPT).toContain(
+      "use an explicit absolute path inside a shared project folder",
+    );
+    expect(PINE_SYSTEM_PROMPT).toContain(
+      "For network-backed work such as cloning or downloading, use privileged_bash from the start",
+    );
+    expect(PINE_SYSTEM_PROMPT).toContain("Git may read a global config file");
+    expect(PINE_SYSTEM_PROMPT).toContain(
+      "A shell parse error, missing command, or failed helper command is not evidence of a sandbox denial",
+    );
+    expect(PINE_SYSTEM_PROMPT).toContain(
+      "Never switch backends and replay a failed command verbatim",
     );
   });
 
@@ -80,8 +105,56 @@ describe("systemPromptWithUserProfile", () => {
     expect(prompt).toContain("## User profile");
     expect(prompt).toContain("Preferred name: 小 Pine");
     expect(prompt).toContain("Always lead with the conclusion.");
+    expect(prompt).toContain("The user self-defines as a professional user.");
     expect(prompt).toContain("technically sophisticated solutions");
+    expect(prompt).toContain("Use ask_user_question eagerly");
+    expect(prompt).toContain(
+      "let the user decide about architecture, tools, debugging strategy",
+    );
     expect(prompt).toContain("system-level personalization preferences");
+  });
+
+  it("adjusts question eagerness across technical backgrounds", () => {
+    const baseProfile = createDefaultPineUserProfile();
+    const promptFor = (
+      technicalBackground: PineUserProfile["technicalBackground"],
+    ) =>
+      systemPromptWithUserProfile("base prompt", {
+        ...baseProfile,
+        technicalBackground,
+      });
+
+    const generalUserPrompt = promptFor("general-user");
+    const enthusiastPrompt = promptFor("enthusiast");
+    const professionalUserPrompt = promptFor("professional-user");
+
+    expect(generalUserPrompt).toContain(
+      "Use ask_user_question sparingly for technical decisions",
+    );
+    expect(generalUserPrompt).toContain(
+      "- Technical background: The user self-defines as a general user.",
+    );
+    expect(generalUserPrompt).toContain(
+      "Still ask before committing the user to important non-technical preferences",
+    );
+    expect(enthusiastPrompt).toContain(
+      "Use ask_user_question with moderate eagerness",
+    );
+    expect(enthusiastPrompt).toContain(
+      "- Technical background: The user self-defines as an enthusiast.",
+    );
+    expect(enthusiastPrompt).toContain(
+      "You may choose sensible defaults for routine details",
+    );
+    expect(professionalUserPrompt).toContain(
+      "Use ask_user_question eagerly for key technical and implementation decisions",
+    );
+    expect(professionalUserPrompt).toContain(
+      "- Technical background: The user self-defines as a professional user.",
+    );
+    expect(professionalUserPrompt).toContain(
+      "let the user decide about architecture, tools, debugging strategy",
+    );
   });
 
   it("uses the product defaults for a new profile", () => {
@@ -104,6 +177,9 @@ describe("systemPromptForApprovalMode", () => {
     expect(prompt).toContain("outside Pine's project sandbox");
     expect(prompt).toContain("without approval");
     expect(prompt).toContain("All other tools also run without");
+    expect(prompt).toContain(
+      "there is no ordinary-shell fallback in this mode",
+    );
     expect(prompt).toContain("avoid destructive or irreversible actions");
   });
 
