@@ -32,6 +32,7 @@ import { AgentProcessHost } from "./main/agentProcessHost";
 import { ModelRecommendationService } from "./main/modelRecommendations";
 import {
   ensureWindowsSandboxReady,
+  releaseWindowsSandboxRuntimeAccess,
   type WindowsSandboxSetupChoice,
 } from "./main/windowsSandbox";
 import { ModelMetadataService } from "./main/modelMetadata";
@@ -1610,6 +1611,7 @@ app.on("ready", () => {
 app.on("will-quit", () => {
   projectFileWatchers?.dispose();
   void agentHost?.dispose();
+  releaseWindowsSandboxRuntimeAccess();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

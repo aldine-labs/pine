@@ -26,6 +26,10 @@ export function createSandboxConfig(
       }),
     ),
   ];
+  const windowsSrtWinPath =
+    platform === "win32"
+      ? resolveSpawnableResourcePath(VENDORED_SRT_WIN_EXE)
+      : undefined;
   const grants = [
     ...policy.readablePaths(),
     ...policy.writableFolders(),
@@ -71,15 +75,26 @@ export function createSandboxConfig(
         // The dedicated srt-sandbox account has no implicit access to the
         // caller's profile. Runtime grants are concrete NTFS ACL entries.
         denyRead: [],
-        allowRead: [...new Set([...runtimeFiles, ...policy.readablePaths()])],
+        allowRead: [
+          ...new Set([
+            ...runtimeFiles,
+            ...(windowsSrtWinPath ? [windowsSrtWinPath] : []),
+            ...policy.readablePaths(),
+          ]),
+        ],
         allowWrite: policy.writableFolders(),
-        denyWrite: [...runtimeFiles],
+        denyWrite: [
+          ...new Set([
+            ...runtimeFiles,
+            ...(windowsSrtWinPath ? [path.dirname(windowsSrtWinPath)] : []),
+          ]),
+        ],
         allowGitConfig: false,
       },
       enableWeakerNestedSandbox: false,
       enableWeakerNetworkIsolation: false,
       windows: {
-        srtWin: { path: resolveSpawnableResourcePath(VENDORED_SRT_WIN_EXE) },
+        srtWin: { path: windowsSrtWinPath! },
       },
     };
   }

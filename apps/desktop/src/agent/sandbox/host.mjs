@@ -34,7 +34,10 @@ process.on("SIGINT", stop);
 try {
   // Unix socket paths have a small platform limit. This private directory is
   // only used by the trusted supervisor and is never a filesystem grant.
-  controlDirectory = await mkdtemp(path.join(os.tmpdir(), "pine-srt-"));
+  // The command's project-scoped TMPDIR may itself be deeply nested, so it
+  // cannot safely host SRT's additional pine-srt-*/srt-mux-*.sock path.
+  const controlRoot = process.platform === "darwin" ? "/tmp" : os.tmpdir();
+  controlDirectory = await mkdtemp(path.join(controlRoot, "pine-srt-"));
   if (process.platform !== "win32") process.env.TMPDIR = controlDirectory;
   const { SandboxManager, SandboxRuntimeConfigSchema, getDefaultWritePaths } =
     await import(request.runtimeUrl);

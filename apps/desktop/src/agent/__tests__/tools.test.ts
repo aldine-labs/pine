@@ -224,8 +224,16 @@ describeSandbox("createPineToolDefinitions", () => {
       "edit",
       "write",
     ]);
+    const scratchDirectory = path.join(
+      path.dirname(location.sessionsRoot),
+      "tmp",
+      createHash("sha256")
+        .update(await realpath(location.cwd))
+        .digest("hex")
+        .slice(0, 24),
+    );
     expect(tools.find((tool) => tool.name === "bash")?.description).toContain(
-      "$TMPDIR",
+      `The scratch directory is ${JSON.stringify(await realpath(scratchDirectory))}`,
     );
 
     const bash = tools.find((tool) => tool.name === "bash");
@@ -368,7 +376,10 @@ describeSandbox("createPineToolDefinitions", () => {
       "use privileged_bash directly to read or list",
     );
     expect(privileged.description).toContain(
-      "ordinary bash blocks these reads even in Auto Approve mode",
+      "out-of-project filesystem access",
+    );
+    expect(privileged.description).toContain(
+      "Every call requires a fresh approval",
     );
   });
 

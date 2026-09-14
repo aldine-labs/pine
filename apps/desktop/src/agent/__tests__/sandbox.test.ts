@@ -121,6 +121,14 @@ describe.runIf(process.platform === "darwin" && !process.env.CODEX_SANDBOX)(
       expect(result.output).toContain('"exitCode":0');
     });
 
+    it("keeps control sockets outside a deeply nested project temp directory", async () => {
+      const { run } = await fixture();
+      const result = await run("printf control-socket-ok");
+
+      expect(result.exitCode).toBe(0);
+      expect(result.output).toBe("control-socket-ok");
+    });
+
     it("keeps simultaneous project grants and scratch storage separate", async () => {
       const a = await fixture();
       const b = await fixture();
@@ -202,5 +210,12 @@ describe("sandbox policy compilation", () => {
     expect(config.network.allowedDomains).toEqual([]);
     expect(config.network.allowLocalBinding).toBe(false);
     expect(config.filesystem.allowWrite).toEqual(policy.writableFolders());
+    expect(config.filesystem.allowRead).toContain(config.windows?.srtWin?.path);
+    expect(config.filesystem.denyWrite).toContain(
+      path.dirname(config.windows?.srtWin?.path ?? ""),
+    );
+    expect(config.filesystem.denyWrite).not.toContain(
+      config.windows?.srtWin?.path,
+    );
   });
 });
