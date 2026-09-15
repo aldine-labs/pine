@@ -34,7 +34,7 @@ describe("project store", () => {
       Object.defineProperty(window, "pine", {
         configurable: true,
         value: {
-          openProject: vi.fn().mockResolvedValue({ project }),
+          openProject: vi.fn().mockResolvedValue({ opened: true, project }),
           closeProject: vi.fn().mockResolvedValue(undefined),
         },
       });
@@ -59,7 +59,7 @@ describe("project store", () => {
     Object.defineProperty(window, "pine", {
       configurable: true,
       value: {
-        openProject: vi.fn().mockResolvedValue({ project }),
+        openProject: vi.fn().mockResolvedValue({ opened: true, project }),
         closeProject: vi.fn().mockResolvedValue(undefined),
         updateProject: vi
           .fn()
@@ -99,14 +99,17 @@ describe("project store", () => {
   });
 
   it("opens a project and stores it as active", async () => {
-    const openProject = vi.fn().mockResolvedValue({ project });
+    const openProject = vi.fn().mockResolvedValue({ opened: true, project });
     Object.defineProperty(window, "pine", {
       configurable: true,
       value: { openProject },
     });
     const store = useProjectStore();
 
-    await expect(store.openProject(project.id)).resolves.toEqual(project);
+    await expect(store.openProject(project.id)).resolves.toEqual({
+      opened: true,
+      project,
+    });
     expect(openProject).toHaveBeenCalledWith({ id: project.id });
     expect(store.activeProject).toEqual(project);
     expect(store.isOpeningProject).toBe(false);

@@ -135,6 +135,11 @@ export interface ProjectResult {
   project: PineProject;
 }
 
+export interface OpenProjectResult extends ProjectResult {
+  /** Whether this window now owns the project runtime. */
+  opened: boolean;
+}
+
 export interface DeleteProjectResult {
   deleted: boolean;
 }
@@ -231,7 +236,7 @@ export interface PineDesktopApi extends PineWindowApi {
   loadSessionMessages: (
     request: LoadSessionMessagesRequest,
   ) => Promise<LoadSessionMessagesResult>;
-  openProject: (request: ProjectIdRequest) => Promise<ProjectResult>;
+  openProject: (request: ProjectIdRequest) => Promise<OpenProjectResult>;
   pickAttachments: () => Promise<PickAttachmentsResult>;
   pickAttachmentFolders: () => Promise<PickAttachmentsResult>;
   pickProjectFolders: (

@@ -31,7 +31,9 @@ describe("project navigation", () => {
   it("opens a project when its URL is loaded directly", async () => {
     Object.defineProperty(window, "pine", {
       configurable: true,
-      value: { openProject: vi.fn().mockResolvedValue({ project }) },
+      value: {
+        openProject: vi.fn().mockResolvedValue({ opened: true, project }),
+      },
     });
     const pinia = createPinia();
     const router = createAppRouter(pinia, createMemoryHistory());
@@ -48,6 +50,24 @@ describe("project navigation", () => {
     Object.defineProperty(window, "pine", {
       configurable: true,
       value: { openProject: vi.fn().mockRejectedValue(new Error("missing")) },
+    });
+    const pinia = createPinia();
+    const router = createAppRouter(pinia, createMemoryHistory());
+
+    await router.push({
+      name: ROUTE_NAMES.project,
+      params: { projectId: project.id },
+    });
+
+    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.projects);
+  });
+
+  it("returns to the Project Library when another window owns the project", async () => {
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        openProject: vi.fn().mockResolvedValue({ opened: false, project }),
+      },
     });
     const pinia = createPinia();
     const router = createAppRouter(pinia, createMemoryHistory());

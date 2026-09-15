@@ -117,6 +117,8 @@ import {
   UPDATE_PROJECT_CHANNEL,
   type DeleteProjectResult,
   type ListProjectsResult,
+  type OpenProjectResult,
+  type PineProject,
   type PickProjectFoldersResult,
   type ProjectResult,
 } from "./shared/projects";
@@ -353,6 +355,10 @@ let appUpdater: AppUpdater | null = null;
 let tinyFishCredentialStore: TinyFishCredentialStore | null = null;
 let windowsSandboxReady = process.platform !== "win32";
 let windowsSandboxSetupPromise: Promise<boolean> | null = null;
+const pendingProjectOpens = new Map<
+  string,
+  { promise: Promise<PineProject>; webContentsId: number }
+>();
 
 const ProjectFolderInputSchema = z.object({
   access: z.enum(["read-only", "read-write"]),
@@ -712,6 +718,21 @@ function getProjectRuntimes(): ProjectRuntimeRegistry {
   return projectRuntimes;
 }
 
+function windowForWebContentsId(
+  webContentsId: number,
+): BrowserWindow | undefined {
+  return BrowserWindow.getAllWindows().find(
+    (window) =>
+      !window.isDestroyed() && window.webContents.id === webContentsId,
+  );
+}
+
+function focusWindow(window: BrowserWindow): void {
+  if (window.isMinimized()) window.restore();
+  if (!window.isVisible()) window.show();
+  window.focus();
+}
+
 function getTinyFishCredentialStore(): TinyFishCredentialStore {
   if (!tinyFishCredentialStore) {
     throw new Error("TinyFish credential storage is not ready.");
@@ -874,6 +895,11 @@ const createWindow = () => {
     }
   });
   mainWindow.webContents.once("destroyed", () => {
+    for (const [projectId, pending] of pendingProjectOpens) {
+      if (pending.webContentsId === webContentsId) {
+        pendingProjectOpens.delete(projectId);
+      }
+    }
     attachedPreviewPaths.delete(webContentsId);
     presentedFiles?.forget(webContentsId);
     projectFileWatchers?.disposeSender(webContentsId);
@@ -1285,16 +1311,50 @@ ipcMain.handle(CLOSE_PROJECT_CHANNEL, async (event): Promise<void> => {
 
 ipcMain.handle(
   OPEN_PROJECT_CHANNEL,
-  async (event, request: unknown): Promise<ProjectResult> => {
+  async (event, request: unknown): Promise<OpenProjectResult> => {
     const { id } = ProjectIdRequestSchema.parse(request);
     const repository = getProjectRepository();
-    const project = await repository.open(id);
-    await getProjectRuntimes().open(
-      event.sender.id,
-      project,
-      repository.dataPaths(id),
-    );
-    return { project };
+    const currentOwnerId = getProjectRuntimes().ownerOfProject(id);
+    if (currentOwnerId !== undefined && currentOwnerId !== event.sender.id) {
+      const project = await repository.open(id);
+      const existingWindow = windowForWebContentsId(currentOwnerId);
+      if (existingWindow) {
+        focusWindow(existingWindow);
+        return { opened: false, project };
+      }
+      await getProjectRuntimes().dispose(currentOwnerId);
+    }
+
+    const pending = pendingProjectOpens.get(id);
+    if (pending) {
+      const targetWindow = windowForWebContentsId(pending.webContentsId);
+      if (targetWindow && pending.webContentsId !== event.sender.id) {
+        focusWindow(targetWindow);
+        return { opened: false, project: await pending.promise };
+      }
+      return { opened: true, project: await pending.promise };
+    }
+
+    const opening = (async (): Promise<PineProject> => {
+      const project = await repository.open(id);
+      await getProjectRuntimes().open(
+        event.sender.id,
+        project,
+        repository.dataPaths(id),
+      );
+      return project;
+    })();
+    pendingProjectOpens.set(id, {
+      promise: opening,
+      webContentsId: event.sender.id,
+    });
+    try {
+      return { opened: true, project: await opening };
+    } finally {
+      if (pendingProjectOpens.get(id)?.promise === opening) {
+        pendingProjectOpens.delete(id);
+      }
+    }
   },
 );
 

@@ -59,7 +59,7 @@ export function createAppRouter(
 
     return projectStore
       .openProject(projectId)
-      .then(() => true)
+      .then((result) => (result.opened ? true : { name: ROUTE_NAMES.projects }))
       .catch(() => ({ name: ROUTE_NAMES.projects }));
   });
 

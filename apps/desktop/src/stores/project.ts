@@ -2,6 +2,7 @@ import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
 import type {
   CreateProjectRequest,
+  OpenProjectResult,
   PineProject,
   UpdateProjectRequest,
 } from "@/shared/projects";
@@ -51,18 +52,21 @@ export const useProjectStore = defineStore("project", () => {
     }
   }
 
-  async function openProject(id: string): Promise<PineProject> {
+  async function openProject(id: string): Promise<OpenProjectResult> {
     if (isOpeningProject.value) {
       throw new Error("Another project is already opening.");
     }
     isOpeningProject.value = true;
     try {
-      const project = (await window.pine.openProject({ id })).project;
+      const result = await window.pine.openProject({ id });
+      if (!result.opened) return result;
+
+      const { project } = result;
       sessionStore.reset();
       contentTabsStore.restore(project.id);
       activeProject.value = project;
       upsertProject(project);
-      return project;
+      return result;
     } finally {
       isOpeningProject.value = false;
     }

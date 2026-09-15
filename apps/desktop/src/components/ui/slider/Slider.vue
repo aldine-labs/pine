@@ -41,9 +41,12 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     <SliderThumb
       v-for="(_, key) in modelValue"
       :key="key"
+      :as-child="Boolean($slots.thumb)"
       data-slot="slider-thumb"
       :data-vertical="props.orientation === 'vertical' ? '' : undefined"
       class="ring-black/10 not-dark:bg-clip-padding ring-1 size-4 rounded-2xl bg-white shadow-md transition-[color,box-shadow] duration-200 hover:ring-4 hover:ring-ring/30 focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-hidden block shrink-0 select-none disabled:pointer-events-none disabled:opacity-50"
-    />
+    >
+      <slot name="thumb" :index="key" />
+    </SliderThumb>
   </SliderRoot>
 </template>

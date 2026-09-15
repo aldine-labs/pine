@@ -48,9 +48,6 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -64,6 +61,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { PineApprovalAction, PineApprovalMode } from "@/shared/agent";
 import {
@@ -183,6 +181,20 @@ const thinkingLevelTooltips = computed<
   max: t("models.thinkingLevelWarnings.max"),
   off: t("models.thinkingLevelWarnings.off"),
 }));
+const thinkingLevelSliderValue = computed<number[]>({
+  get: () => {
+    const selectedLevel = selection.value?.thinkingLevel;
+    const selectedIndex = selectedLevel
+      ? thinkingLevels.value.indexOf(selectedLevel)
+      : -1;
+    return [Math.max(selectedIndex, 0)];
+  },
+  set: (value) => updateThinkingLevel(value),
+});
+const activeThinkingLevel = computed(() => {
+  const index = thinkingLevelSliderValue.value[0] ?? 0;
+  return thinkingLevels.value[index];
+});
 
 function selectApprovalMode(value: unknown): void {
   if (value === "YOLO") {
@@ -353,6 +365,11 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 function updateThinkingLevel(value: unknown): void {
+  if (Array.isArray(value)) {
+    const index = value[0];
+    if (typeof index !== "number") return;
+    value = thinkingLevels.value[index];
+  }
   if (
     typeof value !== "string" ||
     !thinkingLevels.value.includes(value as PineThinkingLevel)
@@ -365,14 +382,18 @@ function updateThinkingLevel(value: unknown): void {
   );
 }
 
-function thinkingLevelTextClass(level: PineThinkingLevel): string | undefined {
+function thinkingLevelTextClass(
+  level: PineThinkingLevel | undefined,
+): string | undefined {
   if (level === "max") return "text-thinking-max!";
   if (level === "off") return "text-destructive!";
   return undefined;
 }
 
-function thinkingLevelTooltip(level: PineThinkingLevel): string | undefined {
-  return thinkingLevelTooltips.value[level];
+function thinkingLevelTooltip(
+  level: PineThinkingLevel | undefined,
+): string | undefined {
+  return level ? thinkingLevelTooltips.value[level] : undefined;
 }
 
 function selectFeaturedModel(value: unknown): void {
@@ -698,61 +719,47 @@ function handleRootSubmit(event: Event): void {
 
           <template v-if="selectedModel && thinkingLevels.length > 1">
             <DropdownMenuSeparator />
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger data-slot="reasoning-effort-trigger">
-                <span class="flex min-w-0 flex-1 justify-between gap-3">
-                  <span>{{ t("models.reasoning") }}</span>
-                  <span
-                    :class="
-                      cn(
-                        'text-muted-foreground',
-                        selection &&
-                          thinkingLevelTextClass(selection.thinkingLevel),
-                      )
-                    "
-                  >
-                    {{
-                      selection
-                        ? t(`models.thinkingLevels.${selection.thinkingLevel}`)
-                        : ""
-                    }}
-                  </span>
-                </span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent class="w-36">
-                <DropdownMenuRadioGroup
-                  :model-value="selection?.thinkingLevel"
-                  @update:model-value="updateThinkingLevel"
+            <div data-slot="reasoning-effort-control" class="w-full">
+              <DropdownMenuLabel class="flex items-center justify-between">
+                <span>{{ t("models.reasoning") }}</span>
+                <span
+                  v-if="activeThinkingLevel"
+                  :class="thinkingLevelTextClass(activeThinkingLevel)"
                 >
-                  <Tooltip
-                    v-for="level in thinkingLevels"
-                    :key="level"
-                    :disabled="!thinkingLevelTooltip(level)"
+                  {{ t(`models.thinkingLevels.${activeThinkingLevel}`) }}
+                </span>
+              </DropdownMenuLabel>
+
+              <div class="px-3 pb-4">
+                <Tooltip :disabled="!thinkingLevelTooltip(activeThinkingLevel)">
+                  <Slider
+                    v-model="thinkingLevelSliderValue"
+                    data-slot="reasoning-effort-slider"
+                    class="reasoning-effort-slider"
+                    :min="0"
+                    :max="thinkingLevels.length - 1"
+                    :step="1"
+                    :aria-label="t('models.reasoning')"
                   >
-                    <TooltipTrigger as-child>
-                      <DropdownMenuRadioItem
-                        data-slot="reasoning-effort-option"
-                        :value="level"
-                      >
-                        <span :class="thinkingLevelTextClass(level)">
-                          {{ t(`models.thinkingLevels.${level}`) }}
-                        </span>
-                      </DropdownMenuRadioItem>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      v-if="thinkingLevelTooltip(level)"
-                      data-slot="reasoning-effort-tooltip"
-                      side="left"
-                      align="start"
-                      :side-offset="8"
-                      class="max-w-80 whitespace-normal"
-                    >
-                      {{ thinkingLevelTooltip(level) }}
-                    </TooltipContent>
-                  </Tooltip>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+                    <template #thumb>
+                      <TooltipTrigger as-child>
+                        <span />
+                      </TooltipTrigger>
+                    </template>
+                  </Slider>
+                  <TooltipContent
+                    v-if="thinkingLevelTooltip(activeThinkingLevel)"
+                    data-slot="reasoning-effort-tooltip"
+                    side="top"
+                    align="center"
+                    :side-offset="8"
+                    class="max-w-80 whitespace-normal"
+                  >
+                    {{ thinkingLevelTooltip(activeThinkingLevel) }}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
           </template>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -813,5 +820,12 @@ function handleRootSubmit(event: Event): void {
 .session-composer-input {
   padding-inline-start: var(--session-composer-control-inset);
   padding-inline-end: var(--session-input-padding-inline, 1rem);
+}
+
+.reasoning-effort-slider :deep([data-slot="slider-thumb"]),
+.reasoning-effort-slider :deep([data-slot="slider-range"]) {
+  transition-property: left, right;
+  transition-duration: 500ms;
+  transition-timing-function: var(--ease-out-expo);
 }
 </style>

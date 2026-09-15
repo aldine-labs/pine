@@ -41,11 +41,13 @@ const project: PineProject = {
 async function mountView(
   projects: PineProject[],
   platform: "darwin" | "win32" = "darwin",
+  openProject = vi.fn().mockResolvedValue({ opened: true, project }),
 ) {
   Object.defineProperty(window, "pine", {
     configurable: true,
     value: {
       listProjects: vi.fn().mockResolvedValue({ projects }),
+      openProject,
       platform,
     },
   });
@@ -121,5 +123,35 @@ describe("ProjectsView", () => {
     expect(trailing.find('[data-testid="project-search"]').exists()).toBe(
       false,
     );
+  });
+
+  it("disables the project library while a project is opening", async () => {
+    let resolveOpening!: (result: {
+      opened: true;
+      project: PineProject;
+    }) => void;
+    const openProject = vi.fn().mockReturnValue(
+      new Promise<{ opened: true; project: PineProject }>((resolve) => {
+        resolveOpening = resolve;
+      }),
+    );
+    const wrapper = await mountView([project], "darwin", openProject);
+
+    await wrapper.get('[data-testid="project-card"]').trigger("click");
+
+    expect(openProject).toHaveBeenCalledWith({ id: project.id });
+    expect(wrapper.attributes("inert")).toBeDefined();
+    expect(
+      wrapper.get('[data-testid="create-project-card"]').element,
+    ).toHaveProperty("disabled", true);
+    expect(wrapper.get('[data-testid="project-card"]').element).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    resolveOpening({ opened: true, project });
+    await flushPromises();
+
+    expect(wrapper.attributes("inert")).toBeUndefined();
   });
 });

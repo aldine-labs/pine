@@ -145,6 +145,13 @@ export class ProjectRuntimeRegistry {
     return this.runtimes.get(webContentsId)?.project.id === projectId;
   }
 
+  ownerOfProject(projectId: string): number | undefined {
+    for (const [webContentsId, runtime] of this.runtimes) {
+      if (runtime.project.id === projectId) return webContentsId;
+    }
+    return undefined;
+  }
+
   /** Attachment storage root for the project open in this window. */
   attachmentsRootFor(webContentsId: number): string | undefined {
     return this.runtimes.get(webContentsId)?.dataPaths.attachmentsRoot;

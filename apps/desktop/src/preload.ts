@@ -79,6 +79,7 @@ import {
   type CreateProjectRequest,
   type DeleteProjectResult,
   type ListProjectsResult,
+  type OpenProjectResult,
   type PineDesktopApi,
   type PickProjectFoldersRequest,
   type PickProjectFoldersResult,
@@ -319,7 +320,7 @@ const pineApi: PineDesktopApi = {
     request: LoadSessionMessagesRequest,
   ): Promise<LoadSessionMessagesResult> =>
     ipcRenderer.invoke(LOAD_SESSION_MESSAGES_CHANNEL, request),
-  openProject: (request: ProjectIdRequest): Promise<ProjectResult> =>
+  openProject: (request: ProjectIdRequest): Promise<OpenProjectResult> =>
     ipcRenderer.invoke(OPEN_PROJECT_CHANNEL, request),
   pickAttachments: (): Promise<PickAttachmentsResult> =>
     ipcRenderer.invoke(PICK_ATTACHMENTS_CHANNEL),

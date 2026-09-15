@@ -65,6 +65,7 @@ const openingProjectId = ref<string | null>(null);
 const searchQuery = ref("");
 const isMacOSPlatform = computed(() => window.pine?.platform === "darwin");
 const isWindowsPlatform = computed(() => window.pine?.platform === "win32");
+const isProjectOpening = computed(() => openingProjectId.value !== null);
 
 const filteredProjects = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase();
@@ -81,7 +82,9 @@ async function openProject(project: PineProject): Promise<void> {
 
   openingProjectId.value = project.id;
   try {
-    await projectStore.openProject(project.id);
+    const result = await projectStore.openProject(project.id);
+    if (!result.opened) return;
+
     await router.push({
       name: ROUTE_NAMES.project,
       params: { projectId: project.id },
@@ -170,6 +173,8 @@ onMounted(() => {
 <template>
   <section
     class="relative flex h-full min-h-0 flex-col overflow-hidden bg-background"
+    :aria-busy="isProjectOpening ? 'true' : undefined"
+    :inert="isProjectOpening"
   >
     <WindowTitleBar>
       <template #leading>
@@ -198,7 +203,7 @@ onMounted(() => {
             v-model="searchQuery"
             data-testid="project-search"
             type="search"
-            :disabled="isLoadingProjects"
+            :disabled="isLoadingProjects || isProjectOpening"
             :aria-label="t('projects.searchLabel')"
             :placeholder="t('projects.searchPlaceholder')"
           />
@@ -216,7 +221,7 @@ onMounted(() => {
             v-model="searchQuery"
             data-testid="project-search"
             type="search"
-            :disabled="isLoadingProjects"
+            :disabled="isLoadingProjects || isProjectOpening"
             :aria-label="t('projects.searchLabel')"
             :placeholder="t('projects.searchPlaceholder')"
           />
@@ -252,6 +257,7 @@ onMounted(() => {
               variant="muted"
               size="sm"
               class="min-h-14 cursor-pointer text-left hover:bg-muted"
+              :disabled="isProjectOpening"
               @click="createProject"
             >
               <ItemMedia variant="icon">
@@ -281,9 +287,9 @@ onMounted(() => {
                 variant="outline"
                 size="sm"
                 class="min-h-16 cursor-pointer pr-14 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-                :disabled="isOpeningProject"
+                :disabled="isProjectOpening"
                 :aria-busy="
-                  isOpeningProject && openingProjectId === project.id
+                  isProjectOpening && openingProjectId === project.id
                     ? 'true'
                     : undefined
                 "
@@ -291,7 +297,7 @@ onMounted(() => {
               >
                 <ItemMedia variant="icon">
                   <Loader2
-                    v-if="isOpeningProject && openingProjectId === project.id"
+                    v-if="isProjectOpening && openingProjectId === project.id"
                     class="animate-spin"
                   />
                   <FolderKanban v-else />
@@ -310,6 +316,7 @@ onMounted(() => {
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      :disabled="isProjectOpening"
                       :aria-label="
                         t('projects.projectActions', { name: project.name })
                       "

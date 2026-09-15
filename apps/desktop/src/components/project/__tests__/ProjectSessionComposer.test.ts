@@ -64,6 +64,7 @@ function mountComposer(
     configurable: true,
     value: {
       getModelCatalog: () => Promise.resolve(catalog),
+      selectModel: vi.fn().mockResolvedValue(undefined),
       pickAttachmentFolders: () => Promise.resolve({ attachments: [] }),
       pickAttachments: () => Promise.resolve({ attachments: [] }),
       attachSession: () => Promise.reject(new Error("Not configured")),
@@ -78,7 +79,10 @@ function mountComposer(
         Tooltip: { template: "<div><slot /></div>" },
         TooltipContent: { template: "<div><slot /></div>" },
         TooltipTrigger: {
-          template: '<div data-slot="tooltip-trigger"><slot /></div>',
+          inheritAttrs: false,
+          props: ["asChild"],
+          template:
+            '<span data-test-tooltip-trigger v-bind="$attrs"><slot /></span>',
         },
         SessionSearchOverlay: {
           props: ["open", "purpose"],
@@ -127,6 +131,46 @@ describe("ProjectSessionComposer", () => {
     selectedYoloOption?.click();
     await flushPromises();
     expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+
+    wrapper.unmount();
+  });
+
+  it("uses discrete reasoning slider positions and keeps warning tooltips", async () => {
+    const wrapper = mountComposer({}, "high");
+
+    await wrapper.get('[data-slot="model-selector-trigger"]').trigger("click");
+    await flushPromises();
+
+    const slider = document.querySelector<HTMLElement>(
+      '[data-slot="reasoning-effort-slider"]',
+    );
+    expect(slider).not.toBeNull();
+    const thumb = slider?.querySelector<HTMLElement>('[role="slider"]');
+    expect(thumb?.getAttribute("aria-valuemin")).toBe("0");
+    expect(thumb?.getAttribute("aria-valuemax")).toBe("2");
+    expect(thumb?.getAttribute("aria-valuenow")).toBe("1");
+    const tooltipTrigger = slider?.querySelector("[data-test-tooltip-trigger]");
+    expect(tooltipTrigger).not.toBeNull();
+    expect(tooltipTrigger).toBe(thumb);
+    expect(slider?.className).toContain("reasoning-effort-slider");
+    expect(
+      document.querySelector('[data-slot="reasoning-effort-control"]')
+        ?.textContent,
+    ).not.toContain("关闭");
+    expect(
+      document.querySelector('[data-slot="reasoning-effort-tooltip"]'),
+    ).toBeNull();
+
+    thumb?.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }),
+    );
+    await flushPromises();
+
+    expect(useModelsStore().selection?.thinkingLevel).toBe("max");
+    expect(
+      document.querySelector('[data-slot="reasoning-effort-tooltip"]')
+        ?.textContent,
+    ).toContain("“最大”推理强度");
 
     wrapper.unmount();
   });
