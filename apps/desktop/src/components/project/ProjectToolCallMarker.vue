@@ -21,6 +21,10 @@ import {
 
 const props = defineProps<{
   toolCall: PineToolCall;
+  /** Nearby calls let Computer Use markers resolve element ids against the
+   * latest accessibility-tree snapshot (for example, e133 → Button
+   * "Show Detail"). */
+  contextToolCalls?: readonly PineToolCall[];
   /** Nested rows repeat the folded header's kind icons, so they fall back
    * to a plain check once the call succeeds. */
   nested?: boolean;
@@ -46,6 +50,70 @@ function isPresentFileTool(name: string): boolean {
   return normalizedToolName(name) === UI_PRESENT_FILE_TOOL_NAME;
 }
 
+function isComputerUseActivationTool(name: string): boolean {
+  return normalizedToolName(name) === "activate_computer_use";
+}
+
+const COMPUTER_USE_OPERATION_KEYS: Record<string, string> = {
+  request_computer_use_permissions: "requestPermissions",
+  install_pine_browser_extension: "installExtension",
+  list_apps: "listApps",
+  get_app_state: "getAppState",
+  click: "click",
+  type_text: "typeText",
+  press_key: "pressKey",
+  scroll: "scroll",
+  activate_app: "activateApp",
+  screenshot: "screenshot",
+  list_displays: "listDisplays",
+  right_click: "rightClick",
+  drag: "drag",
+  set_value: "setValue",
+  browser_open_tab: "browserOpenTab",
+  browser_list_tabs: "browserListTabs",
+  browser_use_tab: "browserUseTab",
+  browser_release_tab: "browserReleaseTab",
+  browser_select_tab: "browserSelectTab",
+  browser_close_tab: "browserCloseTab",
+  browser_snapshot: "browserSnapshot",
+  browser_click: "browserClick",
+  browser_type: "browserType",
+  browser_press_key: "browserPressKey",
+  browser_close_all_tabs: "browserCloseAllTabs",
+  browser_navigate: "browserNavigate",
+  zoom: "zoom",
+  hover: "hover",
+  wait: "wait",
+  select_text: "selectText",
+};
+
+function computerUseOperationKey(name: string): string | undefined {
+  return COMPUTER_USE_OPERATION_KEYS[normalizedToolName(name)];
+}
+
+type ComputerUseTargetPlacement =
+  | "app"
+  | "display"
+  | "direction"
+  | "drag"
+  | "element"
+  | "key"
+  | "tab"
+  | "url"
+  | "coordinates"
+  | "none";
+
+const COMPUTER_USE_TARGET_PLACEMENTS: Record<
+  string,
+  ComputerUseTargetPlacement
+> = {
+  getAppState: "app",
+  click: "element",
+  activateApp: "app",
+  screenshot: "app",
+  browserSnapshot: "tab",
+};
+
 /** Tools whose meaning is more specific than their generic kind. */
 function toolIcon(name: string): Component {
   if (isAskUserQuestionTool(name)) return CircleHelpIcon;
@@ -59,6 +127,14 @@ const isRunning = computed(() => isRunningTool(props.toolCall));
 const isDenied = computed(() => isDeniedTool(props.toolCall));
 
 function inputRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return inputRecord(parsed);
+    } catch {
+      return {};
+    }
+  }
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
@@ -118,7 +194,18 @@ function webUrlLabel(value: string): string {
 }
 
 function toolOutputText(value: unknown): string | undefined {
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        if (parsed !== value) return toolOutputText(parsed);
+      } catch {
+        // Treat non-JSON strings as ordinary tool output below.
+      }
+    }
+    return value;
+  }
   if (Array.isArray(value)) {
     const text = value
       .map((part) => toolOutputText(part))
@@ -328,6 +415,143 @@ function webFetchTarget(
   );
 }
 
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function accessibilityElementLabel(
+  elementId: string,
+  contextToolCalls: readonly PineToolCall[],
+  currentToolCallId?: string,
+): string | undefined {
+  const pattern = new RegExp(
+    `\\[${escapeRegExp(elementId)}\\]\\s+([^\\n]+)`,
+    "u",
+  );
+  const currentIndex = currentToolCallId
+    ? contextToolCalls.findIndex((call) => call.id === currentToolCallId)
+    : -1;
+  const endIndex =
+    currentIndex >= 0 ? currentIndex - 1 : contextToolCalls.length - 1;
+  for (let index = endIndex; index >= 0; index--) {
+    const call = contextToolCalls[index];
+    if (normalizedToolName(call.name) !== "get_app_state") continue;
+    const tree = toolOutputText(call.output);
+    const match = tree?.match(pattern);
+    if (match?.[1]?.trim()) return compactInline(match[1]);
+  }
+  return undefined;
+}
+
+function elementIdFromInput(
+  input: Record<string, unknown>,
+): string | undefined {
+  return firstString(input, ["element_id", "from_element_id", "to_element_id"]);
+}
+
+function appDisplayName(input: Record<string, unknown>): string | undefined {
+  const app = firstString(input, ["app"]);
+  if (!app) return undefined;
+  return app.match(/^(.+?)\s+\[[^\]]+\](?:\s+pid=\d+)?/u)?.[1] ?? app;
+}
+
+function computerUseTarget(
+  name: string,
+  input: Record<string, unknown>,
+  contextToolCalls: readonly PineToolCall[],
+  currentToolCallId?: string,
+): string {
+  const parts: string[] = [];
+  const normalized = normalizedToolName(name);
+  const app = appDisplayName(input);
+  const url = firstString(input, ["url"]);
+  const element = firstString(input, [
+    "element_id",
+    "from_element_id",
+    "to_element_id",
+  ]);
+  if (app) parts.push(app);
+  else if (url) parts.push(webUrlLabel(url));
+  else if (
+    ["browser_select_tab", "browser_close_tab"].includes(normalized) &&
+    typeof input.index === "number"
+  ) {
+    parts.push(`tab ${Math.round(input.index)}`);
+  } else if (typeof input.index === "number") {
+    parts.push(`element ${Math.round(input.index)}`);
+  } else if (typeof input.tab_id === "number") {
+    parts.push(`tab ${input.tab_id}`);
+  } else if (element) {
+    parts.push(
+      accessibilityElementLabel(element, contextToolCalls, currentToolCallId) ??
+        element,
+    );
+  } else if (typeof input.display === "number") {
+    parts.push(`display ${input.display}`);
+  } else if (typeof input.key === "string") parts.push(input.key);
+  else if (typeof input.direction === "string") parts.push(input.direction);
+  else if (typeof input.x === "number" && typeof input.y === "number") {
+    parts.push(`${Math.round(input.x)}, ${Math.round(input.y)}`);
+  }
+  return compactInline(parts.join(" · "), 120);
+}
+
+function computerUseTargetMono(
+  input: Record<string, unknown>,
+  contextToolCalls: readonly PineToolCall[],
+  currentToolCallId?: string,
+): boolean {
+  const element = elementIdFromInput(input);
+  if (
+    element &&
+    accessibilityElementLabel(element, contextToolCalls, currentToolCallId)
+  )
+    return false;
+  return (
+    typeof input.element_id === "string" ||
+    typeof input.from_element_id === "string" ||
+    typeof input.to_element_id === "string" ||
+    typeof input.key === "string" ||
+    (typeof input.x === "number" && typeof input.y === "number")
+  );
+}
+
+function computerUseEmbeddedTarget(
+  operationKey: string,
+  input: Record<string, unknown>,
+  target: string,
+): string | undefined {
+  switch (COMPUTER_USE_TARGET_PLACEMENTS[operationKey]) {
+    case "app":
+      return (
+        appDisplayName(input) ||
+        (target
+          ? target
+          : t("project.transcript.tools.computerOperations.screen"))
+      );
+    case "display":
+      return typeof input.display === "number"
+        ? `display ${Math.round(input.display)}`
+        : undefined;
+    case "direction":
+      return firstString(input, ["direction"]);
+    case "drag": {
+      const from = firstString(input, ["from_element_id"]);
+      const to = firstString(input, ["to_element_id"]);
+      return from && to ? `${from} → ${to}` : target || undefined;
+    }
+    case "element":
+    case "key":
+    case "tab":
+    case "url":
+    case "coordinates":
+      return target || undefined;
+    case "none":
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Mirrors read's line-window semantics: offset-only means "from this line
  * onward", while a supplied limit makes the inclusive end line knowable.
@@ -408,9 +632,31 @@ const presentation = computed(() => {
         : kind === "fetch"
           ? (webFetchTarget(input, props.toolCall.output) ??
             props.toolCall.name)
-          : path
-            ? `${filename(path)}${suffix}`
-            : props.toolCall.name;
+          : kind === "computer" || kind === "browser"
+            ? computerUseTarget(
+                props.toolCall.name,
+                input,
+                props.contextToolCalls ?? [],
+                props.toolCall.id,
+              )
+            : path
+              ? `${filename(path)}${suffix}`
+              : props.toolCall.name;
+  const targetMono =
+    kind === "bash" ||
+    kind === "read" ||
+    kind === "edit" ||
+    kind === "write" ||
+    ((kind === "computer" || kind === "browser") &&
+      computerUseTargetMono(
+        input,
+        props.contextToolCalls ?? [],
+        props.toolCall.id,
+      ));
+  const operationKey =
+    kind === "computer" || kind === "browser"
+      ? computerUseOperationKey(props.toolCall.name)
+      : undefined;
   // Review holds replace the tense label entirely: the reader must see that
   // the call is gated, not that it is running.
   const state = isDenied.value
@@ -438,6 +684,19 @@ const presentation = computed(() => {
       operation: undefined,
       separator: "",
       target: "",
+      targetMono: false,
+      purpose: undefined,
+      faviconDataUrl: undefined,
+      after: "",
+    };
+  }
+  if (isComputerUseActivationTool(props.toolCall.name)) {
+    return {
+      before: t(`project.transcript.tools.activateComputerUse.${state}`),
+      operation: undefined,
+      separator: "",
+      target: "",
+      targetMono: false,
       purpose: undefined,
       faviconDataUrl: undefined,
       after: "",
@@ -451,14 +710,18 @@ const presentation = computed(() => {
       // The gate label carries its own trailing separator so the target
       // reads as one sentence, e.g. "正在审核 读取文档目录：ls ~/Documents".
       before: t(`project.transcript.tools.${stateKey}`, {
-        tool:
-          kind === "bash" && description
+        tool: operationKey
+          ? t(
+              `project.transcript.tools.computerOperations.${operationKey}.label`,
+            )
+          : kind === "bash" && description
             ? compactInline(description)
             : t(`project.transcript.toolKinds.${kind}`),
       }),
       operation: undefined,
       separator: "",
       target,
+      targetMono,
       purpose: compactPurpose,
       faviconDataUrl,
       after: "",
@@ -472,6 +735,32 @@ const presentation = computed(() => {
       operation: undefined,
       separator: "",
       target,
+      targetMono: true,
+      purpose: undefined,
+      faviconDataUrl: undefined,
+      after: "",
+    };
+  }
+  if (operationKey) {
+    const operationPath = `project.transcript.tools.computerOperations.${operationKey}`;
+    const embeddedTarget = computerUseEmbeddedTarget(
+      operationKey,
+      input,
+      target,
+    );
+    return {
+      before: t(`${operationPath}.${state}`, {
+        app: appDisplayName(input) ?? "",
+        target: embeddedTarget ?? "",
+        url: firstString(input, ["url"]) ?? "",
+        key: firstString(input, ["key"]) ?? "",
+        direction: firstString(input, ["direction"]) ?? "",
+        tab: typeof input.tab_id === "number" ? `tab ${input.tab_id}` : "",
+      }),
+      operation: undefined,
+      separator: embeddedTarget ? "" : target ? " " : "",
+      target: embeddedTarget ? "" : target,
+      targetMono: embeddedTarget ? false : targetMono,
       purpose: undefined,
       faviconDataUrl: undefined,
       after: "",
@@ -486,6 +775,7 @@ const presentation = computed(() => {
       kind === "bash" && description && command ? `${description}` : undefined,
     separator: t("project.transcript.tools.operationSeparator"),
     target,
+    targetMono,
     purpose: compactPurpose,
     faviconDataUrl,
     after: t(`${key}.after`),
@@ -524,7 +814,9 @@ const fullText = computed(() => {
   const target = presentation.value.target;
   const purpose = presentation.value.purpose;
   const after = presentation.value.after;
-  return `${before}${operation ?? ""}${operation ? separator : ""}${target}${purpose ? ` ${purpose}` : ""}${after}`;
+  const targetSeparator =
+    !operation && separator === " " && target ? separator : "";
+  return `${before}${operation ?? ""}${operation ? separator : targetSeparator}${target}${purpose ? ` ${purpose}` : ""}${after}`;
 });
 </script>
 
@@ -582,10 +874,23 @@ const fullText = computed(() => {
           class="mx-0.5 inline-block size-4 shrink-0 rounded-sm object-contain align-[-0.2em]"
           @error="faviconError = true"
         />
+        <span
+          v-if="
+            !presentation.operation &&
+            presentation.separator === ' ' &&
+            presentation.target
+          "
+          aria-hidden="true"
+          data-tool-target-separator
+          >{{ presentation.separator }}</span
+        >
         <code
-          v-if="presentation.target"
+          v-if="presentation.target && presentation.targetMono"
           class="font-mono text-sm font-normal"
           >{{ presentation.target }}</code
+        ><span v-else-if="presentation.target" class="text-sm font-normal">{{
+          presentation.target
+        }}</span
         ><span
           v-if="presentation.purpose"
           data-tool-purpose

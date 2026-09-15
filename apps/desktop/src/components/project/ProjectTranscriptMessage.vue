@@ -58,6 +58,11 @@ const attachments = computed(() =>
     block.type === "attachments" ? block.attachments : [],
   ),
 );
+const contextToolCalls = computed(() =>
+  props.message.blocks.flatMap((block) =>
+    block.type === "toolCall" ? [block.toolCall] : [],
+  ),
+);
 
 /**
  * Collapse ordering for a message's blocks: consecutive `toolCall` blocks
@@ -129,6 +134,7 @@ const renderItems = computed<RenderItem[]>(() => {
           <ProjectToolCallMarker
             v-else-if="item.kind === 'toolCall'"
             :tool-call="item.toolCall"
+            :context-tool-calls="contextToolCalls"
             :reviewing="reviewingToolCallIds?.has(item.toolCall.id) ?? false"
             :awaiting-approval="
               awaitingApprovalToolCallIds?.has(item.toolCall.id) ?? false

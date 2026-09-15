@@ -327,18 +327,23 @@ describe("AutoReviewGate", () => {
     );
   });
 
-  it("fails closed when the judge errors", async () => {
-    const { host, mocks } = createHost();
+  it("asks the user when the judge errors", async () => {
+    const { host, mocks } = createHost(undefined, () =>
+      Promise.resolve({ kind: "allow" }),
+    );
     mocks.judge.mockRejectedValue(new Error("provider down"));
     const gate = new AutoReviewGate(host);
 
     await expect(
       gate.reviewBashCommand({ toolCallId: "t1", command: "rm -rf build" }),
-    ).resolves.toEqual({
-      kind: "deny",
-      reason: expect.stringContaining("provider down"),
-    });
-    expect(mocks.emit).toHaveBeenCalledWith(
+    ).resolves.toEqual({ kind: "allow" });
+    expect(mocks.requestUserApproval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolCallId: "t1",
+        evidence: expect.stringContaining("provider down"),
+      }),
+    );
+    expect(mocks.emit).not.toHaveBeenCalledWith(
       expect.objectContaining({
         type: "approval-decided",
         verdict: "denied",
@@ -347,7 +352,7 @@ describe("AutoReviewGate", () => {
     );
   });
 
-  it("stops reviewing after too many consecutive escalations", async () => {
+  it("asks the user after too many consecutive escalations", async () => {
     const { host, mocks } = createHost(() =>
       Promise.resolve({ verdict: "deny", reason: "denied" }),
     );
@@ -363,11 +368,14 @@ describe("AutoReviewGate", () => {
       toolCallId: "t-final",
       command,
     });
-    expect(capped).toEqual({
-      kind: "deny",
-      reason: expect.stringContaining("Too many escalations"),
-    });
+    expect(capped).toEqual({ kind: "allow" });
     expect(mocks.judge).toHaveBeenCalledTimes(5);
+    expect(mocks.requestUserApproval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolCallId: "t-final",
+        evidence: expect.stringContaining("Too many escalations"),
+      }),
+    );
   });
 
   it("resetTurn clears the escalation streak", async () => {

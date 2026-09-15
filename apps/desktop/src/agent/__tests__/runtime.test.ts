@@ -12,12 +12,15 @@ import {
   normalizeGeneratedTitle,
   parseJudgeRulings,
   PineAgentRuntime,
+  JUDGE_SYSTEM_PROMPT,
   projectSessionDirectory,
   recommendedCompactionReserveTokens,
   titleFromAssistantMessage,
   toolNamesForApprovalMode,
+  toolNamesForComputerUseState,
 } from "../runtime";
 import { serializeAttachmentMessage } from "../../shared/attachments";
+import { ACTIVATE_COMPUTER_USE_TOOL_NAME } from "../computer-use/tools";
 
 const temporaryDirectories: string[] = [];
 
@@ -174,6 +177,21 @@ describe("approval context", () => {
   });
 });
 
+describe("Computer Use judge guidance", () => {
+  it("teaches the automatic reviewer how native UI calls differ from sandboxed shell work", () => {
+    expect(JUDGE_SYSTEM_PROMPT).toContain(
+      "Computer Use calls need a separate review lens",
+    );
+    expect(JUDGE_SYSTEM_PROMPT).toContain(
+      "observation-only Computer Use calls",
+    );
+    expect(JUDGE_SYSTEM_PROMPT).toContain(
+      "Activation only loads the capability",
+    );
+    expect(JUDGE_SYSTEM_PROMPT).toContain("browser_use_tab");
+  });
+});
+
 describe("judgeStreamOptions", () => {
   const signal = new AbortController().signal;
   const modelWithApi = (api: Api) => ({ api }) as unknown as Model<Api>;
@@ -300,6 +318,27 @@ describe("toolNamesForApprovalMode", () => {
   });
 });
 
+describe("toolNamesForComputerUseState", () => {
+  const tools = [
+    "read",
+    "activate_computer_use",
+    "request_computer_use_permissions",
+    "list_apps",
+    "browser_open_tab",
+  ];
+
+  it("keeps only the activator visible before Computer Use is activated", () => {
+    expect(toolNamesForComputerUseState(tools, false)).toEqual([
+      "read",
+      "activate_computer_use",
+    ]);
+  });
+
+  it("restores every registered Computer Use tool after activation", () => {
+    expect(toolNamesForComputerUseState(tools, true)).toEqual(tools);
+  });
+});
+
 describe("parseJudgeRulings", () => {
   it("parses one ordered ruling for every expected tool call", () => {
     expect(
@@ -360,6 +399,44 @@ describe("parseJudgeRulings", () => {
 });
 
 describe("PineAgentRuntime", () => {
+  it("registers hidden Computer Use tools without exposing them initially", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "pine-agent-runtime-"));
+    temporaryDirectories.push(root);
+    const location = {
+      agentDir: path.join(root, "agent"),
+      cwd: path.join(root, "source"),
+      folders: [
+        {
+          access: "read-write" as const,
+          path: path.join(root, "source"),
+        },
+      ],
+      sessionsRoot: path.join(root, "sessions"),
+    };
+    await mkdir(location.cwd, { recursive: true });
+    const runtime = new PineAgentRuntime({ emit: () => undefined });
+
+    try {
+      const created = await runtime.createSession(location);
+      const liveSessions = (
+        runtime as unknown as {
+          liveSessions: Map<string, { session: AgentSession }>;
+        }
+      ).liveSessions;
+      const agentSession = liveSessions.get(created.session.id)?.session;
+
+      expect(agentSession?.getAllTools().map((tool) => tool.name)).toContain(
+        "list_apps",
+      );
+      expect(agentSession?.getActiveToolNames()).toContain(
+        ACTIVATE_COMPUTER_USE_TOOL_NAME,
+      );
+      expect(agentSession?.getActiveToolNames()).not.toContain("list_apps");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("returns the session as soon as prompt preflight succeeds", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "pine-agent-runtime-"));
     temporaryDirectories.push(root);

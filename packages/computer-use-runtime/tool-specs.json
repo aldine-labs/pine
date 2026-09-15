@@ -1,0 +1,486 @@
+[
+  {
+    "name": "list_apps",
+    "description": "List running applications with their bundle id, pid, window count, and which is frontmost. Note that one app can have several running instances and only some may own windows.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "description": "Read an app's accessibility tree as an indented outline. Interactive elements are prefixed with an id like [e12] that you pass to click/type_text/scroll. Call this before interacting, and again after the UI changes, since ids are per-snapshot.",
+    "name": "get_app_state",
+    "inputSchema": {
+      "properties": {
+        "window": {
+          "description": "Limit to one window: a 0-based index, or \"agent\" for the browser window this agent owns"
+        },
+        "max_depth": {
+          "type": "integer",
+          "description": "Max tree depth (default 18)"
+        },
+        "app": {
+          "type": "string",
+          "description": "App name, bundle id, or pid"
+        },
+        "query": {
+          "description": "Only list elements whose role, label or value contains this text (case-insensitive). Ids stay valid. Use it instead of raising max_elements when you know what you are looking for.",
+          "type": "string"
+        },
+        "max_elements": {
+          "type": "integer",
+          "description": "Max elements to emit (default 800)"
+        }
+      },
+      "required": ["app"],
+      "type": "object"
+    }
+  },
+  {
+    "inputSchema": {
+      "properties": {
+        "click_count": {
+          "type": "integer",
+          "description": "1 for single, 2 for double-click"
+        },
+        "element_id": {
+          "description": "Element id from get_app_state, e.g. e12",
+          "type": "string"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "name": "click",
+    "description": "Click an element by element_id (preferred, uses the accessibility press action) or at absolute screen coordinates. The agent pointer overlay moves to the target without moving the user's mouse."
+  },
+  {
+    "description": "Type literal text into the focused element, optionally focusing element_id first.",
+    "inputSchema": {
+      "required": ["text"],
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "element_id": {
+          "type": "string",
+          "description": "Focus this element before typing"
+        }
+      }
+    },
+    "name": "type_text"
+  },
+  {
+    "name": "press_key",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "modifiers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Any of cmd, shift, alt, ctrl, fn"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": ["key"]
+    },
+    "description": "Press a named key with optional modifiers, e.g. key='s' modifiers=['cmd'] to save, or key='return'."
+  },
+  {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "element_id": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": ["up", "down", "left", "right"],
+          "type": "string"
+        },
+        "amount": {
+          "type": "integer",
+          "description": "Scroll lines (default 5)"
+        }
+      }
+    },
+    "name": "scroll",
+    "description": "Scroll up, down, left, or right, optionally positioning the cursor over element_id first."
+  },
+  {
+    "description": "Bring an app to the foreground.",
+    "inputSchema": {
+      "properties": {
+        "app": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": ["app"]
+    },
+    "name": "activate_app"
+  },
+  {
+    "description": "Capture the app's largest window (or a whole display) as a PNG image. The result text states the capture's screen origin and pixels-per-point so you can convert an image pixel into click/hover coordinates. Prefer get_app_state for interaction, which is cheaper and gives clickable element ids; use a screenshot to verify an outcome or to see content the accessibility tree does not describe (canvas, video, custom drawing). Use zoom to read small text.",
+    "inputSchema": {
+      "properties": {
+        "display": {
+          "type": "integer",
+          "description": "Capture a whole display by index (see list_displays) instead of an app window"
+        },
+        "max_width": {
+          "type": "integer",
+          "description": "Downscale to this width in pixels (default 1400)"
+        },
+        "app": {
+          "description": "App name, bundle id, or pid",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "screenshot"
+  },
+  {
+    "description": "List every attached display with its index, resolution and position, for use with screenshot(display: N).",
+    "name": "list_displays",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "element_id": {
+          "type": "string"
+        }
+      }
+    },
+    "description": "Right-click (secondary click) an element or screen position to open a context menu.",
+    "name": "right_click"
+  },
+  {
+    "inputSchema": {
+      "properties": {
+        "from_y": {
+          "type": "number"
+        },
+        "from_x": {
+          "type": "number"
+        },
+        "to_y": {
+          "type": "number"
+        },
+        "to_element_id": {
+          "type": "string"
+        },
+        "to_x": {
+          "type": "number"
+        },
+        "from_element_id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "drag",
+    "description": "Press at one point, drag, and release at another. Accepts element ids or coordinates on each end."
+  },
+  {
+    "description": "Replace a text field's contents directly. More reliable than select-all-then-type for long values, though some fields reject it and need click + type_text.",
+    "inputSchema": {
+      "required": ["element_id", "value"],
+      "properties": {
+        "element_id": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_value"
+  },
+  {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "URL to open (default about:blank)",
+          "type": "string"
+        }
+      }
+    },
+    "description": "Open a URL in a new background tab inside the agent's own labelled tab group, in the user's signed-in Chrome. The user keeps browsing their tabs undisturbed. Returns a tab_id for browser_snapshot / browser_click.",
+    "name": "browser_open_tab"
+  },
+  {
+    "name": "browser_list_tabs",
+    "description": "List the tabs in the agent's own Chrome window, marking the active one. Pass all=true to see every tab open in the browser, including the user's, so you can pick one to drive with browser_use_tab.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "all": {
+          "type": "boolean",
+          "description": "List every tab in the browser, not just the agent's (default false)"
+        }
+      }
+    }
+  },
+  {
+    "inputSchema": {
+      "type": "object",
+      "required": ["tab_id"],
+      "properties": {
+        "tab_id": {
+          "type": "integer",
+          "description": "From browser_list_tabs all=true"
+        }
+      }
+    },
+    "description": "Take over a tab the user already has open, instead of opening a new one. Use this when the page is already signed in or mid-flow — a checkout, a draft, a dashboard behind SSO — and re-opening the URL would lose that state. Find the tab_id with browser_list_tabs all=true. The tab stays exactly where it is in the user's window; it is not moved into the agent's group, not activated, and not reloaded. It is never closed by cleanup — call browser_release_tab to hand it back. Ask the user before taking over a tab they are actively working in.",
+    "name": "browser_use_tab"
+  },
+  {
+    "inputSchema": {
+      "type": "object",
+      "required": ["tab_id"],
+      "properties": {
+        "tab_id": {
+          "type": "integer"
+        }
+      }
+    },
+    "name": "browser_release_tab",
+    "description": "Hand a tab taken over with browser_use_tab back to the user: the agent stops driving it and the page is left exactly as it is."
+  },
+  {
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "description": "1-based index, fallback mode only",
+          "type": "integer"
+        },
+        "tab_id": {
+          "description": "From browser_list_tabs",
+          "type": "integer"
+        }
+      }
+    },
+    "description": "Make one of the agent's tabs the visible one. Does not affect the user's tabs.",
+    "name": "browser_select_tab"
+  },
+  {
+    "name": "browser_close_tab",
+    "inputSchema": {
+      "properties": {
+        "tab_id": {
+          "type": "integer",
+          "description": "From browser_list_tabs"
+        },
+        "index": {
+          "type": "integer",
+          "description": "1-based index, fallback mode only"
+        }
+      },
+      "type": "object"
+    },
+    "description": "Close one of the agent's tabs. A tab taken over with browser_use_tab is released rather than closed — it belongs to the user."
+  },
+  {
+    "inputSchema": {
+      "properties": {
+        "tab_id": {
+          "description": "From browser_open_tab or browser_list_tabs",
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": ["tab_id"]
+    },
+    "name": "browser_snapshot",
+    "description": "List the interactive elements on a page in one of the agent's tabs, with indices to pass to browser_click. Works on a background tab, so the user can be looking at something else."
+  },
+  {
+    "description": "Click in one of the agent's tabs, by element index from browser_snapshot or by page coordinates. Works on a background tab.",
+    "inputSchema": {
+      "properties": {
+        "y": {
+          "type": "number"
+        },
+        "index": {
+          "description": "Element index from browser_snapshot",
+          "type": "integer"
+        },
+        "tab_id": {
+          "type": "integer"
+        },
+        "x": {
+          "type": "number"
+        }
+      },
+      "required": ["tab_id"],
+      "type": "object"
+    },
+    "name": "browser_click"
+  },
+  {
+    "description": "Type text into the focused field of one of the agent's tabs. Click the field first.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["tab_id", "text"],
+      "properties": {
+        "tab_id": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "name": "browser_type"
+  },
+  {
+    "description": "Press Enter, Tab, Escape or Backspace in one of the agent's tabs.",
+    "name": "browser_press_key",
+    "inputSchema": {
+      "properties": {
+        "tab_id": {
+          "type": "integer"
+        },
+        "key": {
+          "enum": ["Enter", "Tab", "Escape", "Backspace"],
+          "type": "string"
+        }
+      },
+      "required": ["tab_id", "key"],
+      "type": "object"
+    }
+  },
+  {
+    "name": "browser_close_all_tabs",
+    "description": "Close every tab the agent opened and remove its tab group. Tabs taken over with browser_use_tab are released back to the user, not closed. Call this when finished with the browser so no empty group is left in the user's tab strip. The MCP process also runs this automatically when the Computer Use session ends.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  {
+    "name": "browser_navigate",
+    "description": "Point one of the agent's tabs at a different URL.",
+    "inputSchema": {
+      "required": ["tab_id", "url"],
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "tab_id": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "inputSchema": {
+      "type": "object",
+      "required": ["x0", "y0", "x1", "y1"],
+      "properties": {
+        "y1": {
+          "description": "Bottom edge, screen coordinates",
+          "type": "number"
+        },
+        "y0": {
+          "type": "number",
+          "description": "Top edge, screen coordinates"
+        },
+        "x1": {
+          "description": "Right edge, screen coordinates",
+          "type": "number"
+        },
+        "x0": {
+          "description": "Left edge, screen coordinates",
+          "type": "number"
+        },
+        "max_width": {
+          "description": "Downscale the zoomed image to this width in pixels (default 1400)",
+          "type": "integer"
+        }
+      }
+    },
+    "description": "Capture one region of the screen at full resolution, to read small text, dense tables, file names or tiny controls that a normal screenshot blurs. Give the region as two corners in screen coordinates (the same space click uses); the result text explains how to map pixels in the zoomed image back to screen coordinates.",
+    "name": "zoom"
+  },
+  {
+    "description": "Move the agent pointer over an element or screen position without clicking, to reveal hover menus, toolbars, tooltips or drag handles. Follow with get_app_state or screenshot to see what appeared.",
+    "name": "hover",
+    "inputSchema": {
+      "properties": {
+        "element_id": {
+          "type": "string",
+          "description": "Element id from get_app_state"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "description": "Pause before the next action so the UI can catch up: page loads, animations, dialogs opening, apps launching. Follow with get_app_state or screenshot to confirm the new state instead of guessing.",
+    "inputSchema": {
+      "properties": {
+        "seconds": {
+          "description": "Seconds to wait (default 1, max 30)",
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "name": "wait"
+  },
+  {
+    "name": "select_text",
+    "description": "Select a character range inside a text element. Defaults to selecting from 'start' to the end of the value.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["element_id"],
+      "properties": {
+        "start": {
+          "description": "Start offset (default 0)",
+          "type": "integer"
+        },
+        "length": {
+          "type": "integer",
+          "description": "Characters to select (default: to end)"
+        },
+        "element_id": {
+          "type": "string"
+        }
+      }
+    }
+  }
+]

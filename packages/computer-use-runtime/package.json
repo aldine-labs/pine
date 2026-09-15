@@ -1,0 +1,14 @@
+{
+  "name": "@pine/computer-use-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tool-specs.json": "./tool-specs.json"
+  },
+  "scripts": {
+    "build": "bun run scripts/build.mjs",
+    "sync:tool-specs": "bun run scripts/sync-tool-specs.mjs",
+    "test": "node vendor/munim-computer-use/chrome-extension/background.test.mjs"
+  }
+}

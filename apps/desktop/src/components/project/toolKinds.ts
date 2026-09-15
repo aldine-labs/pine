@@ -2,6 +2,8 @@ import {
   FilePlusIcon,
   FileTextIcon,
   GlobeIcon,
+  MonitorCogIcon,
+  PanelTopIcon,
   SearchIcon,
   SquarePenIcon,
   TerminalIcon,
@@ -11,11 +13,21 @@ import type { Component } from "vue";
 import type { PineToolCall } from "@/shared/sessions";
 
 export type ToolKind =
-  "bash" | "edit" | "fetch" | "generic" | "read" | "search" | "write";
+  | "bash"
+  | "browser"
+  | "computer"
+  | "edit"
+  | "fetch"
+  | "generic"
+  | "read"
+  | "search"
+  | "write";
 
 /** Icon shown for each tool call, keyed by its kind. */
 export const TOOL_KIND_ICON: Record<ToolKind, Component> = {
   bash: TerminalIcon,
+  browser: PanelTopIcon,
+  computer: MonitorCogIcon,
   edit: SquarePenIcon,
   fetch: GlobeIcon,
   generic: WrenchIcon,
@@ -32,12 +44,40 @@ export const TOOL_KIND_ORDER: readonly ToolKind[] = [
   "write",
   "search",
   "fetch",
+  "computer",
+  "browser",
   "bash",
   "generic",
 ];
 
 export function toolKind(name: string): ToolKind {
   const normalized = name.toLowerCase().split(/[.:/]/).at(-1) ?? name;
+  if (normalized.startsWith("browser_")) return "browser";
+  if (
+    [
+      "activate_computer_use",
+      "request_computer_use_permissions",
+      "install_pine_browser_extension",
+      "list_apps",
+      "get_app_state",
+      "click",
+      "right_click",
+      "hover",
+      "drag",
+      "scroll",
+      "type_text",
+      "set_value",
+      "select_text",
+      "press_key",
+      "activate_app",
+      "screenshot",
+      "zoom",
+      "list_displays",
+      "wait",
+    ].includes(normalized)
+  ) {
+    return "computer";
+  }
   if (
     [
       "bash",

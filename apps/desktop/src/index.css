@@ -56,44 +56,37 @@
  *
  * Apply `attention-flash` to any element that must pull the user's eye
  * without stealing focus. Set `--attention-flash-color` on that element to
- * override the default warning tone. The ring lives on the element itself and
- * the tint is painted by an overlay pseudo-element, so the signal stays
+ * override the default warning tone. The border stays fixed on the element,
+ * while the tint is painted by an overlay pseudo-element, so the signal stays
  * visible even when opaque children fill the box; the overlay never receives
  * pointer events, and its peak opacity stays low so text remains legible.
- * `prefers-reduced-motion` degrades the pulse to a steady highlight.
+ * `prefers-reduced-motion` degrades the fill to a steady highlight.
  */
-@keyframes attention-flash-ring {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1px var(--attention-flash-color),
-      0 0 0 1px
-        color-mix(in oklab, var(--attention-flash-color) 20%, transparent);
+@keyframes attention-flash-fill {
+  0% {
+    opacity: 0.05;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  50% {
-    box-shadow:
-      0 0 0 1px var(--attention-flash-color),
-      0 0 0 6px
-        color-mix(in oklab, var(--attention-flash-color) 36%, transparent);
+  14% {
+    opacity: 0.2;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
-}
 
-@keyframes attention-flash-tint {
-  0%,
+  72% {
+    opacity: 0.05;
+    animation-timing-function: linear;
+  }
+
   100% {
     opacity: 0.05;
-  }
-
-  50% {
-    opacity: 0.2;
   }
 }
 
 @utility attention-flash {
   --attention-flash-color: var(--color-warning);
   position: relative;
-  animation: attention-flash-ring 1.4s ease-in-out infinite;
+  box-shadow: 0 0 0 1px var(--attention-flash-color);
 
   &::after {
     content: "";
@@ -104,15 +97,11 @@
     background-color: var(--attention-flash-color);
     opacity: 0.05;
     pointer-events: none;
-    animation: attention-flash-tint 1.4s ease-in-out infinite;
+    animation: attention-flash-fill 1.8s infinite;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    animation: none;
-    box-shadow:
-      0 0 0 1px var(--attention-flash-color),
-      0 0 0 3px
-        color-mix(in oklab, var(--attention-flash-color) 28%, transparent);
+    box-shadow: 0 0 0 1px var(--attention-flash-color);
 
     &::after {
       animation: none;

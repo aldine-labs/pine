@@ -295,7 +295,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
               <Empty v-if="!messages.length && !isLoadingMessages">
                 <EmptyHeader>
                   <PineCharacter decorative size="lg" />
-                  <EmptyTitle>{{
+                  <EmptyTitle class="font-semibold">{{
                     t("project.transcript.emptyTitle")
                   }}</EmptyTitle>
                   <EmptyDescription>

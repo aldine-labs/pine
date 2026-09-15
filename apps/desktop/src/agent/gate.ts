@@ -231,7 +231,8 @@ export class UserApprovalGate implements ToolGate {
 /**
  * Auto Approve mode: deterministic checks stay in the sandbox; the model judge
  * sees sandbox/authorize escalations, destructive-pattern matches, and every
- * explicit privileged shell call. Judgments are fail-closed.
+ * explicit privileged shell call. Reviewer failures are handed to the user
+ * for a fresh decision; explicit safety denials remain enforced.
  */
 export class AutoReviewGate implements ToolGate {
   private readonly approvedCommands = new Set<string>();
@@ -360,6 +361,8 @@ export class AutoReviewGate implements ToolGate {
     const decisions: Array<GateDecision | undefined> = reviews.map(
       () => undefined,
     );
+    let allowed = false;
+    const userFallbacks: Promise<void>[] = [];
     const pending: Array<{
       index: number;
       sequence: number;
@@ -376,8 +379,24 @@ export class AutoReviewGate implements ToolGate {
       if (this.consecutiveEscalations >= MAX_CONSECUTIVE_ESCALATIONS) {
         const reason =
           "Too many escalations in this turn; the auto-reviewer stopped responding. Change your approach or ask the user directly.";
-        this.emitDecided(sequence, review.input.toolCallId, "denied", reason);
-        decisions[index] = { kind: "deny", reason };
+        userFallbacks.push(
+          this.host
+            .requestUserApproval({
+              trigger: review.trigger,
+              toolCallId: review.input.toolCallId,
+              toolName: review.input.toolName,
+              subject: review.input.subject,
+              description: review.input.description,
+              evidence: [review.input.evidence, reason]
+                .filter(Boolean)
+                .join("\n\n"),
+              signal: review.input.signal,
+            })
+            .then((decision) => {
+              decisions[index] = decision;
+              if (decision.kind === "allow") allowed = true;
+            }),
+        );
         return;
       }
 
@@ -408,7 +427,11 @@ export class AutoReviewGate implements ToolGate {
       });
     });
 
-    if (pending.length === 0) return decisions as GateDecision[];
+    if (pending.length === 0) {
+      await Promise.all(userFallbacks);
+      if (allowed) this.consecutiveEscalations = 0;
+      return decisions as GateDecision[];
+    }
 
     let rulings: JudgeRuling[];
     try {
@@ -417,17 +440,29 @@ export class AutoReviewGate implements ToolGate {
       const reason = `Auto-review unavailable: ${
         error instanceof Error ? error.message : String(error)
       }`;
-      pending.forEach(({ index, input, sequence }) => {
-        this.emitDecided(sequence, input.toolCallId, "denied", reason);
-        decisions[index] = { kind: "deny", reason };
-      });
+      await Promise.all(
+        pending.map(async ({ index, input, request }) => {
+          const decision = await this.host.requestUserApproval({
+            trigger: request.trigger,
+            toolCallId: input.toolCallId,
+            toolName: input.toolName,
+            subject: input.subject,
+            description: input.description,
+            evidence: [input.evidence, reason].filter(Boolean).join("\n\n"),
+            signal: input.signal,
+          });
+          decisions[index] = decision;
+          if (decision.kind === "allow") allowed = true;
+        }),
+      );
+      await Promise.all(userFallbacks);
+      if (allowed) this.consecutiveEscalations = 0;
       return decisions as GateDecision[];
     }
 
     const rulingsById = new Map(
       rulings.map((ruling) => [ruling.toolCallId, ruling]),
     );
-    let allowed = false;
     for (const {
       index,
       input,
@@ -439,8 +474,17 @@ export class AutoReviewGate implements ToolGate {
       if (!ruling) {
         const reason =
           "Auto-review unavailable: The reviewer omitted this tool call from its rulings.";
-        this.emitDecided(sequence, input.toolCallId, "denied", reason);
-        decisions[index] = { kind: "deny", reason };
+        const decision = await this.host.requestUserApproval({
+          trigger: request.trigger,
+          toolCallId: input.toolCallId,
+          toolName: input.toolName,
+          subject: input.subject,
+          description: input.description,
+          evidence: [input.evidence, reason].filter(Boolean).join("\n\n"),
+          signal: input.signal,
+        });
+        decisions[index] = decision;
+        if (decision.kind === "allow") allowed = true;
         continue;
       }
       if (ruling.verdict === "allow") {

@@ -132,6 +132,7 @@ function toggleExpanded(): void {
             v-for="toolCall in toolCalls"
             :key="toolCall.id"
             :tool-call="toolCall"
+            :context-tool-calls="toolCalls"
             nested
             :reviewing="props.reviewingToolCallIds?.has(toolCall.id) ?? false"
             :awaiting-approval="

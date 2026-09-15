@@ -137,6 +137,10 @@ const config: ForgeConfig = {
     extraResource: [
       path.join(__dirname, "resources/icon.png"),
       path.join(__dirname, "../../.pine/release.json"),
+      path.join(
+        __dirname,
+        "../../packages/computer-use-runtime/pine-computer-use",
+      ),
     ],
     afterPrune: [
       (

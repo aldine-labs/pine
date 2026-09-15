@@ -1,5 +1,10 @@
 import { mount } from "@vue/test-utils";
-import { CircleHelpIcon, EyeIcon } from "@lucide/vue";
+import {
+  CircleHelpIcon,
+  EyeIcon,
+  MonitorCogIcon,
+  PanelTopIcon,
+} from "@lucide/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAppI18n } from "@/app/i18n";
 import ProjectCompactionMarker from "../ProjectCompactionMarker.vue";
@@ -196,6 +201,111 @@ describe("project transcript markers", () => {
     expect(wrapper.get('[data-slot="marker"]').attributes("aria-live")).toBe(
       "polite",
     );
+  });
+
+  it("formats Computer Use calls without exposing typed text", () => {
+    const desktop = mount(ProjectToolCallMarker, {
+      props: {
+        toolCall: {
+          id: "computer-1",
+          input: { element_id: "e12", text: "private draft text" },
+          name: "type_text",
+          status: "running",
+        },
+      },
+      global: { plugins: [createAppI18n("en-US")] },
+    });
+    expect(desktop.text()).toContain("Typing text");
+    expect(desktop.text()).toContain("Typing text e12");
+    expect(desktop.text()).toContain("e12");
+    expect(desktop.text()).not.toContain("private draft text");
+    expect(desktop.get("code").text()).toBe("e12");
+    expect(desktop.findComponent(MonitorCogIcon).exists()).toBe(true);
+
+    const browser = mount(ProjectToolCallMarker, {
+      props: {
+        toolCall: {
+          id: "browser-1",
+          input: { tab_id: 7 },
+          name: "browser_snapshot",
+          status: "complete",
+        },
+      },
+      global: { plugins: [createAppI18n("en-US")] },
+    });
+    expect(browser.text()).toContain("Viewed webpage tab 7");
+    expect(browser.text()).toContain("tab 7");
+    expect(browser.find("code").exists()).toBe(false);
+    expect(browser.findComponent(PanelTopIcon).exists()).toBe(true);
+
+    const chinese = mount(ProjectToolCallMarker, {
+      props: {
+        toolCall: {
+          id: "computer-zh",
+          input: {},
+          name: "list_apps",
+          status: "complete",
+        },
+      },
+      global: { plugins: [createAppI18n("zh-CN")] },
+    });
+    expect(chinese.text()).toContain("已查看已打开的应用");
+    expect(chinese.text()).not.toContain("project.transcript");
+
+    const appState = mount(ProjectToolCallMarker, {
+      props: {
+        toolCall: {
+          id: "state-zh",
+          // Historical assistant messages may keep tool arguments as JSON.
+          input: JSON.stringify({ app: "System Settings" }),
+          name: "get_app_state",
+          status: "complete",
+        },
+      },
+      global: { plugins: [createAppI18n("zh-CN")] },
+    });
+    expect(appState.text()).toContain("已查看 System Settings 应用状态");
+
+    const screenshot = mount(ProjectToolCallMarker, {
+      props: {
+        toolCall: {
+          id: "screenshot-zh",
+          input: { app: "System Settings" },
+          name: "screenshot",
+          status: "complete",
+        },
+      },
+      global: { plugins: [createAppI18n("zh-CN")] },
+    });
+    expect(screenshot.text()).toContain("已给 System Settings 截图并查看");
+
+    const parsedTarget = mount(ProjectToolCallMarker, {
+      props: {
+        contextToolCalls: [
+          {
+            id: "state-1",
+            name: "get_app_state",
+            input: { app: "System Settings" },
+            output: {
+              content: [{ type: "text", text: '[e133] Button "Show Detail"' }],
+            },
+            status: "complete",
+          },
+        ],
+        toolCall: {
+          id: "click-1",
+          input: { element_id: "e133" },
+          name: "click",
+          status: "complete",
+        },
+      },
+      global: { plugins: [createAppI18n("zh-CN")] },
+    });
+    expect(parsedTarget.text()).toContain(
+      '已点击界面上的 Button "Show Detail"',
+    );
+    expect(parsedTarget.text()).not.toContain("e133");
+    expect(parsedTarget.find("code").exists()).toBe(false);
   });
 
   it("renders questionnaire tool progress without exposing its raw name", async () => {

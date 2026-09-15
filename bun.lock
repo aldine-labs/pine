@@ -20,6 +20,7 @@
         "@fontsource-variable/jetbrains-mono": "5.3.0",
         "@lobehub/icons-static-svg": "1.95.0",
         "@lucide/vue": "1.44.0",
+        "@pine/computer-use-runtime": "workspace:*",
         "@pine/rpiv-ask-user-question": "workspace:*",
         "@tanstack/vue-virtual": "3.13.37",
         "@vue-office/docx": "1.6.3",
@@ -85,6 +86,10 @@
         "vue-tsc": "3.3.11",
       },
     },
+    "packages/computer-use-runtime": {
+      "name": "@pine/computer-use-runtime",
+      "version": "0.1.0",
+    },
     "packages/rpiv-ask-user-question": {
       "name": "@pine/rpiv-ask-user-question",
       "version": "0.1.0",
@@ -95,9 +100,9 @@
   },
   "trustedDependencies": [
     "@vue-office/excel",
+    "electron-winstaller",
     "@vue-office/docx",
     "@vue-office/pptx",
-    "electron-winstaller",
   ],
   "packages": {
     "@anthropic-ai/sandbox-runtime": ["@anthropic-ai/sandbox-runtime@0.0.75", "", { "dependencies": { "@pondwader/socks5-server": "^1.0.10", "commander": "^12.1.0", "node-forge": "^1.4.0", "zod": "^3.24.1" }, "bin": { "srt": "dist/cli.js" } }, "sha512-oqAKi6QtkT2DpLwFoDCDD757zw2i6ftpLTyV8rNSV9QWF53q2m1JxEs0RYXv2CIXtCoje4RGYQylagn15RKmww=="],
@@ -517,6 +522,8 @@
     "@one-ini/wasm": ["@one-ini/wasm@0.2.1", "", {}, "sha512-TUqERXGNTifZ9y2g3wPxQrw3HpHv/02DsW3D90T9x0hhonrL1ZqpSmNrU2XkoIq0fP1N6gZfVQzy2Fw1ZvGBNg=="],
 
     "@oxc-project/types": ["@oxc-project/types@0.146.0", "", {}, "sha512-XC0QsnnhVe7sLIWmYmdPw7x5P0h4W8vUU3Nv1ySgWXtvCz8NizoAEpGXA0sOYoJQV2Rl13LgURAHQ5cI5ILCSA=="],
+
+    "@pine/computer-use-runtime": ["@pine/computer-use-runtime@workspace:packages/computer-use-runtime"],
 
     "@pine/desktop": ["@pine/desktop@workspace:apps/desktop"],
 
