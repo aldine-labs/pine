@@ -3,13 +3,11 @@ import { PlusIcon, Trash2Icon } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { handleError } from "@/app/errors/errorHandler";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -260,9 +258,6 @@ watch(activeScope, () => {
                 :placeholder="t('skills.namePlaceholder')"
                 @update:model-value="syncFrontmatterName(String($event))"
               />
-              <Badge variant="secondary">{{
-                t(`skills.scope.${activeScope}`)
-              }}</Badge>
             </div>
             <Textarea
               v-model="content"
@@ -293,12 +288,6 @@ watch(activeScope, () => {
           </div>
         </TabsContent>
       </Tabs>
-
-      <DialogFooter class="px-6 py-4">
-        <Button variant="outline" @click="open = false">
-          {{ t("common.done") }}
-        </Button>
-      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>
