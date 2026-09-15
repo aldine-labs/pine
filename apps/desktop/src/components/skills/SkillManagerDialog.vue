@@ -183,11 +183,11 @@ watch(activeScope, () => {
 
       <Tabs v-model="activeScope" class="flex min-h-0 flex-1 flex-col">
         <div class="px-6 pb-4">
-          <TabsList class="grid w-full grid-cols-2">
-            <TabsTrigger value="global">
+          <TabsList class="grid w-full grid-cols-2 items-stretch">
+            <TabsTrigger value="global" class="data-active:-translate-y-px">
               {{ t("skills.scope.global") }}
             </TabsTrigger>
-            <TabsTrigger value="project">
+            <TabsTrigger value="project" class="data-active:-translate-y-px">
               {{ t("skills.scope.project") }}
             </TabsTrigger>
           </TabsList>
