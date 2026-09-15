@@ -73,6 +73,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build computer-use runtime
+        env:
+          PINE_COMPUTER_USE_ARCH: ${{ matrix.arch }}
+        run: bun run --filter @pine/computer-use-runtime build
+
       # MakerDMG -> electron-installer-dmg -> appdmg uses host-side native
       # addons which Bun does not compile automatically for this tool chain.
       - name: Build native DMG-maker addons
@@ -133,6 +138,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Build computer-use runtime
+        run: bun run --filter @pine/computer-use-runtime build
 
       - name: Verify Squirrel packaging tools
         shell: pwsh

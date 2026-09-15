@@ -16,6 +16,19 @@ const outputRoot = path.join(packageRoot, "pine-computer-use");
 const executableName =
   process.platform === "win32" ? "pine-computer-use.exe" : "pine-computer-use";
 const outputExecutable = path.join(outputRoot, "bin", executableName);
+const targetArchitecture = process.env.PINE_COMPUTER_USE_ARCH;
+const swiftArchitecture =
+  targetArchitecture === "x64"
+    ? "x86_64"
+    : targetArchitecture === "arm64"
+      ? "arm64"
+      : undefined;
+
+if (targetArchitecture && !swiftArchitecture && process.platform === "darwin") {
+  throw new Error(
+    `Unsupported PINE_COMPUTER_USE_ARCH value: ${targetArchitecture}`,
+  );
+}
 
 function latestModifiedAt(root) {
   let latest = 0;
@@ -72,23 +85,22 @@ const nativeSourceRoot =
     ? path.join(vendorRoot, "macos")
     : path.join(vendorRoot, "windows-linux");
 const nativeIsCurrent =
+  !targetArchitecture &&
   existsSync(outputExecutable) &&
   statSync(outputExecutable).mtimeMs >= latestModifiedAt(nativeSourceRoot);
 
 if (!nativeIsCurrent) {
   let builtExecutable;
   if (process.platform === "darwin") {
-    run("swift", [
-      "build",
-      "-c",
-      "release",
-      "--package-path",
-      nativeSourceRoot,
-    ]);
+    const swiftBuildArgs = ["build", "-c", "release"];
+    if (swiftArchitecture) swiftBuildArgs.push("--arch", swiftArchitecture);
+    swiftBuildArgs.push("--package-path", nativeSourceRoot);
+    run("swift", swiftBuildArgs);
     const binPath = commandOutput("swift", [
       "build",
       "-c",
       "release",
+      ...(swiftArchitecture ? ["--arch", swiftArchitecture] : []),
       "--show-bin-path",
       "--package-path",
       nativeSourceRoot,
