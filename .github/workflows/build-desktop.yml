@@ -94,6 +94,35 @@ jobs:
           bunx electron-forge make --platform=darwin --arch=${{ matrix.arch }}
           --targets dmg
 
+      - name: Verify macOS code identity
+        run: |
+          APP=$(find apps/desktop/out -type d -name 'Pine.app' -print -quit)
+          if [ -z "$APP" ]; then
+            echo "No packaged Pine.app was produced" >&2
+            exit 1
+          fi
+          HELPER="$APP/Contents/Resources/pine-computer-use/bin/pine-computer-use"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --verify --strict --verbose=2 "$HELPER"
+          APP_ID=$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Identifier=//p')
+          HELPER_ID=$(codesign -dvv "$HELPER" 2>&1 | sed -n 's/^Identifier=//p')
+          if [ "$APP_ID" != "com.electron.pine" ]; then
+            echo "Unexpected Pine code-signing identifier: $APP_ID" >&2
+            exit 1
+          fi
+          if [ "$HELPER_ID" != "munim-computer-use" ]; then
+            echo "Unexpected helper code-signing identifier: $HELPER_ID" >&2
+            exit 1
+          fi
+          if codesign -dvv "$APP" 2>&1 | grep -q 'Info.plist=not bound'; then
+            echo "Pine Info.plist is not bound into its code signature" >&2
+            exit 1
+          fi
+          codesign -dr- "$APP" 2>&1 | grep -Fxq \
+            'designated => identifier "com.electron.pine"'
+          codesign -dr- "$HELPER" 2>&1 | grep -Fxq \
+            'designated => identifier "munim-computer-use"'
+
       - name: Name installer
         id: installer
         env:

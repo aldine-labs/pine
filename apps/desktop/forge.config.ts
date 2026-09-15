@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { ForgeConfig } from "@electron-forge/shared-types";
@@ -91,6 +92,52 @@ function injectAgentRuntimeDeps(buildPath: string): void {
   }
 }
 
+function signMacPackage(outputPaths: string[]): void {
+  for (const outputPath of outputPaths) {
+    const appPath = path.join(outputPath, "Pine.app");
+    if (!existsSync(appPath)) continue;
+
+    const computerUseHelper = path.join(
+      appPath,
+      "Contents/Resources/pine-computer-use/bin/pine-computer-use",
+    );
+    if (!existsSync(computerUseHelper)) {
+      throw new Error(`Missing computer-use helper at ${computerUseHelper}`);
+    }
+
+    execFileSync("codesign", [
+      "--force",
+      "--sign",
+      "-",
+      "--timestamp=none",
+      "--identifier",
+      "munim-computer-use",
+      "--requirements",
+      '=designated => identifier "munim-computer-use"',
+      computerUseHelper,
+    ]);
+    execFileSync("codesign", [
+      "--force",
+      "--deep",
+      "--sign",
+      "-",
+      "--timestamp=none",
+      "--identifier",
+      "com.electron.pine",
+      "--requirements",
+      '=designated => identifier "com.electron.pine"',
+      appPath,
+    ]);
+    execFileSync("codesign", [
+      "--verify",
+      "--deep",
+      "--strict",
+      "--verbose=2",
+      appPath,
+    ]);
+  }
+}
+
 const windowsCertificateFile = process.env.WINDOWS_CERTIFICATE_FILE;
 const windowsCertificatePassword = process.env.WINDOWS_CERTIFICATE_PASSWORD;
 const windowsSign =
@@ -120,11 +167,6 @@ const config: ForgeConfig = {
     // Packager discovers icon.icon and compiles its native Assets.car on macOS;
     // icon.icns is Apple's generated legacy fallback, icon.ico is for Windows.
     icon: path.join(__dirname, "resources/icon"),
-    // Seal the app bundle and nested helpers consistently while releases do
-    // not yet have a Developer ID identity. This is not trusted notarization.
-    osxSign: {
-      identity: "-",
-    },
     win32metadata: {
       CompanyName: "Xinyuan Weng",
       FileDescription: "Pine desktop client",
@@ -154,6 +196,14 @@ const config: ForgeConfig = {
         callback();
       },
     ],
+  },
+  hooks: {
+    postPackage: (_forgeConfig, packageResult) => {
+      if (packageResult.platform === "darwin") {
+        signMacPackage(packageResult.outputPaths);
+      }
+      return Promise.resolve();
+    },
   },
   rebuildConfig: {},
   makers: [
