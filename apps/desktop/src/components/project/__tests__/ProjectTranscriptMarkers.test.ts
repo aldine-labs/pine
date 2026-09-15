@@ -308,6 +308,60 @@ describe("project transcript markers", () => {
     expect(parsedTarget.find("code").exists()).toBe(false);
   });
 
+  it("uses no-parameter variants when Computer Use values are absent", () => {
+    const cases = [
+      {
+        locale: "en-US" as const,
+        name: "get_app_state",
+        input: {},
+        expected: "Viewed app state",
+      },
+      {
+        locale: "en-US" as const,
+        name: "click",
+        input: { click_count: 2 },
+        expected: "Clicked the interface",
+      },
+      {
+        locale: "en-US" as const,
+        name: "activate_app",
+        input: {},
+        expected: "Switched to an app",
+      },
+      {
+        locale: "zh-CN" as const,
+        name: "screenshot",
+        input: { display: 1 },
+        expected: "已截取屏幕并查看",
+      },
+      {
+        locale: "zh-CN" as const,
+        name: "browser_snapshot",
+        input: {},
+        expected: "已查看网页",
+      },
+    ] as const;
+
+    for (const [index, testCase] of cases.entries()) {
+      const wrapper = mount(ProjectToolCallMarker, {
+        props: {
+          toolCall: {
+            id: `computer-without-parameter-${index}`,
+            input: testCase.input,
+            name: testCase.name,
+            status: "complete",
+          },
+        },
+        global: { plugins: [createAppI18n(testCase.locale)] },
+      });
+
+      expect(wrapper.get('[data-slot="marker-content"]').text()).toBe(
+        testCase.expected,
+      );
+      wrapper.unmount();
+    }
+  });
+
   it("renders questionnaire tool progress without exposing its raw name", async () => {
     const wrapper = mount(ProjectToolCallMarker, {
       props: {

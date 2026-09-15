@@ -570,14 +570,20 @@ export default {
           getAppState: {
             label: "查看应用状态",
             complete: "已查看 {app} 应用状态",
+            completeNoApp: "已查看应用状态",
             running: "正在查看 {app} 应用状态",
+            runningNoApp: "正在查看应用状态",
             error: "查看 {app} 应用状态失败",
+            errorNoApp: "查看应用状态失败",
           },
           click: {
             label: "点击界面元素",
             complete: "已点击界面上的 {target}",
+            completeNoTarget: "已点击界面",
             running: "正在点击界面上的 {target}",
+            runningNoTarget: "正在点击界面",
             error: "点击界面上的 {target} 失败",
+            errorNoTarget: "点击界面失败",
           },
           typeText: {
             label: "输入文本",
@@ -600,14 +606,20 @@ export default {
           activateApp: {
             label: "切换到应用",
             complete: "已切换到 {app}",
+            completeNoApp: "已切换到应用",
             running: "正在切换到 {app}",
+            runningNoApp: "正在切换到应用",
             error: "切换到 {app} 失败",
+            errorNoApp: "切换到应用失败",
           },
           screenshot: {
             label: "截取屏幕",
             complete: "已给 {app} 截图并查看",
+            completeNoApp: "已截取屏幕并查看",
             running: "正在给 {app} 截图并查看",
+            runningNoApp: "正在截取屏幕并查看",
             error: "给 {app} 截图失败",
+            errorNoApp: "截取屏幕并查看失败",
           },
           listDisplays: {
             label: "查看显示器",
@@ -672,8 +684,11 @@ export default {
           browserSnapshot: {
             label: "查看网页界面",
             complete: "已查看网页 {target}",
+            completeNoTarget: "已查看网页",
             running: "正在查看网页 {target}",
+            runningNoTarget: "正在查看网页",
             error: "查看网页 {target} 失败",
+            errorNoTarget: "查看网页失败",
           },
           browserClick: {
             label: "点击网页元素",

@@ -593,14 +593,20 @@ export default {
           getAppState: {
             label: "view app state",
             complete: "Viewed {app} app state",
+            completeNoApp: "Viewed app state",
             running: "Viewing {app} app state",
+            runningNoApp: "Viewing app state",
             error: "Couldn’t view {app} app state",
+            errorNoApp: "Couldn’t view app state",
           },
           click: {
             label: "click an interface element",
             complete: "Clicked {target} on the interface",
+            completeNoTarget: "Clicked the interface",
             running: "Clicking {target} on the interface",
+            runningNoTarget: "Clicking the interface",
             error: "Couldn’t click {target} on the interface",
+            errorNoTarget: "Couldn’t click the interface",
           },
           typeText: {
             label: "type text",
@@ -623,14 +629,20 @@ export default {
           activateApp: {
             label: "switch to an app",
             complete: "Switched to {app}",
+            completeNoApp: "Switched to an app",
             running: "Switching to {app}",
+            runningNoApp: "Switching to an app",
             error: "Couldn’t switch to {app}",
+            errorNoApp: "Couldn’t switch to an app",
           },
           screenshot: {
             label: "capture the screen",
             complete: "Gave {app} a screenshot and reviewed it",
+            completeNoApp: "Captured a screenshot and reviewed it",
             running: "Taking a screenshot of {app} and reviewing it",
+            runningNoApp: "Taking a screenshot and reviewing it",
             error: "Couldn’t take a screenshot of {app}",
+            errorNoApp: "Couldn’t capture and review a screenshot",
           },
           listDisplays: {
             label: "view displays",
@@ -695,8 +707,11 @@ export default {
           browserSnapshot: {
             label: "view the webpage",
             complete: "Viewed webpage {target}",
+            completeNoTarget: "Viewed the webpage",
             running: "Viewing webpage {target}",
+            runningNoTarget: "Viewing the webpage",
             error: "Couldn’t view webpage {target}",
+            errorNoTarget: "Couldn’t view the webpage",
           },
           browserClick: {
             label: "click a webpage element",

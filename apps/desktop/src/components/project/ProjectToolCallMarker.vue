@@ -114,6 +114,27 @@ const COMPUTER_USE_TARGET_PLACEMENTS: Record<
   browserSnapshot: "tab",
 };
 
+const COMPUTER_USE_OPERATION_PARAMETER_KEYS: Partial<
+  Record<string, "app" | "target">
+> = {
+  getAppState: "app",
+  click: "target",
+  activateApp: "app",
+  screenshot: "app",
+  browserSnapshot: "target",
+};
+
+function computerUseOperationVariant(
+  operationKey: string,
+  input: Record<string, unknown>,
+  target: string | undefined,
+): "NoApp" | "NoTarget" | undefined {
+  const parameterKey = COMPUTER_USE_OPERATION_PARAMETER_KEYS[operationKey];
+  if (parameterKey === "app" && !appDisplayName(input)) return "NoApp";
+  if (parameterKey === "target" && !target) return "NoTarget";
+  return undefined;
+}
+
 /** Tools whose meaning is more specific than their generic kind. */
 function toolIcon(name: string): Component {
   if (isAskUserQuestionTool(name)) return CircleHelpIcon;
@@ -748,15 +769,23 @@ const presentation = computed(() => {
       input,
       target,
     );
+    const operationVariant = computerUseOperationVariant(
+      operationKey,
+      input,
+      embeddedTarget,
+    );
+    const operationState = `${state}${operationVariant ?? ""}`;
     return {
-      before: t(`${operationPath}.${state}`, {
-        app: appDisplayName(input) ?? "",
-        target: embeddedTarget ?? "",
-        url: firstString(input, ["url"]) ?? "",
-        key: firstString(input, ["key"]) ?? "",
-        direction: firstString(input, ["direction"]) ?? "",
-        tab: typeof input.tab_id === "number" ? `tab ${input.tab_id}` : "",
-      }),
+      before: operationVariant
+        ? t(`${operationPath}.${operationState}`)
+        : t(`${operationPath}.${state}`, {
+            app: appDisplayName(input) ?? "",
+            target: embeddedTarget ?? "",
+            url: firstString(input, ["url"]) ?? "",
+            key: firstString(input, ["key"]) ?? "",
+            direction: firstString(input, ["direction"]) ?? "",
+            tab: typeof input.tab_id === "number" ? `tab ${input.tab_id}` : "",
+          }),
       operation: undefined,
       separator: embeddedTarget ? "" : target ? " " : "",
       target: embeddedTarget ? "" : target,
