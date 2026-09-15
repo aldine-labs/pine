@@ -274,7 +274,7 @@ export default {
   project: {
     closeProject: "关闭项目",
     preferences: "项目设置",
-    skills: "Skills",
+    skills: "工作技能",
     preview: {
       metadata: "文件元数据",
       file: "文件",

@@ -90,9 +90,9 @@ it("restores the project tab and persists navigation without changing the active
   expect(sessions.scrollTop).toBe(720);
   const footerText = wrapper.text();
   expect(footerText.indexOf("新版本 Pine 可用")).toBeLessThan(
-    footerText.indexOf("Skills"),
+    footerText.indexOf("工作技能"),
   );
-  expect(footerText.indexOf("Skills")).toBeLessThan(
+  expect(footerText.indexOf("工作技能")).toBeLessThan(
     footerText.indexOf("项目设置"),
   );
   await wrapper.get("[data-testid='project-skills-button']").trigger("click");
