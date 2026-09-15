@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-14
+
+### Added
+
+- Native computer-use controls with visible review flow and bundled platform
+  runtimes for macOS and Windows.
+- Background file presentation, reusable attention flashes, and clearer agent
+  execution-resource and user-question guidance.
+- A discrete reasoning-effort slider with animated thumb/range movement and
+  thumb-anchored warning tooltips.
+
+### Changed
+
+- Project opening now disables the project library until loading and navigation
+  finish, preventing competing interactions during the transition.
+- Opening a project that is already owned by another Pine window focuses that
+  window instead of creating a duplicate project runtime.
+
+### Fixed
+
+- CI desktop packaging now builds the native computer-use runtime before
+  Electron Forge packages the application.
+
 ## [0.2.2] - 2026-09-14
 
 ### Added
@@ -81,7 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/phosphoros-works/pine/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/phosphoros-works/pine/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/phosphoros-works/pine/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/phosphoros-works/pine/compare/v0.1.2...v0.2.0
