@@ -22,7 +22,11 @@ import {
 import { Type } from "typebox";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
-import type { PineAgentEvent, PineApprovalMode } from "../shared/agent";
+import {
+  isSandboxDeniedPayload,
+  type PineAgentEvent,
+  type PineApprovalMode,
+} from "../shared/agent";
 import type {
   AddCustomModelRequest,
   PineAuthType,
@@ -35,8 +39,10 @@ import type {
 import { addCustomModel as writeCustomModel } from "./customModels";
 import {
   PINE_AUTHORIZATION_GRANT_ENTRY,
+  PINE_APPROVAL_DECISION_ENTRY,
   PINE_APPROVAL_MODE_ENTRY,
   PINE_COMPUTER_USE_ACTIVE_ENTRY,
+  type PineApprovalDecision,
   type PineContextUsage,
   type PineSessionSummary,
 } from "../shared/sessions";
@@ -98,6 +104,39 @@ const TITLE_TIMEOUT_MS = 30_000;
 const MAX_GENERATED_TITLE_LENGTH = 60;
 export const RECOMMENDED_COMPACTION_CONTEXT_RATIO = 0.8;
 export const RECOMMENDED_COMPACTION_HARD_LIMIT = 400_000;
+
+/**
+ * Returns the cache hit rate for the latest assistant request in the session.
+ * The active assistant message is accepted separately because Pi emits
+ * message_end before persisting that message to SessionManager.
+ */
+export function getLatestCacheHitRate(
+  entries: readonly SessionEntry[],
+  currentAssistantMessage?: AssistantMessage,
+): number | null {
+  let latestCacheHitRate: number | undefined;
+
+  for (const entry of entries) {
+    if (entry.type !== "message" || entry.message.role !== "assistant") {
+      continue;
+    }
+    latestCacheHitRate = cacheHitRateForMessage(entry.message);
+  }
+
+  if (currentAssistantMessage) {
+    latestCacheHitRate = cacheHitRateForMessage(currentAssistantMessage);
+  }
+
+  return latestCacheHitRate ?? null;
+}
+
+function cacheHitRateForMessage(message: AssistantMessage): number | undefined {
+  const promptTokens =
+    message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
+  return promptTokens > 0
+    ? (message.usage.cacheRead / promptTokens) * 100
+    : undefined;
+}
 
 export function recommendedCompactionReserveTokens(
   contextWindow: number,
@@ -1323,6 +1362,8 @@ export class PineAgentRuntime {
           subjects,
         ),
       recordGrant: (grant) => this.recordAuthorizationGrant(live, grant),
+      recordApprovalDecision: (decision) =>
+        this.recordApprovalDecision(live, decision),
       judge: (request) => this.runJudge(live, request),
       requestUserApproval: (request) => this.requestUserApproval(live, request),
     };
@@ -1489,6 +1530,16 @@ export class PineAgentRuntime {
       });
     }
     pending.resolve(decision);
+    const persistedDecision: PineApprovalDecision = {
+      requestId,
+      toolCallId: pending.toolCallId,
+      verdict: decision.kind === "allow" ? "approved" : "denied",
+      decidedBy: "user",
+      ...(decision.kind === "deny" && decision.reason
+        ? { reason: decision.reason }
+        : {}),
+    };
+    this.recordApprovalDecision(pending.live, persistedDecision);
     this.options.emit({
       type: "approval-decided",
       sessionId: pending.sessionId,
@@ -1499,6 +1550,16 @@ export class PineAgentRuntime {
       reason: decision.kind === "deny" ? decision.reason : undefined,
     });
     return { accepted: true };
+  }
+
+  private recordApprovalDecision(
+    live: LiveAgentSession,
+    decision: PineApprovalDecision,
+  ): void {
+    live.session.sessionManager.appendCustomEntry(
+      PINE_APPROVAL_DECISION_ENTRY,
+      decision,
+    );
   }
 
   /**
@@ -1877,7 +1938,13 @@ export class PineAgentRuntime {
           message: toPineJsonValue(event.message),
         });
         if (event.type === "message_end") {
-          this.emitContextUsage(session);
+          this.emitContextUsage(
+            session,
+            this.getContextUsage(
+              session,
+              event.message.role === "assistant" ? event.message : undefined,
+            ),
+          );
         }
         break;
       }
@@ -1916,14 +1983,25 @@ export class PineAgentRuntime {
         });
         break;
       case "tool_execution_end":
-        this.options.emit({
-          type: "tool-end",
-          sessionId,
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          payload: toPineJsonValue(event.result),
-          isError: event.isError,
-        });
+        {
+          const payload = toPineJsonValue(event.result);
+          if (event.isError && isSandboxDeniedPayload(payload)) {
+            this.recordApprovalDecision(this.getSession(sessionId), {
+              requestId: `sandbox-${event.toolCallId}`,
+              toolCallId: event.toolCallId,
+              verdict: "denied",
+              decidedBy: "sandbox",
+            });
+          }
+          this.options.emit({
+            type: "tool-end",
+            sessionId,
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            payload,
+            isError: event.isError,
+          });
+        }
         break;
       case "compaction_start": {
         const compactionId = randomUUID();
@@ -1991,14 +2069,30 @@ export class PineAgentRuntime {
 
   /** Pushes the live context usage estimate so the renderer's composer
    * indicator stays current without polling. */
-  private getContextUsage(session: AgentSession): PineContextUsage | undefined {
+  private getContextUsage(
+    session: AgentSession,
+    currentAssistantMessage?: AssistantMessage,
+  ): PineContextUsage | undefined {
     const usage = session.getContextUsage();
     if (!usage) return undefined;
+    const stats = session.getSessionStats();
+    const currentCacheUsage = currentAssistantMessage?.usage;
+    const hasCacheUsage =
+      stats.tokens.cacheRead > 0 ||
+      stats.tokens.cacheWrite > 0 ||
+      (currentCacheUsage !== undefined &&
+        (currentCacheUsage.cacheRead > 0 || currentCacheUsage.cacheWrite > 0));
     return {
       tokens: usage.tokens,
       contextWindow: usage.contextWindow,
       percent: usage.percent,
-      cost: session.getSessionStats().cost,
+      cost: stats.cost,
+      cacheHitRate: hasCacheUsage
+        ? getLatestCacheHitRate(
+            session.sessionManager.getEntries(),
+            currentAssistantMessage,
+          )
+        : null,
     };
   }
 

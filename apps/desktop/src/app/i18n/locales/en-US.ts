@@ -372,6 +372,7 @@ export default {
         contextWindow: "Context window",
         utilization: "Utilization",
         cost: "Conversation cost",
+        cacheHitRate: "Cache hit rate",
         unknown: "Unknown",
         compactNow: "Compact context now",
         compacting: "Compacting…",

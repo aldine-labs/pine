@@ -351,6 +351,7 @@ export default {
         contextWindow: "上下文窗口",
         utilization: "占用率",
         cost: "对话花费",
+        cacheHitRate: "缓存命中率",
         unknown: "未知",
         compactNow: "立即压缩上下文",
         compacting: "正在压缩……",

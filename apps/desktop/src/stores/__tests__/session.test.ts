@@ -22,6 +22,7 @@ const contextUsage: PineContextUsage = {
   contextWindow: 200_000,
   percent: 43.2,
   cost: 0.1234,
+  cacheHitRate: null,
 };
 
 describe("session store", () => {
@@ -923,6 +924,7 @@ describe("session store", () => {
       contextWindow: 200_000,
       percent: 0.5,
       cost: 0.01,
+      cacheHitRate: null,
     });
     expect(store.contextUsage).toBeNull();
 
@@ -933,6 +935,7 @@ describe("session store", () => {
       contextWindow: 200_000,
       percent: 43.2,
       cost: 0.1234,
+      cacheHitRate: 75.5,
     });
 
     expect(store.contextUsage).toEqual({
@@ -940,6 +943,7 @@ describe("session store", () => {
       contextWindow: 200_000,
       percent: 43.2,
       cost: 0.1234,
+      cacheHitRate: 75.5,
     });
   });
 

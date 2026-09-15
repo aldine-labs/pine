@@ -2,6 +2,7 @@ import { Type } from "typebox";
 import type { Tool } from "@earendil-works/pi-ai";
 import { createHash } from "node:crypto";
 import type { PineAgentEvent } from "../shared/agent";
+import type { PineApprovalDecision } from "../shared/sessions";
 import type { GateDecision } from "./protocol";
 import { matchDestructive } from "./destructive";
 
@@ -90,6 +91,7 @@ export interface GateHost {
   recordGrant(
     grant: Omit<AuthorizationGrant, "id" | "createdAt">,
   ): AuthorizationGrant;
+  recordApprovalDecision(decision: PineApprovalDecision): void;
   judge(requests: JudgeRequest[]): Promise<JudgeRuling[]>;
   /**
    * Route a review to the renderer. Resolves with the user's decision; the
@@ -537,10 +539,18 @@ export class AutoReviewGate implements ToolGate {
     verdict: "approved" | "denied",
     reason?: string,
   ): void {
+    const requestId = `judge-${sequence}`;
+    this.host.recordApprovalDecision({
+      requestId,
+      toolCallId,
+      verdict,
+      decidedBy: "judge",
+      ...(reason ? { reason } : {}),
+    });
     this.host.emit({
       type: "approval-decided",
       sessionId: this.host.sessionId,
-      requestId: `judge-${sequence}`,
+      requestId,
       toolCallId,
       verdict,
       decidedBy: "judge",

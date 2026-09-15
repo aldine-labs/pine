@@ -1,7 +1,10 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type {
+  AgentSession,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -14,6 +17,7 @@ import {
   parseJudgeRulings,
   PineAgentRuntime,
   JUDGE_SYSTEM_PROMPT,
+  getLatestCacheHitRate,
   projectSessionDirectory,
   recommendedCompactionReserveTokens,
   titleFromAssistantMessage,
@@ -24,6 +28,62 @@ import { serializeAttachmentMessage } from "../../shared/attachments";
 import { ACTIVATE_COMPUTER_USE_TOOL_NAME } from "../computer-use/tools";
 
 const temporaryDirectories: string[] = [];
+
+function assistantMessage(
+  input: number,
+  cacheRead: number,
+  cacheWrite: number,
+): AssistantMessage {
+  return {
+    role: "assistant",
+    content: [],
+    api: "openai-responses",
+    provider: "test",
+    model: "test-model",
+    usage: {
+      input,
+      output: 0,
+      cacheRead,
+      cacheWrite,
+      totalTokens: input + cacheRead + cacheWrite,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  };
+}
+
+describe("getLatestCacheHitRate", () => {
+  it("uses the latest assistant request and accepts an unpersisted message", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        id: "assistant-1",
+        parentId: null,
+        timestamp: new Date().toISOString(),
+        message: assistantMessage(100, 300, 100),
+      },
+    ];
+    const current = assistantMessage(100, 700, 100);
+
+    expect(getLatestCacheHitRate(entries)).toBeCloseTo(60);
+    expect(getLatestCacheHitRate(entries, current)).toBeCloseTo(77.8, 1);
+  });
+
+  it("returns null when no assistant request has usable prompt tokens", () => {
+    expect(
+      getLatestCacheHitRate([
+        {
+          type: "message",
+          id: "assistant-1",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          message: assistantMessage(0, 0, 0),
+        },
+      ]),
+    ).toBeNull();
+  });
+});
 
 afterEach(async () => {
   await Promise.all(

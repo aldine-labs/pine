@@ -15,10 +15,19 @@ import type {
   PineSessionModel,
   PineSessionSummary,
   PineTextMessage,
+  PineToolCallApproval,
+  PineApprovalDecision,
   SessionSearchResult,
 } from "../shared/sessions";
-import { PINE_APPROVAL_MODE_ENTRY } from "../shared/sessions";
-import type { PineApprovalMode } from "../shared/agent";
+import {
+  PINE_APPROVAL_DECISION_ENTRY,
+  PINE_APPROVAL_MODE_ENTRY,
+} from "../shared/sessions";
+import {
+  isSandboxDeniedPayload,
+  type PineApprovalMode,
+  type PineJsonValue,
+} from "../shared/agent";
 import { formatSessionAsMarkdown } from "../shared/sessionExport";
 import {
   attachmentMessagePreview,
@@ -81,6 +90,43 @@ interface IndexedTextMessage {
   message: PineTextMessage;
 }
 
+function isApprovalDecision(value: unknown): value is PineApprovalDecision {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const decision = value as Partial<PineApprovalDecision>;
+  return (
+    typeof decision.requestId === "string" &&
+    typeof decision.toolCallId === "string" &&
+    (decision.verdict === "approved" || decision.verdict === "denied") &&
+    (decision.decidedBy === "user" ||
+      decision.decidedBy === "judge" ||
+      decision.decidedBy === "sandbox") &&
+    (decision.reason === undefined || typeof decision.reason === "string")
+  );
+}
+
+function approvalDecisionsFromEntries(
+  entries: readonly Entry[],
+): Map<string, PineToolCallApproval> {
+  const decisions = new Map<string, PineToolCallApproval>();
+  for (const entry of entries) {
+    if (
+      entry.type !== "custom" ||
+      entry.customType !== PINE_APPROVAL_DECISION_ENTRY ||
+      !isApprovalDecision(entry.data)
+    ) {
+      continue;
+    }
+    decisions.set(entry.data.toolCallId, {
+      state: entry.data.verdict,
+      decidedBy: entry.data.decidedBy,
+      ...(entry.data.reason ? { reason: entry.data.reason } : {}),
+    });
+  }
+  return decisions;
+}
+
 function textFromContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -120,6 +166,7 @@ function textFromMessage(entry: Extract<Entry, { type: "message" }>): string {
 function indexedTextMessages(entries: Entry[]): IndexedTextMessage[] {
   const messages: IndexedTextMessage[] = [];
   const toolOwners = new Map<string, PineTextMessage>();
+  const approvalDecisions = approvalDecisionsFromEntries(entries);
 
   for (const entry of entries) {
     if (entry.type === "compaction") {
@@ -154,6 +201,16 @@ function indexedTextMessages(entries: Entry[]): IndexedTextMessage[] {
     ) {
       const owner = toolOwners.get(entryMessage.toolCallId);
       if (!owner) continue;
+      const sandboxDenied =
+        entryMessage.isError &&
+        isSandboxDeniedPayload(
+          entryMessage.content as unknown as PineJsonValue,
+        );
+      const approval =
+        approvalDecisions.get(entryMessage.toolCallId) ??
+        (sandboxDenied
+          ? { state: "denied" as const, decidedBy: "sandbox" as const }
+          : undefined);
       owner.blocks = owner.blocks.map((block) => {
         if (
           block.type !== "toolCall" ||
@@ -169,6 +226,7 @@ function indexedTextMessages(entries: Entry[]): IndexedTextMessage[] {
               ? ("error" as const)
               : ("complete" as const),
             output: entryMessage.content,
+            ...(approval ? { approval } : {}),
           },
         };
       });
@@ -179,8 +237,17 @@ function indexedTextMessages(entries: Entry[]): IndexedTextMessage[] {
     }
 
     const blocks = parseMessageBlocks(entry.message);
-    const hasThinking = blocks.some((block) => block.type === "thinking");
-    if (blocks.length === 0) continue;
+    const blocksWithApproval = blocks.map((block) => {
+      if (block.type !== "toolCall") return block;
+      const approval = approvalDecisions.get(block.toolCall.id);
+      return approval
+        ? { ...block, toolCall: { ...block.toolCall, approval } }
+        : block;
+    });
+    const hasThinking = blocksWithApproval.some(
+      (block) => block.type === "thinking",
+    );
+    if (blocksWithApproval.length === 0) continue;
     const messageTimestamp = entry.message.timestamp;
     const message: PineTextMessage = {
       createdAt:
@@ -189,11 +256,11 @@ function indexedTextMessages(entries: Entry[]): IndexedTextMessage[] {
           : new Date(entry.timestamp).toISOString(),
       id: entry.id,
       role: entry.message.role,
-      blocks,
+      blocks: blocksWithApproval,
       ...(hasThinking ? { thinkingDurationMs: thinkingDurationMs(entry) } : {}),
     };
     messages.push({ cursor: entry.seq, message });
-    for (const block of blocks) {
+    for (const block of blocksWithApproval) {
       if (block.type === "toolCall") toolOwners.set(block.toolCall.id, message);
     }
   }

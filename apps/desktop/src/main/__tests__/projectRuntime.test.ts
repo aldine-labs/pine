@@ -150,6 +150,7 @@ describe("ProjectRuntimeRegistry", () => {
       contextWindow: 200_000,
       percent: 43.2,
       cost: 0.1234,
+      cacheHitRate: null,
     };
 
     try {

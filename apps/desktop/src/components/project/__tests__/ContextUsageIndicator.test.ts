@@ -27,6 +27,7 @@ describe("ContextUsageIndicator", () => {
             contextWindow: 128_000,
             percent: 50,
             cost: 0.25,
+            cacheHitRate: 75.5,
           },
         }),
       },
@@ -47,11 +48,53 @@ describe("ContextUsageIndicator", () => {
     });
 
     expect(wrapper.text()).toContain("64,000");
+    expect(wrapper.text()).toContain("缓存命中率");
+    expect(wrapper.text()).toContain("75.5%");
     await wrapper
       .get('[data-testid="compact-context-button"]')
       .trigger("click");
     await flushPromises();
 
     expect(compactSession).toHaveBeenCalledOnce();
+  });
+
+  it("hides cache hit rate when the provider does not report it", async () => {
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        loadSessionMessages: vi.fn().mockResolvedValue({ messages: [] }),
+        resumeSession: vi.fn().mockResolvedValue({
+          session: {
+            id: "session-2",
+            createdAt: "2026-09-07T12:00:00.000Z",
+            updatedAt: "2026-09-07T12:00:00.000Z",
+            messageCount: 2,
+          },
+          contextUsage: {
+            tokens: 64_000,
+            contextWindow: 128_000,
+            percent: 50,
+            cost: 0.25,
+            cacheHitRate: null,
+          },
+        }),
+      },
+    });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    await useSessionStore().resume("session-2");
+
+    const wrapper = mount(ContextUsageIndicator, {
+      global: {
+        plugins: [pinia, createAppI18n("zh-CN")],
+        stubs: {
+          Popover: passthroughStub,
+          PopoverContent: passthroughStub,
+          PopoverTrigger: passthroughStub,
+        },
+      },
+    });
+
+    expect(wrapper.text()).not.toContain("缓存命中率");
   });
 });

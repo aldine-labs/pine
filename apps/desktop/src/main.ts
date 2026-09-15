@@ -1710,6 +1710,7 @@ async function initializeApp(): Promise<void> {
         contextWindow: agentEvent.contextWindow,
         percent: agentEvent.percent,
         cost: agentEvent.cost,
+        cacheHitRate: agentEvent.cacheHitRate,
       });
     } else if (agentEvent.type === "session-updated") {
       projectRuntimes?.updateSessionSummary(

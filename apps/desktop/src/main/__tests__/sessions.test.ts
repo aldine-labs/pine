@@ -20,6 +20,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  PINE_APPROVAL_DECISION_ENTRY,
   PINE_APPROVAL_MODE_ENTRY,
   type PineTextMessage,
 } from "../../shared/sessions";
@@ -425,6 +426,64 @@ describe("ProjectSessionService", () => {
           ],
         }),
       ]);
+    } finally {
+      await service.dispose();
+      await environment.cleanup(BACKGROUND_CONTEXT);
+    }
+  });
+
+  it("restores denied approval markers from persisted decisions", async () => {
+    const rootPath = await createTemporaryProjectData();
+    const options = serviceOptions(rootPath);
+    await mkdir(options.cwd, { recursive: true });
+    const environment = new NodeExecutionEnv({ cwd: options.cwd });
+    const repository = createRepository(environment, options.sessionsRoot);
+    const session = await createSession(repository, options.cwd);
+    const toolCallId = "call-denied-main";
+    await appendMessage(
+      session,
+      fauxAssistantMessage(
+        [
+          fauxToolCall(
+            "bash",
+            { command: "rm -rf important-data" },
+            { id: toolCallId },
+          ),
+        ],
+        { stopReason: "toolUse" },
+      ),
+    );
+    await appendCustomEntry(session, PINE_APPROVAL_DECISION_ENTRY, {
+      requestId: "judge-1",
+      toolCallId,
+      verdict: "denied",
+      decidedBy: "judge",
+      reason: "Use a safer command.",
+    });
+    const metadata = session.metadata;
+    const service = await ProjectSessionService.create(options);
+
+    try {
+      await expect(service.loadMessages(metadata.id)).resolves.toEqual({
+        hasMore: false,
+        messages: [
+          expect.objectContaining({
+            blocks: [
+              {
+                type: "toolCall",
+                toolCall: expect.objectContaining({
+                  id: toolCallId,
+                  approval: {
+                    state: "denied",
+                    decidedBy: "judge",
+                    reason: "Use a safer command.",
+                  },
+                }),
+              },
+            ],
+          }),
+        ],
+      });
     } finally {
       await service.dispose();
       await environment.cleanup(BACKGROUND_CONTEXT);

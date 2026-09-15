@@ -20,11 +20,22 @@ export const PINE_COMPUTER_USE_ACTIVE_ENTRY =
 export const PINE_AUTHORIZATION_GRANT_ENTRY =
   "pine.authorization-grant" as const;
 
+/** Audit record preserving a tool approval decision in the session transcript. */
+export const PINE_APPROVAL_DECISION_ENTRY = "pine.approval-decision" as const;
+
 export type PineToolCallStatus = "pending" | "running" | "complete" | "error";
 
 export interface PineToolCallApproval {
   state: "reviewing" | "awaiting-user" | "approved" | "denied";
   decidedBy?: "user" | "judge" | "sandbox";
+  reason?: string;
+}
+
+export interface PineApprovalDecision {
+  requestId: string;
+  toolCallId: string;
+  verdict: "approved" | "denied";
+  decidedBy: "user" | "judge" | "sandbox";
   reason?: string;
 }
 
@@ -206,6 +217,8 @@ export interface PineContextUsage {
   contextWindow: number;
   percent: number | null;
   cost: number;
+  /** Latest assistant request's prompt-cache hit rate, when reported. */
+  cacheHitRate: number | null;
 }
 
 export interface ResumeSessionResult {

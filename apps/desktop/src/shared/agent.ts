@@ -157,6 +157,9 @@ export type PineAgentEvent =
       percent: number | null;
       /** Cumulative conversation cost in USD. */
       cost: number;
+      /** Latest assistant request's prompt-cache hit rate, or null when the
+       * provider has not reported cache usage. */
+      cacheHitRate: number | null;
     }
   | {
       type: "compaction-start";

@@ -69,6 +69,12 @@ const costText = computed(() =>
     : t("project.composer.contextUsage.unknown"),
 );
 
+const cacheHitRateText = computed(() =>
+  usage.value?.cacheHitRate == null
+    ? t("project.composer.contextUsage.unknown")
+    : `${usage.value.cacheHitRate.toFixed(1)}%`,
+);
+
 async function compactContext(): Promise<void> {
   if (!activeSession.value || isCompacting.value) return;
   isCompacting.value = true;
@@ -157,6 +163,15 @@ async function compactContext(): Promise<void> {
         >
           <dt class="text-muted-foreground">{{ row.label }}</dt>
           <dd class="font-medium tabular-nums">{{ row.value }}</dd>
+        </div>
+        <div
+          v-if="usage?.cacheHitRate != null"
+          class="flex items-baseline justify-between gap-4"
+        >
+          <dt class="text-muted-foreground">
+            {{ t("project.composer.contextUsage.cacheHitRate") }}
+          </dt>
+          <dd class="font-medium tabular-nums">{{ cacheHitRateText }}</dd>
         </div>
       </dl>
       <Separator />

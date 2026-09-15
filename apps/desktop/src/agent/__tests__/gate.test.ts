@@ -5,6 +5,7 @@ import { AutoReviewGate, normalizeCommand, UserApprovalGate } from "../gate";
 interface HostMocks {
   emit: ReturnType<typeof vi.fn>;
   judge: ReturnType<typeof vi.fn>;
+  recordApprovalDecision: ReturnType<typeof vi.fn>;
   requestUserApproval: ReturnType<typeof vi.fn>;
 }
 
@@ -26,6 +27,7 @@ function createHost(
     ),
   );
   const requestUserApproval = vi.fn(requestApprovalImpl);
+  const recordApprovalDecision = vi.fn();
   const host: GateHost = {
     sessionId: "session-1",
     emit,
@@ -40,10 +42,14 @@ function createHost(
       id: "grant-1",
       createdAt: "2026-09-11T00:00:00.000Z",
     }),
+    recordApprovalDecision,
     judge,
     requestUserApproval,
   };
-  return { host, mocks: { emit, judge, requestUserApproval } };
+  return {
+    host,
+    mocks: { emit, judge, recordApprovalDecision, requestUserApproval },
+  };
 }
 
 describe("UserApprovalGate", () => {
@@ -82,6 +88,7 @@ describe("UserApprovalGate", () => {
         subject: "npm test",
       }),
     );
+    expect(mocks.recordApprovalDecision).not.toHaveBeenCalled();
   });
 
   it("maps denial reviews to their triggers and carries the evidence", async () => {
@@ -183,6 +190,15 @@ describe("AutoReviewGate", () => {
     expect(mocks.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "approval-decided",
+        verdict: "denied",
+        decidedBy: "judge",
+        reason: "untracked files",
+      }),
+    );
+    expect(mocks.recordApprovalDecision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: expect.stringMatching(/^judge-/),
+        toolCallId: "t1",
         verdict: "denied",
         decidedBy: "judge",
         reason: "untracked files",

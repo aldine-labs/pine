@@ -693,6 +693,7 @@ export const useSessionStore = defineStore("session", () => {
         contextWindow: event.contextWindow,
         percent: event.percent,
         cost: event.cost,
+        cacheHitRate: event.cacheHitRate,
       };
       contextUsage.value = usage;
       const cached = sessionCache.get(event.sessionId);
