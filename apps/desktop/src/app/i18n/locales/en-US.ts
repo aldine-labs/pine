@@ -460,6 +460,10 @@ export default {
           active: "Fetching {count} web pages",
           complete: "Fetched {count} web pages",
         },
+        presentFile: {
+          active: "Presenting {count} files",
+          complete: "Presented {count} files",
+        },
         write: {
           active: "Writing {count} files",
           complete: "Wrote {count} files",
@@ -474,6 +478,7 @@ export default {
         read: "read",
         search: "search",
         fetch: "web fetch",
+        presentFile: "present file",
         write: "write",
       },
       toolParams: {

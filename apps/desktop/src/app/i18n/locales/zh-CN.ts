@@ -437,6 +437,10 @@ export default {
           active: "正在抓取 {count} 个网页",
           complete: "抓取了 {count} 个网页",
         },
+        presentFile: {
+          active: "正在打开 {count} 个文件",
+          complete: "打开了 {count} 个文件",
+        },
         write: {
           active: "正在写入 {count} 个文件",
           complete: "写入了 {count} 个文件",
@@ -451,6 +455,7 @@ export default {
         read: "读取",
         search: "搜索",
         fetch: "网页抓取",
+        presentFile: "打开文件",
         write: "写入",
       },
       toolParams: {

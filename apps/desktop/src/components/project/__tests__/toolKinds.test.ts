@@ -1,4 +1,4 @@
-import { MonitorCogIcon, PanelTopIcon } from "@lucide/vue";
+import { EyeIcon, MonitorCogIcon, PanelTopIcon } from "@lucide/vue";
 import { describe, expect, it } from "vitest";
 import { TOOL_KIND_ICON, toolKind } from "../toolKinds";
 
@@ -9,5 +9,10 @@ describe("Computer Use tool kinds", () => {
     expect(toolKind("browser_snapshot")).toBe("browser");
     expect(TOOL_KIND_ICON.computer).toBe(MonitorCogIcon);
     expect(TOOL_KIND_ICON.browser).toBe(PanelTopIcon);
+  });
+
+  it("uses a dedicated kind for presented files", () => {
+    expect(toolKind("ui_present_file")).toBe("presentFile");
+    expect(TOOL_KIND_ICON.presentFile).toBe(EyeIcon);
   });
 });

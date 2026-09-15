@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils";
-import { ShieldBanIcon } from "@lucide/vue";
+import { EyeIcon, ShieldBanIcon } from "@lucide/vue";
 import { describe, expect, it } from "vitest";
 import { createAppI18n } from "@/app/i18n";
 import type { PineToolCall } from "@/shared/sessions";
@@ -134,6 +134,30 @@ describe("ProjectToolCallGroup", () => {
     expect(wrapper.get('button[data-slot="marker"]').text()).toContain(
       "抓取了 1 个网页",
     );
+    wrapper.unmount();
+  });
+
+  it("summarizes presented files with the dedicated icon and copy", () => {
+    const wrapper = mountGroup({
+      toolCalls: [
+        {
+          id: "t-present-1",
+          input: { path: "/tmp/report.md" },
+          name: "ui_present_file",
+          status: "complete",
+        },
+        {
+          id: "t-present-2",
+          input: { path: "/tmp/summary.pdf" },
+          name: "ui_present_file",
+          status: "complete",
+        },
+      ],
+    });
+
+    const trigger = wrapper.get('button[data-slot="marker"]');
+    expect(trigger.text()).toContain("打开了 2 个文件");
+    expect(wrapper.findAllComponents(EyeIcon)).toHaveLength(2);
     wrapper.unmount();
   });
 });

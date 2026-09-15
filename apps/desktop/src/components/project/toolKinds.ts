@@ -1,4 +1,5 @@
 import {
+  EyeIcon,
   FilePlusIcon,
   FileTextIcon,
   GlobeIcon,
@@ -10,6 +11,7 @@ import {
   WrenchIcon,
 } from "@lucide/vue";
 import type { Component } from "vue";
+import { UI_PRESENT_FILE_TOOL_NAME } from "@/shared/agent";
 import type { PineToolCall } from "@/shared/sessions";
 
 export type ToolKind =
@@ -19,6 +21,7 @@ export type ToolKind =
   | "edit"
   | "fetch"
   | "generic"
+  | "presentFile"
   | "read"
   | "search"
   | "write";
@@ -31,6 +34,7 @@ export const TOOL_KIND_ICON: Record<ToolKind, Component> = {
   edit: SquarePenIcon,
   fetch: GlobeIcon,
   generic: WrenchIcon,
+  presentFile: EyeIcon,
   read: FileTextIcon,
   search: SearchIcon,
   write: FilePlusIcon,
@@ -44,6 +48,7 @@ export const TOOL_KIND_ORDER: readonly ToolKind[] = [
   "write",
   "search",
   "fetch",
+  "presentFile",
   "computer",
   "browser",
   "bash",
@@ -52,6 +57,7 @@ export const TOOL_KIND_ORDER: readonly ToolKind[] = [
 
 export function toolKind(name: string): ToolKind {
   const normalized = name.toLowerCase().split(/[.:/]/).at(-1) ?? name;
+  if (normalized === UI_PRESENT_FILE_TOOL_NAME) return "presentFile";
   if (normalized.startsWith("browser_")) return "browser";
   if (
     [
