@@ -42,6 +42,7 @@ import {
   PINE_APPROVAL_DECISION_ENTRY,
   PINE_APPROVAL_MODE_ENTRY,
   PINE_COMPUTER_USE_ACTIVE_ENTRY,
+  PINE_SKILL_AUTHORING_ACTIVE_ENTRY,
   type PineApprovalDecision,
   type PineContextUsage,
   type PineSessionSummary,
@@ -89,6 +90,13 @@ import {
   createComputerUseExtension,
   type ComputerUseController,
 } from "./computer-use/tools";
+import {
+  ACTIVATE_SKILL_AUTHORING_TOOL_NAME,
+  INVOKE_SKILL_TOOL_NAME,
+  SKILL_AUTHORING_DYNAMIC_TOOL_NAMES,
+  createSkillToolsExtension,
+} from "./skills/tools";
+import { PineSkillRepository } from "./skills/repository";
 import {
   readPineAgentSettings,
   writeUtilityModelSelection,
@@ -351,6 +359,7 @@ interface LiveAgentSession {
   availableToolNames: string[];
   computerUseActive: boolean;
   computerUseController?: ComputerUseController;
+  skillAuthoringActive: boolean;
   tinyFishApiKey?: string;
   locale: "en-US" | "zh-CN";
   contextCompactionStrategy: PineContextCompactionStrategy;
@@ -488,6 +497,38 @@ export function computerUseActiveFromSessionEntries(
       (entry.data as { active?: unknown }).active === true
     );
   });
+}
+
+export function skillAuthoringActiveFromSessionEntries(
+  entries: readonly unknown[],
+): boolean {
+  return entries.some((value) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return false;
+    }
+    const entry = value as Record<string, unknown>;
+    return (
+      entry.type === "custom" &&
+      entry.customType === PINE_SKILL_AUTHORING_ACTIVE_ENTRY &&
+      typeof entry.data === "object" &&
+      entry.data !== null &&
+      !Array.isArray(entry.data) &&
+      (entry.data as { active?: unknown }).active === true
+    );
+  });
+}
+
+export function toolNamesForSkillAuthoringState(
+  toolNames: readonly string[],
+  active: boolean,
+): string[] {
+  if (active) return [...toolNames];
+  return toolNames.filter(
+    (name) =>
+      !SKILL_AUTHORING_DYNAMIC_TOOL_NAMES.includes(
+        name as (typeof SKILL_AUTHORING_DYNAMIC_TOOL_NAMES)[number],
+      ),
+  );
 }
 
 function textFromMessageContent(content: unknown): string {
@@ -1231,6 +1272,9 @@ export class PineAgentRuntime {
       computerUseActive: computerUseActiveFromSessionEntries(
         sessionManager.getEntries(),
       ),
+      skillAuthoringActive: skillAuthoringActiveFromSessionEntries(
+        sessionManager.getEntries(),
+      ),
       ...(location.tinyFishApiKey
         ? { tinyFishApiKey: location.tinyFishApiKey }
         : {}),
@@ -1251,6 +1295,28 @@ export class PineAgentRuntime {
       },
     });
     live.computerUseController = computerUse.controller;
+    const skillRepository = new PineSkillRepository({
+      disabledGlobalSkillsPath:
+        location.skillsSettingsPath ??
+        path.join(path.dirname(location.sessionsRoot), "skills.json"),
+      global: path.join(location.agentDir, "skills"),
+      project:
+        location.skillsRoot ??
+        path.join(path.dirname(location.sessionsRoot), "skills"),
+    });
+    const skillTools = createSkillToolsExtension({
+      repository: skillRepository,
+      getApprovalMode: () => live.approvalMode,
+      getGate: () => live.gate,
+      activated: () => {
+        if (live.skillAuthoringActive) return;
+        live.skillAuthoringActive = true;
+        live.session.sessionManager.appendCustomEntry(
+          PINE_SKILL_AUTHORING_ACTIVE_ENTRY,
+          { active: true },
+        );
+      },
+    });
     const resourceLoader = new DefaultResourceLoader({
       cwd: location.cwd,
       agentDir: location.agentDir,
@@ -1273,15 +1339,19 @@ export class PineAgentRuntime {
                   personalizedSystemPrompt,
                   live.approvalMode,
                 ) ?? personalizedSystemPrompt;
+              const skillList = skillRepository.promptList();
               return {
-                systemPrompt:
-                  systemPromptWithCurrentMonth(approvalSystemPrompt),
+                systemPrompt: `${systemPromptWithCurrentMonth(approvalSystemPrompt)}${
+                  skillList ? `\n\n${skillList}` : ""
+                }`,
               };
             });
           },
         },
         computerUse.extension,
+        skillTools.extension,
       ],
+      noSkills: true,
       noThemes: true,
       systemPromptOverride: () => systemPromptForPlatform(PINE_SYSTEM_PROMPT),
     });
@@ -1309,6 +1379,9 @@ export class PineAgentRuntime {
       ...customTools.map((tool) => tool.name),
       ACTIVATE_COMPUTER_USE_TOOL_NAME,
       ...COMPUTER_USE_DYNAMIC_TOOL_NAMES,
+      INVOKE_SKILL_TOOL_NAME,
+      ACTIVATE_SKILL_AUTHORING_TOOL_NAME,
+      ...SKILL_AUTHORING_DYNAMIC_TOOL_NAMES,
     ];
 
     const { session } = await createAgentSession({
@@ -1444,7 +1517,10 @@ export class PineAgentRuntime {
     const activeToolNames = live.session.getActiveToolNames();
     const nextToolNames = toolNamesForApprovalMode(
       toolNamesForComputerUseState(
-        live.availableToolNames,
+        toolNamesForSkillAuthoringState(
+          live.availableToolNames,
+          live.skillAuthoringActive,
+        ),
         live.computerUseActive,
       ),
       live.approvalMode,

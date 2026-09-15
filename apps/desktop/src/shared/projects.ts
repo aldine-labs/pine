@@ -67,6 +67,16 @@ import type {
 import type { PineWindowApi } from "./window";
 import type { PineUserProfile, SetUserProfileResult } from "./userProfile";
 import type {
+  ListSkillsResult,
+  ReadSkillResult,
+  RemoveSkillResult,
+  SkillIdentityRequest,
+  SkillScopeRequest,
+  WriteSkillRequest,
+  SetGlobalSkillEnabledRequest,
+  SetGlobalSkillEnabledResult,
+} from "./skills";
+import type {
   SetTinyFishApiKeyRequest,
   SetTinyFishApiKeyResult,
   TinyFishCredentialStatus,
@@ -78,6 +88,8 @@ export const PROJECT_SESSIONS_DIRECTORY = "sessions" as const;
 export const PROJECT_CACHE_DIRECTORY = "cache" as const;
 /** Pine-managed storage for attachments pasted without a filesystem path. */
 export const PROJECT_ATTACHMENTS_DIRECTORY = "attachments" as const;
+export const PROJECT_SKILLS_DIRECTORY = "skills" as const;
+export const PROJECT_SKILLS_SETTINGS_FILE = "skills.json" as const;
 
 export const LIST_PROJECTS_CHANNEL = "project:list" as const;
 export const CREATE_PROJECT_CHANNEL = "project:create" as const;
@@ -190,6 +202,14 @@ export interface PineDesktopApi extends PineWindowApi {
     entries: ProjectEntryReference[],
   ) => Promise<PickAttachmentsResult>;
   listProjects: () => Promise<ListProjectsResult>;
+  listSkills: (request: SkillScopeRequest) => Promise<ListSkillsResult>;
+  readSkill: (request: SkillIdentityRequest) => Promise<ReadSkillResult>;
+  createSkill: (request: WriteSkillRequest) => Promise<ReadSkillResult>;
+  editSkill: (request: WriteSkillRequest) => Promise<ReadSkillResult>;
+  removeSkill: (request: SkillIdentityRequest) => Promise<RemoveSkillResult>;
+  setGlobalSkillEnabled: (
+    request: SetGlobalSkillEnabledRequest,
+  ) => Promise<SetGlobalSkillEnabledResult>;
   getModelCatalog: () => Promise<PineModelCatalog>;
   lookupModelMetadata: (
     request: LookupModelMetadataRequest,

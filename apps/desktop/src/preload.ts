@@ -69,6 +69,14 @@ import {
   type SelectUtilityModelRequest,
 } from "./shared/models";
 import {
+  CREATE_SKILL_CHANNEL,
+  EDIT_SKILL_CHANNEL,
+  LIST_SKILLS_CHANNEL,
+  READ_SKILL_CHANNEL,
+  REMOVE_SKILL_CHANNEL,
+  SET_GLOBAL_SKILL_ENABLED_CHANNEL,
+} from "./shared/skills";
+import {
   CREATE_PROJECT_CHANNEL,
   CLOSE_PROJECT_CHANNEL,
   DELETE_PROJECT_CHANNEL,
@@ -246,6 +254,13 @@ const pineApi: PineDesktopApi = {
     ipcRenderer.invoke(PROJECT_FILE_ATTACHMENTS_CHANNEL, entries),
   listProjects: (): Promise<ListProjectsResult> =>
     ipcRenderer.invoke(LIST_PROJECTS_CHANNEL),
+  listSkills: (request) => ipcRenderer.invoke(LIST_SKILLS_CHANNEL, request),
+  readSkill: (request) => ipcRenderer.invoke(READ_SKILL_CHANNEL, request),
+  createSkill: (request) => ipcRenderer.invoke(CREATE_SKILL_CHANNEL, request),
+  editSkill: (request) => ipcRenderer.invoke(EDIT_SKILL_CHANNEL, request),
+  removeSkill: (request) => ipcRenderer.invoke(REMOVE_SKILL_CHANNEL, request),
+  setGlobalSkillEnabled: (request) =>
+    ipcRenderer.invoke(SET_GLOBAL_SKILL_ENABLED_CHANNEL, request),
   getModelCatalog: (): Promise<PineModelCatalog> =>
     ipcRenderer.invoke(GET_MODEL_CATALOG_CHANNEL),
   lookupModelMetadata: (

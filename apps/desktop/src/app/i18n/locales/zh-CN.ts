@@ -233,6 +233,16 @@ export default {
       folderAccess: "{name} 的访问权限",
     },
   },
+  skills: {
+    title: "Skills",
+    description: "管理全局和项目空间指令。全局 Skill 开关仅对当前项目生效。",
+    scope: { global: "全局", project: "项目" },
+    globalEnabledLabel: "在当前项目中使用 {name}",
+    new: "新建 Skill",
+    empty: "这个空间还没有 Skill",
+    namePlaceholder: "skill-name",
+    contentPlaceholder: "输入完整的 SKILL.md 内容",
+  },
   sessions: {
     searchTitle: "搜索会话",
     searchDescription: "按标题和会话内容搜索当前项目",
@@ -264,6 +274,7 @@ export default {
   project: {
     closeProject: "关闭项目",
     preferences: "项目设置",
+    skills: "Skills",
     preview: {
       metadata: "文件元数据",
       file: "文件",
@@ -805,6 +816,10 @@ export default {
     },
   },
   errors: {
+    skills: {
+      title: "无法更新 Skills",
+      description: "请检查 Skill 名称和 SKILL.md frontmatter 后重试",
+    },
     customModel: {
       title: "无法添加自定义模型",
       description: "请检查端点和模型设置后重试",

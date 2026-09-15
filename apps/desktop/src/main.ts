@@ -38,6 +38,7 @@ import {
 } from "./main/windowsSandbox";
 import { ModelMetadataService } from "./main/modelMetadata";
 import { ProjectRepository } from "./main/projects/projectRepository";
+import { PineSkillRepository } from "./agent/skills/repository";
 import {
   readPineAgentSettings,
   writeContextCompactionStrategy,
@@ -122,6 +123,19 @@ import {
   type PickProjectFoldersResult,
   type ProjectResult,
 } from "./shared/projects";
+import {
+  CREATE_SKILL_CHANNEL,
+  EDIT_SKILL_CHANNEL,
+  LIST_SKILLS_CHANNEL,
+  READ_SKILL_CHANNEL,
+  REMOVE_SKILL_CHANNEL,
+  SET_GLOBAL_SKILL_ENABLED_CHANNEL,
+  type ListSkillsResult,
+  type PineSkillScope,
+  type ReadSkillResult,
+  type RemoveSkillResult,
+  type SetGlobalSkillEnabledResult,
+} from "./shared/skills";
 import {
   GET_TINYFISH_CREDENTIAL_STATUS_CHANNEL,
   SET_TINYFISH_API_KEY_CHANNEL,
@@ -366,6 +380,12 @@ const ProjectFolderInputSchema = z.object({
   name: z.string().trim().min(1).max(100),
   path: z.string().min(1).max(4_096),
 });
+const SkillNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const ProjectMutationSchema = z
   .object({
     defaultFolderId: z.uuid(),
@@ -388,6 +408,31 @@ const PickProjectFoldersRequestSchema = z.object({
   mode: z.enum(["context", "default"]),
 });
 const ProjectIdRequestSchema = z.object({ id: z.uuid() });
+const SkillScopeRequestSchema = z
+  .object({
+    projectId: z.uuid().optional(),
+    scope: z.enum(["global", "project"]),
+  })
+  .superRefine((request, context) => {
+    if (request.scope === "project" && !request.projectId) {
+      context.addIssue({
+        code: "custom",
+        message: "Project scope requires a project ID.",
+        path: ["projectId"],
+      });
+    }
+  });
+const SkillIdentityRequestSchema = SkillScopeRequestSchema.safeExtend({
+  name: SkillNameSchema,
+});
+const WriteSkillRequestSchema = SkillIdentityRequestSchema.safeExtend({
+  content: z.string().trim().min(1).max(1_000_000),
+});
+const SetGlobalSkillEnabledRequestSchema = z.object({
+  enabled: z.boolean(),
+  name: SkillNameSchema,
+  projectId: z.uuid(),
+});
 const ProjectFilePreviewRequestSchema = ProjectEntryReferenceSchema.extend({
   projectId: z.uuid(),
 });
@@ -745,6 +790,39 @@ function getPineAgentDirectory(): string {
     throw new Error("Pine agent storage is not ready.");
   }
   return pineAgentDirectory;
+}
+
+async function skillRepositoryFor(
+  scope: PineSkillScope,
+  projectId?: string,
+): Promise<PineSkillRepository> {
+  const repository = getProjectRepository();
+  if (scope === "project" && !projectId) {
+    throw new Error("Project scope requires a project ID.");
+  }
+
+  let projectSkillsRoot = path.join(
+    getPineAgentDirectory(),
+    ".no-project-skills",
+  );
+  let disabledGlobalSkillsPath: string | undefined;
+  if (projectId) {
+    await repository.get(projectId);
+    const dataPaths = repository.dataPaths(projectId);
+    disabledGlobalSkillsPath =
+      dataPaths.skillsSettingsPath ??
+      path.join(dataPaths.projectRoot, "skills.json");
+    if (scope === "project") {
+      projectSkillsRoot =
+        dataPaths.skillsRoot ?? path.join(dataPaths.projectRoot, "skills");
+    }
+  }
+
+  return new PineSkillRepository({
+    ...(disabledGlobalSkillsPath ? { disabledGlobalSkillsPath } : {}),
+    global: path.join(getPineAgentDirectory(), "skills"),
+    project: projectSkillsRoot,
+  });
 }
 
 function getAppUpdater(): AppUpdater {
@@ -1295,11 +1373,77 @@ ipcMain.handle(
 
 ipcMain.handle(
   CREATE_PROJECT_CHANNEL,
-  async (_event, request: unknown): Promise<ProjectResult> => ({
-    project: await getProjectRepository().create(
-      ProjectMutationSchema.parse(request),
-    ),
-  }),
+  async (_event, request: unknown): Promise<ProjectResult> => {
+    const input = ProjectMutationSchema.parse(request);
+    return { project: await getProjectRepository().create(input) };
+  },
+);
+
+ipcMain.handle(
+  LIST_SKILLS_CHANNEL,
+  async (_event, request: unknown): Promise<ListSkillsResult> => {
+    const parsed = SkillScopeRequestSchema.parse(request);
+    return (await skillRepositoryFor(parsed.scope, parsed.projectId)).list(
+      parsed.scope,
+    );
+  },
+);
+
+ipcMain.handle(
+  READ_SKILL_CHANNEL,
+  async (_event, request: unknown): Promise<ReadSkillResult> => {
+    const parsed = SkillIdentityRequestSchema.parse(request);
+    return (await skillRepositoryFor(parsed.scope, parsed.projectId)).read(
+      parsed.scope,
+      parsed.name,
+    );
+  },
+);
+
+ipcMain.handle(
+  CREATE_SKILL_CHANNEL,
+  async (_event, request: unknown): Promise<ReadSkillResult> => {
+    const parsed = WriteSkillRequestSchema.parse(request);
+    return (await skillRepositoryFor(parsed.scope, parsed.projectId)).create(
+      parsed.scope,
+      parsed.name,
+      parsed.content,
+    );
+  },
+);
+
+ipcMain.handle(
+  EDIT_SKILL_CHANNEL,
+  async (_event, request: unknown): Promise<ReadSkillResult> => {
+    const parsed = WriteSkillRequestSchema.parse(request);
+    return (await skillRepositoryFor(parsed.scope, parsed.projectId)).edit(
+      parsed.scope,
+      parsed.name,
+      parsed.content,
+    );
+  },
+);
+
+ipcMain.handle(
+  REMOVE_SKILL_CHANNEL,
+  async (_event, request: unknown): Promise<RemoveSkillResult> => {
+    const parsed = SkillIdentityRequestSchema.parse(request);
+    return {
+      removed: await (
+        await skillRepositoryFor(parsed.scope, parsed.projectId)
+      ).remove(parsed.scope, parsed.name),
+    };
+  },
+);
+
+ipcMain.handle(
+  SET_GLOBAL_SKILL_ENABLED_CHANNEL,
+  async (_event, request: unknown): Promise<SetGlobalSkillEnabledResult> => {
+    const parsed = SetGlobalSkillEnabledRequestSchema.parse(request);
+    const repository = await skillRepositoryFor("project", parsed.projectId);
+    await repository.setGlobalSkillEnabled(parsed.name, parsed.enabled);
+    return { updated: true };
+  },
 );
 
 ipcMain.handle(CLOSE_PROJECT_CHANNEL, async (event): Promise<void> => {
@@ -1361,7 +1505,13 @@ ipcMain.handle(
 ipcMain.handle(
   UPDATE_PROJECT_CHANNEL,
   async (event, request: unknown): Promise<ProjectResult> => {
-    const { id, ...input } = UpdateProjectRequestSchema.parse(request);
+    const parsed = UpdateProjectRequestSchema.parse(request);
+    const { id } = parsed;
+    const input = {
+      defaultFolderId: parsed.defaultFolderId,
+      folders: parsed.folders,
+      name: parsed.name,
+    };
     const repository = getProjectRepository();
     const project = await repository.update(id, input);
     if (getProjectRuntimes().isOpen(event.sender.id, id)) {

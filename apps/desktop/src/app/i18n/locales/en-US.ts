@@ -247,6 +247,17 @@ export default {
       folderAccess: "Access for {name}",
     },
   },
+  skills: {
+    title: "Skills",
+    description:
+      "Manage global and project instructions. Global switches apply only to this project.",
+    scope: { global: "Global", project: "Project" },
+    globalEnabledLabel: "Use {name} in this project",
+    new: "New Skill",
+    empty: "No Skills in this space",
+    namePlaceholder: "skill-name",
+    contentPlaceholder: "Enter complete SKILL.md content",
+  },
   sessions: {
     searchTitle: "Search sessions",
     searchDescription: "Search titles and conversation content in this Project",
@@ -280,6 +291,7 @@ export default {
   project: {
     closeProject: "Close project",
     preferences: "Project settings",
+    skills: "Skills",
     preview: {
       metadata: "File metadata",
       file: "File",
@@ -828,6 +840,11 @@ export default {
     },
   },
   errors: {
+    skills: {
+      title: "Unable to update Skills",
+      description:
+        "Check the Skill name and SKILL.md frontmatter, then try again",
+    },
     customModel: {
       title: "Unable to add custom model",
       description: "Check the endpoint and model settings, then try again",

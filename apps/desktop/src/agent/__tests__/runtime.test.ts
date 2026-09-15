@@ -12,6 +12,7 @@ import {
   authorizationGrantsFromSessionEntries,
   buildGateTurnContext,
   computerUseActiveFromSessionEntries,
+  skillAuthoringActiveFromSessionEntries,
   judgeStreamOptions,
   normalizeGeneratedTitle,
   parseJudgeRulings,
@@ -23,6 +24,7 @@ import {
   titleFromAssistantMessage,
   toolNamesForApprovalMode,
   toolNamesForComputerUseState,
+  toolNamesForSkillAuthoringState,
 } from "../runtime";
 import { serializeAttachmentMessage } from "../../shared/attachments";
 import { ACTIVATE_COMPUTER_USE_TOOL_NAME } from "../computer-use/tools";
@@ -418,6 +420,38 @@ describe("toolNamesForComputerUseState", () => {
         },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("toolNamesForSkillAuthoringState", () => {
+  const tools = [
+    "read",
+    "invoke_skill",
+    "activate_skill_authoring",
+    "create_skill",
+    "edit_skill",
+    "remove_skill",
+  ];
+
+  it("keeps invocation and activation visible before authoring is activated", () => {
+    expect(toolNamesForSkillAuthoringState(tools, false)).toEqual([
+      "read",
+      "invoke_skill",
+      "activate_skill_authoring",
+    ]);
+  });
+
+  it("restores mutation tools from session metadata", () => {
+    expect(toolNamesForSkillAuthoringState(tools, true)).toEqual(tools);
+    expect(
+      skillAuthoringActiveFromSessionEntries([
+        {
+          type: "custom",
+          customType: "pine.skill-authoring-active",
+          data: { active: true },
+        },
+      ]),
+    ).toBe(true);
   });
 });
 

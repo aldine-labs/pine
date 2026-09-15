@@ -16,6 +16,10 @@ export const PINE_APPROVAL_MODE_ENTRY = "pine.approval-mode" as const;
 export const PINE_COMPUTER_USE_ACTIVE_ENTRY =
   "pine.computer-use-active" as const;
 
+/** Custom session entry recording that Skill Authoring was activated. */
+export const PINE_SKILL_AUTHORING_ACTIVE_ENTRY =
+  "pine.skill-authoring-active" as const;
+
 /** Audit/authorization records used by the automatic approval context. */
 export const PINE_AUTHORIZATION_GRANT_ENTRY =
   "pine.authorization-grant" as const;

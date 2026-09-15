@@ -16,6 +16,8 @@ import {
   PROJECT_ATTACHMENTS_DIRECTORY,
   PROJECT_METADATA_FILE,
   PROJECT_SESSIONS_DIRECTORY,
+  PROJECT_SKILLS_DIRECTORY,
+  PROJECT_SKILLS_SETTINGS_FILE,
   type PineProject,
   type ProjectFolderInput,
   type ProjectMutationInput,
@@ -48,6 +50,8 @@ export interface ProjectDataPaths {
   cacheRoot: string;
   projectRoot: string;
   sessionsRoot: string;
+  skillsRoot?: string;
+  skillsSettingsPath?: string;
 }
 
 function isFileSystemError(error: unknown, code: string): boolean {
@@ -216,6 +220,8 @@ export class ProjectRepository {
       cacheRoot: path.join(projectRoot, PROJECT_CACHE_DIRECTORY),
       projectRoot,
       sessionsRoot: path.join(projectRoot, PROJECT_SESSIONS_DIRECTORY),
+      skillsRoot: path.join(projectRoot, PROJECT_SKILLS_DIRECTORY),
+      skillsSettingsPath: path.join(projectRoot, PROJECT_SKILLS_SETTINGS_FILE),
     };
   }
 

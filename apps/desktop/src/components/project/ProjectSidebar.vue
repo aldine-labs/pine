@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { Files, Info, MessagesSquare, Settings2 } from "@lucide/vue";
+import {
+  Files,
+  Info,
+  LibraryIcon,
+  MessagesSquare,
+  Settings2,
+} from "@lucide/vue";
 import { storeToRefs } from "pinia";
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   useProjectSidebarStore,
@@ -24,6 +30,7 @@ import { useUpdaterStore } from "@/stores/updater";
 import ProjectFileTree from "./ProjectFileTree.vue";
 import ProjectSessionList from "./ProjectSessionList.vue";
 import RetainedPanel from "./RetainedPanel.vue";
+import SkillManagerDialog from "@/components/skills/SkillManagerDialog.vue";
 
 const { t } = useI18n();
 const emit = defineEmits<{
@@ -37,6 +44,7 @@ const { isAvailable } = storeToRefs(useUpdaterStore());
 const sidebarStore = useProjectSidebarStore();
 const route = useRoute();
 const router = useRouter();
+const isSkillManagerOpen = ref(false);
 const activeTab = computed<ProjectSidebarTab>({
   get() {
     const requested = route.query.sidebar;
@@ -118,6 +126,15 @@ watch(
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
+          <SidebarMenuButton
+            data-testid="project-skills-button"
+            @click="isSkillManagerOpen = true"
+          >
+            <LibraryIcon aria-hidden="true" />
+            <span>{{ t("project.skills") }}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
           <SidebarMenuButton @click="emit('editProject')">
             <Settings2 aria-hidden="true" />
             <span>{{ t("project.preferences") }}</span>
@@ -127,5 +144,11 @@ watch(
     </SidebarFooter>
 
     <SidebarRail />
+
+    <SkillManagerDialog
+      v-if="activeProject"
+      v-model:open="isSkillManagerOpen"
+      :project-id="activeProject.id"
+    />
   </Sidebar>
 </template>

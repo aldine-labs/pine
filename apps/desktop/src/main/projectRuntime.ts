@@ -695,6 +695,12 @@ export class ProjectRuntimeRegistry {
           access,
           path: folderPath,
         })),
+      skillsRoot:
+        runtime.dataPaths.skillsRoot ??
+        path.join(runtime.dataPaths.projectRoot, "skills"),
+      skillsSettingsPath:
+        runtime.dataPaths.skillsSettingsPath ??
+        path.join(runtime.dataPaths.projectRoot, "skills.json"),
       sessionsRoot: runtime.dataPaths.sessionsRoot,
       ...(tinyFishApiKey ? { tinyFishApiKey } : {}),
     };

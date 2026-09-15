@@ -26,6 +26,10 @@ export interface AgentSessionLocation {
   agentDir: string;
   cwd: string;
   folders: AgentFolderGrant[];
+  /** Pine-managed project skill directory, outside the user's shared folders. */
+  skillsRoot?: string;
+  /** Project-specific global Skill enablement settings. */
+  skillsSettingsPath?: string;
   sessionsRoot: string;
   /** In-memory TinyFish credential; never written to a session file. */
   tinyFishApiKey?: string;

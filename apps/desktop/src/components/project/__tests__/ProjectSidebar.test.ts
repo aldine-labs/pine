@@ -5,6 +5,7 @@ import { beforeEach, expect, it } from "vitest";
 import { createAppI18n } from "@/app/i18n";
 import { useProjectStore } from "@/stores/project";
 import { useProjectSidebarStore } from "@/stores/projectSidebar";
+import { useUpdaterStore } from "@/stores/updater";
 import ProjectSidebar from "../ProjectSidebar.vue";
 
 beforeEach(() => localStorage.clear());
@@ -22,6 +23,12 @@ it("restores the project tab and persists navigation without changing the active
     folders: [],
   };
   const sidebarStore = useProjectSidebarStore();
+  useUpdaterStore().update = {
+    changelog: "Changes",
+    internalVersion: "2.0.0",
+    publishedAt: "2026-09-15",
+    version: "2.0.0",
+  };
   sidebarStore.setTab("one", "files");
   sidebarStore.setTab("two", "files");
   const router = createRouter({
@@ -46,6 +53,12 @@ it("restores the project tab and persists navigation without changing the active
         SidebarRail: true,
         ProjectFileTree: { template: "<div data-files-scroll />" },
         ProjectSessionList: { template: "<div data-sessions-scroll />" },
+        SkillManagerDialog: {
+          props: ["open", "projectId"],
+          emits: ["update:open"],
+          template:
+            '<div data-skill-manager :data-open="open" :data-project-id="projectId" />',
+        },
       },
     },
   });
@@ -75,6 +88,17 @@ it("restores the project tab and persists navigation without changing the active
   await flushPromises();
   expect(wrapper.get("[data-sessions-scroll]").element).toBe(sessions);
   expect(sessions.scrollTop).toBe(720);
+  const footerText = wrapper.text();
+  expect(footerText.indexOf("新版本 Pine 可用")).toBeLessThan(
+    footerText.indexOf("Skills"),
+  );
+  expect(footerText.indexOf("Skills")).toBeLessThan(
+    footerText.indexOf("项目设置"),
+  );
+  await wrapper.get("[data-testid='project-skills-button']").trigger("click");
+  expect(wrapper.get("[data-skill-manager]").attributes("data-open")).toBe(
+    "true",
+  );
   projectStore.activeProject = { ...projectStore.activeProject, id: "two" };
   await router.push("/projects/two");
   await flushPromises();
