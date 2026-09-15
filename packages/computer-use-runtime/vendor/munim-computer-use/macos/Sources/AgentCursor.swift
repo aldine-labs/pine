@@ -25,7 +25,7 @@ import Foundation
 // not a wall-clock idle after the last move. The overlay stays up across
 // mid-task pauses; it fades once desktop tools/call traffic stops.
 //
-// The look is the soft translucent bubble (lavender glow, rounded
+// The look is the soft translucent bubble (Pine olive glow, rounded
 // arrow, spring follow with tilt/squash, idle breathe) — never a
 // system-style pointer. No click ring and no settle wobble.
 
@@ -930,7 +930,7 @@ private final class OverlayController: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Soft translucent bubble: lavender glow, rounded arrow, path heading,
+/// Soft translucent bubble: Pine olive glow, rounded arrow, path heading,
 /// idle breathe. No click ring.
 private final class BubbleView: NSView {
     var phase: CGFloat = 0
@@ -943,17 +943,20 @@ private final class BubbleView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         let tip = CGPoint(x: OverlayController.hotspot, y: bounds.maxY - OverlayController.hotspot)
 
-        let lavender = NSColor(calibratedRed: 0.76, green: 0.72, blue: 0.99, alpha: 1)
-        let purple = NSColor(calibratedRed: 0.58, green: 0.52, blue: 0.94, alpha: 1)
+        // Keep the cursor in Pine's warm olive/neutral palette. The muted
+        // glow reads on both light and dark host applications without
+        // competing with the user's real cursor.
+        let pineGlow = NSColor(calibratedRed: 0.67, green: 0.68, blue: 0.55, alpha: 1)
+        let pineAccent = NSColor(calibratedRed: 0.46, green: 0.48, blue: 0.33, alpha: 1)
         let breathe = 1 + 0.03 * sin(phase)
 
         if let wash = CGGradient(
             colorsSpace: CGColorSpaceCreateDeviceRGB(),
             colors: [
-                lavender.withAlphaComponent(0.72).cgColor,
-                lavender.withAlphaComponent(0.38).cgColor,
-                purple.withAlphaComponent(0.14).cgColor,
-                purple.withAlphaComponent(0).cgColor,
+                pineGlow.withAlphaComponent(0.72).cgColor,
+                pineGlow.withAlphaComponent(0.38).cgColor,
+                pineAccent.withAlphaComponent(0.14).cgColor,
+                pineAccent.withAlphaComponent(0).cgColor,
             ] as CFArray,
             locations: [0, 0.30, 0.65, 1]
         ) {
@@ -997,8 +1000,8 @@ private final class BubbleView: NSView {
 
         ctx.saveGState()
         arrow.addClip()
-        let deep = NSColor(calibratedRed: 0.22, green: 0.20, blue: 0.38, alpha: 0.96)
-        let body = NSColor(calibratedRed: 0.34, green: 0.32, blue: 0.52, alpha: 0.96)
+        let deep = NSColor(calibratedRed: 0.16, green: 0.17, blue: 0.11, alpha: 0.96)
+        let body = NSColor(calibratedRed: 0.36, green: 0.38, blue: 0.25, alpha: 0.96)
         if let fill = NSGradient(starting: deep, ending: body) {
             fill.draw(in: arrow.bounds, angle: 40)
         }
@@ -1008,7 +1011,7 @@ private final class BubbleView: NSView {
         ctx.setShadow(
             offset: .zero,
             blur: 6,
-            color: lavender.withAlphaComponent(0.55).cgColor
+            color: pineGlow.withAlphaComponent(0.55).cgColor
         )
         arrow.lineWidth = 2.8
         NSColor(calibratedWhite: 1.0, alpha: 1).setStroke()

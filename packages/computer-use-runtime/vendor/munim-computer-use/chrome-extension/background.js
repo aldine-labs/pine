@@ -592,7 +592,8 @@ async function clickAt(tabId, x, y) {
 /// max z-index, so it is purely decorative and cannot intercept anything.
 ///
 /// Uses the PNG rendered from BubbleView in AgentCursor.swift (not a hand-traced
-/// SVG) so Chrome and desktop stay pixel-matched: same glow, fill, rim, shape.
+/// SVG) so Chrome and desktop share the same glow, fill, rim, and shape. The
+/// page overlay applies the Pine palette filter below to the vendored artwork.
 /// The overlay asset is the 2x render (224px shown at 112 CSS px) so it stays as
 /// crisp as the desktop panel on Retina/HiDPI displays; the 1x file is kept for
 /// the tab favicon.
@@ -601,6 +602,9 @@ async function clickAt(tabId, x, y) {
 /// short idle after the last pixel move).
 const CURSOR_IMG_URL = chrome.runtime.getURL("icons/cursor-224.png");
 const CURSOR_HOTSPOT = 56; // OverlayController.hotspot — tip at centre of 112×112
+// The vendored artwork is purple; this filter maps its chroma to Pine's warm
+// olive neutral palette while preserving the white rim and alpha edges.
+const CURSOR_PINE_FILTER = "hue-rotate(180deg) saturate(0.55) brightness(0.94)";
 const CURSOR_FADE_IN_MS = 500;
 const CURSOR_FADE_OUT_MS = 350;
 /** Match desktop `COMPUTER_USE_AGENT_CURSOR_TASK_FADE_SECS` default (8s). */
@@ -634,7 +638,8 @@ const PAINT_CURSOR_JS = `
       img.alt = '';
       img.draggable = false;
       img.style.cssText = 'display:block;width:112px;height:112px;' +
-        'transform-origin:' + hotspot + 'px ' + hotspot + 'px;will-change:transform;';
+        'transform-origin:' + hotspot + 'px ' + hotspot + 'px;will-change:transform;' +
+        'filter:${CURSOR_PINE_FILTER};';
       el.appendChild(img);
       (document.documentElement || document.body).appendChild(el);
       el.__cu = { x: x, y: y, tilt: 0, arc: 1, raf: 0, breatheRaf: 0, phase: 0 };

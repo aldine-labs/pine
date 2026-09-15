@@ -1,7 +1,7 @@
 //! Windows agent-cursor overlay — Mac parity.
 //!
 //! Matches `macos/Sources/AgentCursor.swift`:
-//! soft lavender glow, rounded arrow, curved Bezier flight with heading that
+//! soft Pine olive glow, rounded arrow, curved Bezier flight with heading that
 //! follows the path tangent (frozen on land — no upright settle wiggle),
 //! idle breathe. No click ring. Disabled with `COMPUTER_USE_AGENT_CURSOR=0`.
 //!
@@ -746,7 +746,7 @@ fn put_px(buf: &mut [u8], x: i32, y: i32, r: u8, g: u8, b: u8, a: u8) {
 }
 
 fn radial_glow(buf: &mut [u8], cx: f64, cy: f64, radius: f64) {
-    // lavender → purple → transparent, matching Mac gradient stops.
+    // Pine olive → muted accent → transparent, matching Mac gradient stops.
     let min_x = (cx - radius).floor() as i32;
     let max_x = (cx + radius).ceil() as i32;
     let min_y = (cy - radius).floor() as i32;
@@ -756,16 +756,16 @@ fn radial_glow(buf: &mut [u8], cx: f64, cy: f64, radius: f64) {
             let dx = x as f64 + 0.5 - cx;
             let dy = y as f64 + 0.5 - cy;
             let t = ((dx * dx + dy * dy).sqrt() / radius).clamp(0.0, 1.0);
-            // stops: 0→0.72 lavender, 0.30→0.38, 0.65→0.14 purple, 1→0
+            // stops: 0→0.72 Pine glow, 0.30→0.38, 0.65→0.14 accent, 1→0
             let (rf, gf, bf, af) = if t < 0.30 {
                 let u = t / 0.30;
-                lerp4((0.76, 0.72, 0.99, 0.72), (0.76, 0.72, 0.99, 0.38), u)
+                lerp4((0.67, 0.68, 0.55, 0.72), (0.67, 0.68, 0.55, 0.38), u)
             } else if t < 0.65 {
                 let u = (t - 0.30) / 0.35;
-                lerp4((0.76, 0.72, 0.99, 0.38), (0.58, 0.52, 0.94, 0.14), u)
+                lerp4((0.67, 0.68, 0.55, 0.38), (0.46, 0.48, 0.33, 0.14), u)
             } else {
                 let u = (t - 0.65) / 0.35;
-                lerp4((0.58, 0.52, 0.94, 0.14), (0.58, 0.52, 0.94, 0.0), u)
+                lerp4((0.46, 0.48, 0.33, 0.14), (0.46, 0.48, 0.33, 0.0), u)
             };
             if af > 0.002 {
                 put_px(
@@ -799,7 +799,7 @@ unsafe fn render(fb: &mut Framebuf, state: &Anim) {
     let tip = (HOTSPOT, HOTSPOT);
     let breathe = 1.0 + 0.03 * state.phase.sin();
 
-    // Soft lavender wash with idle breathe (no click ring).
+    // Soft Pine olive wash with idle breathe (no click ring).
     radial_glow(buf, tip.0 + 6.0, tip.1 + 9.0, 34.0 * breathe);
 
     // Pure 2D: heading rotation only — no squash/stretch.
@@ -830,6 +830,29 @@ fn cursor_rgba() -> &'static [(u8, u8, u8, u8)] {
             })
             .collect()
     })
+}
+
+/// Recolor the vendored purple cursor sprite at render time. Keeping the
+/// upstream PNG intact makes license/source updates straightforward while
+/// allowing native overlays to share Pine's warm olive palette with macOS.
+fn tint_cursor_rgb(r: f64, g: f64, b: f64) -> (u8, u8, u8) {
+    let blue_bias = (b - g).max(b - r);
+    if blue_bias < 8.0 {
+        return (
+            r.clamp(0.0, 255.0) as u8,
+            g.clamp(0.0, 255.0) as u8,
+            b.clamp(0.0, 255.0) as u8,
+        );
+    }
+
+    let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    let tone = ((luminance - 80.0) / 170.0).clamp(0.0, 1.0);
+    let lerp = |dark: f64, light: f64| dark + (light - dark) * tone;
+    (
+        lerp(41.0, 173.0).round() as u8,
+        lerp(44.0, 175.0).round() as u8,
+        lerp(29.0, 153.0).round() as u8,
+    )
 }
 
 fn blit_cursor_png(buf: &mut [u8], tip: (f64, f64), sx: f64, sy: f64, cos_t: f64, sin_t: f64) {
@@ -888,13 +911,18 @@ fn blit_cursor_png(buf: &mut [u8], tip: (f64, f64), sx: f64, sy: f64, cos_t: f64
             );
             let a = mix(r0.3, r1.3, fy);
             if a > 1.0 {
+                let (r, g, b) = tint_cursor_rgb(
+                    mix(r0.0, r1.0, fy),
+                    mix(r0.1, r1.1, fy),
+                    mix(r0.2, r1.2, fy),
+                );
                 put_px(
                     buf,
                     x,
                     y,
-                    mix(r0.0, r1.0, fy) as u8,
-                    mix(r0.1, r1.1, fy) as u8,
-                    mix(r0.2, r1.2, fy) as u8,
+                    r,
+                    g,
+                    b,
                     a as u8,
                 );
             }
