@@ -8,6 +8,7 @@ import {
   attachedPathsFromSessionEntries,
   authorizationGrantsFromSessionEntries,
   buildGateTurnContext,
+  computerUseActiveFromSessionEntries,
   judgeStreamOptions,
   normalizeGeneratedTitle,
   parseJudgeRulings,
@@ -337,6 +338,27 @@ describe("toolNamesForComputerUseState", () => {
   it("restores every registered Computer Use tool after activation", () => {
     expect(toolNamesForComputerUseState(tools, true)).toEqual(tools);
   });
+
+  it("restores activation from session metadata", () => {
+    expect(
+      computerUseActiveFromSessionEntries([
+        {
+          type: "custom",
+          customType: "pine.computer-use-active",
+          data: { active: true },
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      computerUseActiveFromSessionEntries([
+        {
+          type: "custom",
+          customType: "pine.computer-use-active",
+          data: { active: false },
+        },
+      ]),
+    ).toBe(false);
+  });
 });
 
 describe("parseJudgeRulings", () => {
@@ -432,6 +454,113 @@ describe("PineAgentRuntime", () => {
         ACTIVATE_COMPUTER_USE_TOOL_NAME,
       );
       expect(agentSession?.getActiveToolNames()).not.toContain("list_apps");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps Computer Use active after a turn settles", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "pine-agent-runtime-"));
+    temporaryDirectories.push(root);
+    const location = {
+      agentDir: path.join(root, "agent"),
+      cwd: path.join(root, "source"),
+      folders: [
+        {
+          access: "read-write" as const,
+          path: path.join(root, "source"),
+        },
+      ],
+      sessionsRoot: path.join(root, "sessions"),
+    };
+    await mkdir(location.cwd, { recursive: true });
+    const runtime = new PineAgentRuntime({ emit: () => undefined });
+
+    try {
+      const created = await runtime.createSession(location);
+      type LiveSession = {
+        computerUseActive: boolean;
+        session: AgentSession;
+      };
+      const internals = runtime as unknown as {
+        forwardEvent(session: AgentSession, event: unknown): void;
+        liveSessions: Map<string, LiveSession>;
+        syncApprovalModeTools(live: LiveSession): void;
+      };
+      const live = internals.liveSessions.get(created.session.id);
+      expect(live).toBeDefined();
+      live!.computerUseActive = true;
+      internals.syncApprovalModeTools(live!);
+
+      internals.forwardEvent(live!.session, { type: "agent_settled" });
+      await Promise.resolve();
+
+      expect(live!.computerUseActive).toBe(true);
+      expect(live!.session.getActiveToolNames()).toContain("list_apps");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("restores Computer Use when a saved session is reopened", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "pine-agent-runtime-"));
+    temporaryDirectories.push(root);
+    const location = {
+      agentDir: path.join(root, "agent"),
+      cwd: path.join(root, "source"),
+      folders: [
+        {
+          access: "read-write" as const,
+          path: path.join(root, "source"),
+        },
+      ],
+      sessionsRoot: path.join(root, "sessions"),
+    };
+    await mkdir(location.cwd, { recursive: true });
+    const runtime = new PineAgentRuntime({ emit: () => undefined });
+
+    try {
+      const created = await runtime.createSession(location);
+      const internals = runtime as unknown as {
+        liveSessions: Map<string, { session: AgentSession }>;
+      };
+      const agentSession = internals.liveSessions.get(
+        created.session.id,
+      )?.session;
+      expect(agentSession).toBeDefined();
+      expect(created.sessionFile).toBeDefined();
+      agentSession!.sessionManager.appendMessage({
+        role: "assistant",
+        content: [],
+        api: "openai-responses",
+        provider: "test",
+        model: "test",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: Date.now(),
+      });
+      agentSession!.sessionManager.appendCustomEntry(
+        "pine.computer-use-active",
+        { active: true },
+      );
+      await runtime.disposeSession(created.session.id);
+
+      const reopened = await runtime.openSession(
+        location,
+        created.sessionFile!,
+      );
+      const reopenedSession = internals.liveSessions.get(
+        reopened.session.id,
+      )?.session;
+
+      expect(reopenedSession?.getActiveToolNames()).toContain("list_apps");
     } finally {
       await runtime.dispose();
     }

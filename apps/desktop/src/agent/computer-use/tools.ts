@@ -212,7 +212,7 @@ export class ComputerUseController {
       content: [
         {
           type: "text",
-          text: `<computer_use_skill>\n${COMPUTER_USE_SKILL.trim()}\n</computer_use_skill>\n\nPine Computer Use is active for this agent run. Browser extension directory: ${this.extensionDirectory}`,
+          text: `<computer_use_skill>\n${COMPUTER_USE_SKILL.trim()}\n</computer_use_skill>\n\nPine Computer Use is active for this session. Browser extension directory: ${this.extensionDirectory}`,
         },
       ],
       details: {
@@ -230,6 +230,7 @@ export class ComputerUseController {
     params: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<AgentToolResult<Record<string, unknown>>> {
+    await this.client.start();
     await this.reviewAction(toolCallId, name, params, signal);
     const raw = (await this.client.callTool(
       name,
@@ -363,7 +364,7 @@ function createComputerUseToolDefinitions(
     name: ACTIVATE_COMPUTER_USE_TOOL_NAME,
     label: "Activate Computer Use",
     description:
-      "Dynamically enable Pine's desktop and browser interaction tools for the current agent run, and load their operating skill. Use only when the task requires a graphical interface and structured tools cannot do it.",
+      "Dynamically enable Pine's desktop and browser interaction tools for the current session, and load their operating skill. Use only when the task requires a graphical interface and structured tools cannot do it.",
     promptSnippet:
       "Activate desktop/browser UI control on demand; the detailed tools and Computer Use skill stay out of context until activation",
     parameters: emptyParams,

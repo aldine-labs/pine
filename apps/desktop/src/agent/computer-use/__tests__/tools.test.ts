@@ -70,6 +70,7 @@ describe("ComputerUseController", () => {
     await controller.call("call-1", "list_apps", {});
     await controller.call("call-2", "click", { element_id: "e12" });
 
+    expect(client.start).toHaveBeenCalledTimes(2);
     expect(review).toHaveBeenCalledOnce();
     expect(review).toHaveBeenCalledWith(
       expect.objectContaining({

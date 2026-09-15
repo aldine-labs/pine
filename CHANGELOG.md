@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finish, preventing competing interactions during the transition.
 - Opening a project that is already owned by another Pine window focuses that
   window instead of creating a duplicate project runtime.
+- Computer Use activation now persists for the full session, including when a
+  saved session is reopened.
 
 ### Fixed
 

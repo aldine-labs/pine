@@ -36,6 +36,7 @@ import { addCustomModel as writeCustomModel } from "./customModels";
 import {
   PINE_AUTHORIZATION_GRANT_ENTRY,
   PINE_APPROVAL_MODE_ENTRY,
+  PINE_COMPUTER_USE_ACTIVE_ENTRY,
   type PineContextUsage,
   type PineSessionSummary,
 } from "../shared/sessions";
@@ -431,6 +432,25 @@ export function toolNamesForComputerUseState(
   );
 }
 
+export function computerUseActiveFromSessionEntries(
+  entries: readonly unknown[],
+): boolean {
+  return entries.some((value) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return false;
+    }
+    const entry = value as Record<string, unknown>;
+    return (
+      entry.type === "custom" &&
+      entry.customType === PINE_COMPUTER_USE_ACTIVE_ENTRY &&
+      typeof entry.data === "object" &&
+      entry.data !== null &&
+      !Array.isArray(entry.data) &&
+      (entry.data as { active?: unknown }).active === true
+    );
+  });
+}
+
 function textFromMessageContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -811,7 +831,6 @@ export class PineAgentRuntime {
     if (aborted) {
       this.options.emit({ type: "run-state", sessionId, state: "aborting" });
       await live.session.abort();
-      await this.deactivateComputerUse(live);
       this.options.emit({ type: "run-state", sessionId, state: "idle" });
     }
     return { aborted };
@@ -1170,7 +1189,9 @@ export class PineAgentRuntime {
       ),
       attachedPaths,
       availableToolNames: [],
-      computerUseActive: false,
+      computerUseActive: computerUseActiveFromSessionEntries(
+        sessionManager.getEntries(),
+      ),
       ...(location.tinyFishApiKey
         ? { tinyFishApiKey: location.tinyFishApiKey }
         : {}),
@@ -1182,7 +1203,12 @@ export class PineAgentRuntime {
       getApprovalMode: () => live.approvalMode,
       getGate: () => live.gate,
       activated: () => {
+        if (live.computerUseActive) return;
         live.computerUseActive = true;
+        live.session.sessionManager.appendCustomEntry(
+          PINE_COMPUTER_USE_ACTIVE_ENTRY,
+          { active: true },
+        );
       },
     });
     live.computerUseController = computerUse.controller;
@@ -1956,19 +1982,11 @@ export class PineAgentRuntime {
       case "agent_settled": {
         const live = this.getSession(sessionId);
         void this.generateInitialTitle(live);
-        void this.deactivateComputerUse(live);
         break;
       }
       default:
         break;
     }
-  }
-
-  private async deactivateComputerUse(live: LiveAgentSession): Promise<void> {
-    if (!live.computerUseActive) return;
-    live.computerUseActive = false;
-    this.syncApprovalModeTools(live);
-    await live.computerUseController?.dispose();
   }
 
   /** Pushes the live context usage estimate so the renderer's composer
