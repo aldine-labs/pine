@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-14
+
+### Fixed
+
+- macOS packages now receive a complete ad-hoc signature whose identity is
+  bound to Pine's bundle metadata, so the computer-use helper resolves the
+  same Accessibility permission entity that System Settings grants.
+
 ## [0.3.0] - 2026-09-14
 
 ### Added
