@@ -1,13 +1,14 @@
 import {
-  loadSkillsFromDir,
-  stripFrontmatter,
-  type ResourceDiagnostic,
-  type Skill,
-} from "@earendil-works/pi-coding-agent";
-import { readFileSync } from "node:fs";
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  type Dirent,
+} from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { parse as parseYaml } from "yaml";
 import type {
   ListSkillsResult,
   PineSkillDiagnostic,
@@ -19,6 +20,181 @@ import type {
 const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_SKILL_NAME_LENGTH = 64;
 const MAX_SKILL_CONTENT_BYTES = 1_000_000;
+const MAX_SKILL_DESCRIPTION_LENGTH = 1_024;
+
+interface Skill {
+  baseDir: string;
+  description: string;
+  disableModelInvocation: boolean;
+  filePath: string;
+  name: string;
+}
+
+interface ResourceDiagnostic {
+  message: string;
+  type: "collision" | "error" | "warning";
+}
+
+interface SkillLoadResult {
+  diagnostics: ResourceDiagnostic[];
+  skills: Skill[];
+}
+
+function parseSkillFile(filePath: string): SkillLoadResult {
+  const diagnostics: ResourceDiagnostic[] = [];
+  let content: string;
+  try {
+    content = readFileSync(filePath, "utf8");
+  } catch (error) {
+    return {
+      diagnostics: [
+        {
+          message:
+            error instanceof Error ? error.message : "Unable to read Skill.",
+          type: "warning",
+        },
+      ],
+      skills: [],
+    };
+  }
+
+  const normalized = content
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    return {
+      diagnostics: [
+        { message: "SKILL.md frontmatter is required.", type: "warning" },
+      ],
+      skills: [],
+    };
+  }
+  const endIndex = normalized.indexOf("\n---", 4);
+  if (endIndex < 0) {
+    return {
+      diagnostics: [
+        { message: "SKILL.md frontmatter is incomplete.", type: "warning" },
+      ],
+      skills: [],
+    };
+  }
+
+  let frontmatter: Record<string, unknown>;
+  try {
+    const parsed = parseYaml(normalized.slice(4, endIndex));
+    frontmatter =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+  } catch (error) {
+    return {
+      diagnostics: [
+        {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Invalid YAML frontmatter.",
+          type: "warning",
+        },
+      ],
+      skills: [],
+    };
+  }
+
+  const baseDir = path.dirname(filePath);
+  const name =
+    typeof frontmatter.name === "string"
+      ? frontmatter.name
+      : path.basename(baseDir);
+  const description = frontmatter.description;
+  if (typeof description !== "string" || description.trim().length === 0) {
+    diagnostics.push({ message: "description is required", type: "warning" });
+    return { diagnostics, skills: [] };
+  }
+  if (description.length > MAX_SKILL_DESCRIPTION_LENGTH) {
+    diagnostics.push({
+      message: `description exceeds ${MAX_SKILL_DESCRIPTION_LENGTH} characters (${description.length})`,
+      type: "warning",
+    });
+  }
+  if (name.length > MAX_SKILL_NAME_LENGTH || !SKILL_NAME_PATTERN.test(name)) {
+    diagnostics.push({
+      message: "name must use lowercase letters, numbers, and single hyphens",
+      type: "warning",
+    });
+  }
+
+  return {
+    diagnostics,
+    skills: [
+      {
+        baseDir,
+        description,
+        disableModelInvocation:
+          frontmatter["disable-model-invocation"] === true,
+        filePath,
+        name,
+      },
+    ],
+  };
+}
+
+function loadSkillsFromDir(directory: string): SkillLoadResult {
+  const skills: Skill[] = [];
+  const diagnostics: ResourceDiagnostic[] = [];
+  if (!existsSync(directory)) return { diagnostics, skills };
+
+  let entries: Dirent<string>[];
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch (error) {
+    return {
+      diagnostics: [
+        {
+          message:
+            error instanceof Error ? error.message : "Unable to list Skills.",
+          type: "warning",
+        },
+      ],
+      skills,
+    };
+  }
+
+  const declaredSkill = entries.find((entry) => entry.name === "SKILL.md");
+  if (declaredSkill) {
+    const result = parseSkillFile(path.join(directory, declaredSkill.name));
+    return result;
+  }
+
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    const entryPath = path.join(directory, entry.name);
+    let isDirectory = entry.isDirectory();
+    if (entry.isSymbolicLink()) {
+      try {
+        isDirectory = statSync(entryPath).isDirectory();
+      } catch {
+        continue;
+      }
+    }
+    if (!isDirectory) continue;
+    const result = loadSkillsFromDir(entryPath);
+    skills.push(...result.skills);
+    diagnostics.push(...result.diagnostics);
+  }
+  return { diagnostics, skills };
+}
+
+function stripFrontmatter(content: string): string {
+  const normalized = content
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  if (!normalized.startsWith("---\n")) return normalized;
+  const endIndex = normalized.indexOf("\n---", 4);
+  return endIndex < 0 ? normalized : normalized.slice(endIndex + 4).trim();
+}
 
 function validateSkillName(name: string): string {
   const normalized = name.trim();
@@ -93,10 +269,7 @@ export class PineSkillRepository {
   constructor(private readonly roots: PineSkillRoots) {}
 
   list(scope: PineSkillScope): ListSkillsResult {
-    const result = loadSkillsFromDir({
-      dir: this.root(scope),
-      source: `pine-${scope}`,
-    });
+    const result = loadSkillsFromDir(this.root(scope));
     return {
       diagnostics: result.diagnostics.map(diagnostic),
       skills: result.skills.map((skill) =>
@@ -115,14 +288,8 @@ export class PineSkillRepository {
     diagnostics: PineSkillDiagnostic[];
     skills: ResolvedPineSkill[];
   } {
-    const project = loadSkillsFromDir({
-      dir: this.roots.project,
-      source: "pine-project",
-    });
-    const global = loadSkillsFromDir({
-      dir: this.roots.global,
-      source: "pine-global",
-    });
+    const project = loadSkillsFromDir(this.roots.project);
+    const global = loadSkillsFromDir(this.roots.global);
     const names = new Set<string>();
     const disabledGlobalSkills = this.disabledGlobalSkillNames();
     const skills: ResolvedPineSkill[] = [];
@@ -317,10 +484,7 @@ export class PineSkillRepository {
   }
 
   private validateStagedSkill(directory: string, expectedName: string): void {
-    const result = loadSkillsFromDir({
-      dir: directory,
-      source: "pine-validation",
-    });
+    const result = loadSkillsFromDir(directory);
     const loaded = result.skills.find((skill) => skill.name === expectedName);
     if (!loaded) {
       const details = result.diagnostics
@@ -335,10 +499,7 @@ export class PineSkillRepository {
 
   private requireSkill(scope: PineSkillScope, name: string): Skill {
     const normalizedName = validateSkillName(name);
-    const result = loadSkillsFromDir({
-      dir: this.root(scope),
-      source: `pine-${scope}`,
-    });
+    const result = loadSkillsFromDir(this.root(scope));
     const skill = result.skills.find((value) => value.name === normalizedName);
     if (!skill) throw new Error(`Skill \"${normalizedName}\" was not found.`);
     if (path.basename(skill.baseDir) !== normalizedName) {
