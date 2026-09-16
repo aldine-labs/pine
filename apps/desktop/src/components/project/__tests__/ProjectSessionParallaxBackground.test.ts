@@ -68,9 +68,28 @@ describe("ProjectSessionParallaxBackground", () => {
     expect(icon.attributes("style")).toContain("scale: 1");
     expect(icon.classes()).toContain("transition-[left,top,opacity,scale]");
 
+    const mostVisibleIndex = icons.reduce(
+      (best, entry, index) =>
+        Number((entry.element as HTMLElement).style.opacity) >
+        Number((icons[best].element as HTMLElement).style.opacity)
+          ? index
+          : best,
+      0,
+    );
     await wrapper.setProps({ fadeOut: true });
     expect(icon.attributes("style")).toContain(`left: ${inwardLeft}%`);
     expect(icon.attributes("style")).toContain("scale: 0.92");
+    const exitStyles = icons.map(
+      (entry) => (entry.element as HTMLElement).style,
+    );
+    const mostVisible = exitStyles[mostVisibleIndex];
+    expect(mostVisible.transitionDelay).toBe("0ms");
+    expect(mostVisible.transitionTimingFunction).toContain(
+      "), linear, cubic-bezier(",
+    );
+    expect(new Set(exitStyles.map((style) => style.transitionDelay)).size).toBe(
+      16,
+    );
     vi.advanceTimersByTime(1199);
     expect(wrapper.emitted("faded")).toBeUndefined();
     vi.advanceTimersByTime(1);

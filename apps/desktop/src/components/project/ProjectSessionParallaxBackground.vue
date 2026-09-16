@@ -55,6 +55,7 @@ interface ParallaxIcon {
   size: "size-12" | "size-14" | "size-16" | "size-20";
   iconSize: "size-8" | "size-10" | "size-12";
   fadeDelay: number;
+  exitDelay: number;
 }
 
 const props = withDefaults(defineProps<{ fadeOut?: boolean }>(), {
@@ -259,6 +260,7 @@ const parallaxIcons: readonly ParallaxIcon[] = parallaxSlots.map(
       opacity: opacityForDepth(depth),
       ...shuffledScales[index],
       fadeDelay: 0,
+      exitDelay: 0,
     };
   },
 );
@@ -268,10 +270,16 @@ const fadeOrder = new Map(
     .sort((first, second) => first.depth - second.depth)
     .map((item, index) => [item.id, index]),
 );
+const exitOrder = new Map(
+  [...parallaxIcons]
+    .sort((first, second) => second.depth - first.depth)
+    .map((item, index) => [item.id, index]),
+);
 const parallaxIconsWithFade: readonly ParallaxIcon[] = parallaxIcons.map(
   (item) => ({
     ...item,
     fadeDelay: (fadeOrder.get(item.id) ?? 0) * FADE_STEP_MS,
+    exitDelay: (exitOrder.get(item.id) ?? 0) * FADE_STEP_MS,
   }),
 );
 
@@ -333,10 +341,12 @@ onBeforeUnmount(() => {
           top: props.fadeOut || !isRevealed ? inwardPosition(item.y) : item.y,
           opacity: props.fadeOut || !isRevealed ? 0 : item.opacity,
           scale: props.fadeOut || !isRevealed ? 0.92 : 1,
-          transitionDelay: isRevealed ? `${item.fadeDelay}ms` : '0ms',
+          transitionDelay: isRevealed
+            ? `${props.fadeOut ? item.exitDelay : item.fadeDelay}ms`
+            : '0ms',
           transitionDuration: `${FADE_DURATION_MS}ms`,
           transitionTimingFunction: props.fadeOut
-            ? 'cubic-bezier(0.4, 0, 0.6, 1)'
+            ? 'cubic-bezier(0.4, 0, 0.6, 1), cubic-bezier(0.4, 0, 0.6, 1), linear, cubic-bezier(0.4, 0, 0.6, 1)'
             : 'cubic-bezier(0.25, 0.1, 0.25, 1)',
         }"
         :class="
