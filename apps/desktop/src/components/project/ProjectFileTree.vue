@@ -90,7 +90,7 @@ const unsubscribeLocalProjectFilesChanged = onProjectFilesChanged(() => {
 });
 
 const items = ref<ProjectTreeNode[]>([]);
-const loadingDirectories = new Set<string>();
+const loadingDirectories = new Map<string, Promise<void>>();
 const sidebarStore = useProjectSidebarStore();
 const expanded = computed<string[]>({
   get: () =>
@@ -105,6 +105,7 @@ const expanded = computed<string[]>({
 const TREE_DISCLOSURE_DURATION_MS = 500;
 const treeRoot = useTemplateRef<{ $el: HTMLElement }>("treeRoot");
 const activeRowAnimations = new Set<Animation>();
+const subtreeClipAnimations = new Map<string, Animation>();
 const dropTarget = ref<string>();
 const contextTarget = ref<string>();
 const busy = ref(false);
@@ -153,7 +154,10 @@ function rowPositions(): Map<string, RowPosition> {
   return positions;
 }
 
-function animateRow(element: HTMLElement, frames: Keyframe[]): void {
+function animateRow(
+  element: HTMLElement,
+  frames: Keyframe[],
+): Animation | undefined {
   if (!element.animate) return;
   const animation = element.animate(frames, {
     duration: TREE_DISCLOSURE_DURATION_MS,
@@ -175,6 +179,7 @@ function animateRow(element: HTMLElement, frames: Keyframe[]): void {
       once: true,
     },
   );
+  return animation;
 }
 
 function isDescendantKey(key: string, ancestorKey: string): boolean {
@@ -186,6 +191,7 @@ function isDescendantKey(key: string, ancestorKey: string): boolean {
 async function animateExpansion(
   previous: Map<string, RowPosition>,
   toggledKey: string,
+  opening: boolean,
 ): Promise<void> {
   await nextTick();
   const root = treeRoot.value?.$el;
@@ -204,67 +210,91 @@ async function animateExpansion(
           { translate: `0 ${offset}px` },
           { translate: "0 0" },
         ]);
-    } else if (parentBottom !== undefined && isDescendantKey(key, toggledKey)) {
-      animateRow(row.element, [
-        { translate: `0 ${parentBottom - row.top}px`, opacity: 0 },
-        { translate: "0 0", opacity: 1 },
-      ]);
     }
   }
 
   if (parentBottom === undefined) return;
   const rootRect = root.getBoundingClientRect();
-  for (const [key, row] of previous) {
-    if (current.has(key) || !isDescendantKey(key, toggledKey)) continue;
+  const subtreeRows = opening
+    ? [...current].filter(
+        ([key]) => !previous.has(key) && isDescendantKey(key, toggledKey),
+      )
+    : [...previous].filter(
+        ([key]) => !current.has(key) && isDescendantKey(key, toggledKey),
+      );
+  if (!subtreeRows.length) return;
+  const height = Math.max(
+    0,
+    ...subtreeRows.map(([, row]) => row.top + row.height - parentBottom),
+  );
+  const clip = document.createElement("div");
+  clip.setAttribute("aria-hidden", "true");
+  clip.className = "bg-sidebar";
+  clip.style.position = "absolute";
+  clip.style.top = `${parentBottom - rootRect.top + root.scrollTop}px`;
+  clip.style.left = "0";
+  clip.style.width = `${root.clientWidth}px`;
+  clip.style.height = `${height}px`;
+  clip.style.overflow = "hidden";
+  clip.style.pointerEvents = "none";
+  for (const [, row] of subtreeRows) {
     const ghost = row.element.cloneNode(true) as HTMLElement;
     ghost.removeAttribute("id");
+    ghost.removeAttribute("data-path");
     ghost.removeAttribute("data-tree-key");
+    ghost.removeAttribute("data-index");
+    ghost.removeAttribute("tabindex");
     ghost
       .querySelectorAll("[id]")
       .forEach((element) => element.removeAttribute("id"));
-    ghost.setAttribute("aria-hidden", "true");
     ghost.style.position = "absolute";
-    ghost.style.top = `${row.top - rootRect.top + root.scrollTop}px`;
+    ghost.style.top = `${row.top - parentBottom}px`;
     ghost.style.left = `${row.left - rootRect.left}px`;
     ghost.style.width = `${row.width}px`;
     ghost.style.height = `${row.height}px`;
     ghost.style.transform = "none";
-    ghost.style.pointerEvents = "none";
-    root.appendChild(ghost);
-    if (!ghost.animate) {
-      ghost.remove();
-      continue;
-    }
-    const animation = ghost.animate(
-      [
-        { translate: "0 0", opacity: 1 },
-        { translate: `0 ${parentBottom - row.top}px`, opacity: 0 },
-      ],
-      {
-        duration: TREE_DISCLOSURE_DURATION_MS,
-        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-      },
-    );
-    void animation.finished.catch(() => {});
-    activeRowAnimations.add(animation);
-    const cleanup = () => {
-      ghost.remove();
-      activeRowAnimations.delete(animation);
-    };
+    ghost.style.visibility = "visible";
+    clip.appendChild(ghost);
+    if (opening) row.element.style.visibility = "hidden";
+  }
+  root.appendChild(clip);
+  const animation = animateRow(
+    clip,
+    opening
+      ? [{ height: "0px" }, { height: `${height}px` }]
+      : [{ height: `${height}px` }, { height: "0px" }],
+  );
+  const cleanup = () => {
+    clip.remove();
+    if (subtreeClipAnimations.get(toggledKey) === animation)
+      subtreeClipAnimations.delete(toggledKey);
+    if (opening)
+      subtreeRows.forEach(([, row]) => (row.element.style.visibility = ""));
+  };
+  if (!animation) cleanup();
+  else {
+    subtreeClipAnimations.set(toggledKey, animation);
     animation.addEventListener("finish", cleanup, { once: true });
     animation.addEventListener("cancel", cleanup, { once: true });
   }
 }
 
 function handleExpandedChange(nextKeys: string[]): void {
-  const previous = rowPositions();
   const before = new Set(expanded.value);
   const next = [...new Set(nextKeys)];
   const toggledKey =
     next.find((key) => !before.has(key)) ??
     [...before].find((key) => !next.includes(key));
+  if (toggledKey) {
+    for (const [key, animation] of subtreeClipAnimations) {
+      if (key === toggledKey || isDescendantKey(key, toggledKey))
+        animation.cancel();
+    }
+  }
+  const previous = rowPositions();
   expanded.value = next;
-  if (toggledKey) void animateExpansion(previous, toggledKey);
+  if (toggledKey)
+    void animateExpansion(previous, toggledKey, next.includes(toggledKey));
 }
 
 function loadingPlaceholder(
@@ -340,36 +370,42 @@ async function readDirectory(
 
 async function loadChildren(node: ProjectTreeNode): Promise<void> {
   const key = nodeKey(node);
+  const pending = loadingDirectories.get(key);
+  if (pending) return pending;
   if (
     node.kind !== "directory" ||
     node.isUnavailable ||
-    !node.children?.some((child) => child.isPlaceholder) ||
-    loadingDirectories.has(key)
+    !node.children?.some((child) => child.isPlaceholder)
   ) {
     return;
   }
 
-  loadingDirectories.add(key);
   const currentGeneration = generation;
-  try {
-    const children = await readDirectory(node.folderId, node.relativePath);
-    if (currentGeneration !== generation) return;
-    node.children = children;
-    // Recurse through Vue's proxies so nested loads update the rendered tree.
-    await Promise.all(
-      node.children
-        .filter((child) => expanded.value.includes(nodeKey(child)))
-        .map(loadChildren),
-    );
-  } catch (error) {
-    handleError(error, {
-      id: `project.files.${key}`,
-      title: t("errors.projectFiles.title"),
-      description: t("errors.projectFiles.description"),
-    });
-  } finally {
-    loadingDirectories.delete(key);
-  }
+  const task = (async () => {
+    try {
+      const children = await readDirectory(node.folderId, node.relativePath);
+      if (currentGeneration !== generation) return;
+      node.children = children;
+      // Recurse through Vue's proxies so nested loads update the rendered tree.
+      await Promise.all(
+        node.children
+          .filter((child) => expanded.value.includes(nodeKey(child)))
+          .map(loadChildren),
+      );
+    } catch (error) {
+      handleError(error, {
+        id: `project.files.${key}`,
+        title: t("errors.projectFiles.title"),
+        description: t("errors.projectFiles.description"),
+      });
+    }
+  })();
+  loadingDirectories.set(key, task);
+  const clearPending = () => {
+    if (loadingDirectories.get(key) === task) loadingDirectories.delete(key);
+  };
+  void task.then(clearPending, clearPending);
+  return task;
 }
 
 function isProjectTreeNode(node: unknown): node is ProjectTreeNode {
@@ -383,8 +419,28 @@ function isProjectTreeNode(node: unknown): node is ProjectTreeNode {
   );
 }
 
-function loadTreeNode(node: unknown): void {
-  if (isProjectTreeNode(node)) void loadChildren(node);
+function handleTreeToggle(
+  event: { detail: { isExpanded: boolean }; preventDefault(): void },
+  node: ProjectTreeNode,
+): void {
+  if (
+    event.detail.isExpanded ||
+    node.kind !== "directory" ||
+    !node.children?.some((child) => child.isPlaceholder)
+  )
+    return;
+  event.preventDefault();
+  const currentGeneration = generation;
+  void loadChildren(node).then(() => {
+    const key = nodeKey(node);
+    if (
+      currentGeneration !== generation ||
+      node.children?.some((child) => child.isPlaceholder) ||
+      expanded.value.includes(key)
+    )
+      return;
+    handleExpandedChange([...expanded.value, key]);
+  });
 }
 
 function previewFile(node: ProjectTreeNode): void {
@@ -431,6 +487,10 @@ async function refresh(): Promise<void> {
       !expanded.value.includes(nodeKey(node))
     )
       return;
+    if (node.children?.some((child) => child.isPlaceholder)) {
+      await loadChildren(node);
+      return;
+    }
     const children = await readDirectory(node.folderId, node.relativePath);
     if (currentGeneration !== generation) return;
     node.children = children;
@@ -774,7 +834,7 @@ onUnmounted(() => {
         @dragend="dropTarget = undefined"
         @drop="drop($event, item.value)"
         :style="{ paddingInlineStart: `${(item.level - 1) * 12 + 8}px` }"
-        @toggle="loadTreeNode(item.value)"
+        @toggle="handleTreeToggle($event, item.value)"
         @click="previewFile(item.value)"
       >
         <ContextMenu

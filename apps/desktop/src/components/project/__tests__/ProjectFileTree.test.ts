@@ -183,8 +183,10 @@ describe("ProjectFileTree", () => {
       await flushPromises();
       expect(wrapper.find('[data-path="docs/readme.md"]').exists()).toBe(true);
       expect(
-        animate.mock.calls.some(([frames]) =>
-          JSON.stringify(frames).includes('"translate":"0 -28px"'),
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames).includes('"height":"0px"') &&
+            JSON.stringify(frames).includes('"height":"28px"'),
         ),
       ).toBe(true);
 
@@ -195,6 +197,13 @@ describe("ProjectFileTree", () => {
       expect(
         animate.mock.calls.some(([frames]) =>
           JSON.stringify(frames).includes('"translate":"0 28px"'),
+        ),
+      ).toBe(true);
+      expect(
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames).includes('"height":"28px"') &&
+            JSON.stringify(frames).includes('"height":"0px"'),
         ),
       ).toBe(true);
     } finally {
@@ -215,6 +224,32 @@ describe("ProjectFileTree", () => {
         );
       else delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
     }
+  });
+
+  it("waits for a first directory read before expanding", async () => {
+    let resolveDirectory:
+      ((result: ListProjectDirectoryResult) => void) | undefined;
+    const { wrapper } = mountTree(
+      "read-write",
+      () =>
+        new Promise((resolve) => {
+          resolveDirectory = resolve;
+        }),
+    );
+    await wrapper.get('[data-path=""]').trigger("click");
+    expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+      "false",
+    );
+    expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(false);
+    resolveDirectory?.({
+      entries: [{ name: "notes.md", relativePath: "notes.md", kind: "file" }],
+    });
+    await flushPromises();
+    expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+      "true",
+    );
+    expect(wrapper.find('[data-path="notes.md"]').exists()).toBe(true);
+    expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(false);
   });
 
   it("omits dot directories at every level, including previously expanded ones, while keeping dotfiles", async () => {
@@ -365,10 +400,17 @@ describe("ProjectFileTree", () => {
         entries: [{ name: "docs", relativePath: "docs", kind: "directory" }],
       });
       await flushPromises();
-      expect(
-        wrapper.get('[data-path="docs"]').attributes("aria-expanded"),
-      ).toBe("true");
-      expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      if (rootExpanded) {
+        expect(
+          wrapper.get('[data-path="docs"]').attributes("aria-expanded"),
+        ).toBe("true");
+        expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      } else {
+        expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+          "false",
+        );
+        expect(wrapper.find('[data-path="docs"]').exists()).toBe(false);
+      }
 
       pending.get("docs")!({
         entries: [
@@ -376,8 +418,14 @@ describe("ProjectFileTree", () => {
         ],
       });
       await flushPromises();
-      expect(wrapper.find('[data-path="docs/nested"]').exists()).toBe(true);
-      expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      if (rootExpanded) {
+        expect(wrapper.find('[data-path="docs/nested"]').exists()).toBe(true);
+        expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      } else {
+        expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+          "false",
+        );
+      }
 
       pending.get("docs/nested")!({
         entries: [
