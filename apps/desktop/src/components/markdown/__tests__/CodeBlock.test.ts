@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { codeToHtml } from "@/lib/codeHighlight";
 import { useAppearanceStore } from "@/stores/appearance";
 import CodeBlock from "../CodeBlock.vue";
@@ -23,7 +23,10 @@ describe("CodeBlock", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.mocked(codeToHtml).mockReset();
+    vi.stubGlobal("IntersectionObserver", undefined);
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("shows escaped, preformatted source while highlighting is pending", () => {
     vi.mocked(codeToHtml).mockReturnValue(new Promise(() => {}));
@@ -115,6 +118,34 @@ describe("CodeBlock", () => {
       defaultColor: false,
     });
     expect(wrapper.get("pre.shiki code").text()).toBe("final source");
+    wrapper.unmount();
+  });
+
+  it("defers highlighting until an offscreen block approaches the viewport", async () => {
+    let reveal: (() => void) | undefined;
+    class TestIntersectionObserver {
+      constructor(callback: IntersectionObserverCallback) {
+        reveal = () =>
+          callback(
+            [{ isIntersecting: true } as IntersectionObserverEntry],
+            this as unknown as IntersectionObserver,
+          );
+      }
+      disconnect() {}
+      observe() {}
+    }
+    vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
+    vi.mocked(codeToHtml).mockResolvedValue(
+      '<pre class="shiki"><code>visible</code></pre>',
+    );
+
+    const wrapper = mount(CodeBlock, { props: { node } });
+    await flushPromises();
+    expect(codeToHtml).not.toHaveBeenCalled();
+
+    reveal?.();
+    await flushPromises();
+    expect(codeToHtml).toHaveBeenCalledOnce();
     wrapper.unmount();
   });
 

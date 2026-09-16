@@ -1,10 +1,6 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  SANDBOX_DENIED_MESSAGE,
-  type PineAgentEvent,
-  type PineJsonValue,
-} from "@/shared/agent";
+import { SANDBOX_DENIED_MESSAGE, type PineAgentEvent } from "@/shared/agent";
 import type { PineContextUsage, PineSessionSummary } from "@/shared/sessions";
 import { useModelsStore } from "../models";
 import { useSessionStore } from "../session";
@@ -671,24 +667,27 @@ describe("session store", () => {
         type: "message-update",
         sessionId: session.id,
         messageId,
-        message: {
-          role: "assistant",
-          timestamp: 500,
-          content: [{ type: "thinking", thinking: "Inspect.\nRead the file." }],
-        },
-        update: { type: "thinking_delta" },
+        updates: [
+          { type: "thinking-start", contentIndex: 0, thinking: "" },
+          {
+            type: "thinking-delta",
+            contentIndex: 0,
+            delta: "Inspect.\nRead the file.",
+          },
+        ],
       });
       vi.setSystemTime(3_500);
       listener?.({
         type: "message-update",
         sessionId: session.id,
         messageId,
-        message: {
-          role: "assistant",
-          timestamp: 500,
-          content: [{ type: "thinking", thinking: "Inspect.\nRead the file." }],
-        },
-        update: { type: "thinking_end" },
+        updates: [
+          {
+            type: "thinking-end",
+            contentIndex: 0,
+            thinking: "Inspect.\nRead the file.",
+          },
+        ],
       });
       listener?.({
         type: "message-end",
@@ -751,7 +750,7 @@ describe("session store", () => {
     }
   });
 
-  it("surfaces progressively streamed tool arguments before execution", async () => {
+  it("defers streamed tool argument parsing until the final payload", async () => {
     let listener: ((event: PineAgentEvent) => void) | undefined;
     Object.defineProperty(window, "pine", {
       configurable: true,
@@ -770,47 +769,56 @@ describe("session store", () => {
     const messageId = "assistant-streaming-tool";
 
     listener?.({ type: "run-state", sessionId, state: "running" });
-    const emitToolUpdate = (
-      arguments_: Record<string, PineJsonValue> | undefined,
-    ) => {
-      listener?.({
-        type: "message-update",
-        sessionId,
-        messageId,
-        update: { type: "toolcall_delta", delta: "..." },
-        message: {
-          role: "assistant",
-          timestamp: 1000,
-          content: [
-            arguments_ === undefined
-              ? { type: "toolCall", id: "call-bash", name: "bash" }
-              : {
-                  type: "toolCall",
-                  id: "call-bash",
-                  name: "bash",
-                  arguments: arguments_,
-                },
-          ],
+    listener?.({
+      type: "message-update",
+      sessionId,
+      messageId,
+      updates: [
+        {
+          type: "tool-call-start",
+          contentIndex: 0,
+          id: "call-bash",
+          name: "bash",
         },
-      });
-    };
-
-    // toolcall_start: no arguments parsed yet.
-    emitToolUpdate(undefined);
+      ],
+    });
     let blocks = store.messages[0]?.blocks ?? [];
     expect(
       blocks[0]?.type === "toolCall" && blocks[0].toolCall.input,
     ).toBeUndefined();
 
-    // First delta: partial arguments parsed from the stream so far.
-    emitToolUpdate({ command: "bun run" });
-    blocks = store.messages[0]?.blocks ?? [];
-    expect(blocks[0]?.type === "toolCall" && blocks[0].toolCall.input).toEqual({
-      command: "bun run",
+    // Raw deltas do not repeatedly parse and clone an ever-growing object.
+    listener?.({
+      type: "message-update",
+      sessionId,
+      messageId,
+      updates: [
+        {
+          type: "tool-call-delta",
+          contentIndex: 0,
+          delta: '{"command":"bun run check"}',
+        },
+      ],
     });
+    blocks = store.messages[0]?.blocks ?? [];
+    expect(
+      blocks[0]?.type === "toolCall" && blocks[0].toolCall.input,
+    ).toBeUndefined();
 
-    // Later delta: arguments grow — never shadowed by the stale snapshot.
-    emitToolUpdate({ command: "bun run check" });
+    listener?.({
+      type: "message-update",
+      sessionId,
+      messageId,
+      updates: [
+        {
+          type: "tool-call-end",
+          contentIndex: 0,
+          id: "call-bash",
+          name: "bash",
+          input: { command: "bun run check" },
+        },
+      ],
+    });
     blocks = store.messages[0]?.blocks ?? [];
     expect(blocks[0]?.type === "toolCall" && blocks[0].toolCall.input).toEqual({
       command: "bun run check",
@@ -829,6 +837,42 @@ describe("session store", () => {
       command: "bun run check",
       description: "Checks types",
     });
+  });
+
+  it("applies a large coalesced text stream without cumulative snapshots", async () => {
+    let listener: ((event: PineAgentEvent) => void) | undefined;
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        onSessionEvent: vi.fn((nextListener) => {
+          listener = nextListener;
+          return () => undefined;
+        }),
+        promptSession: vi.fn().mockResolvedValue({ accepted: true, session }),
+      },
+    });
+    const store = useSessionStore();
+    store.connectAgentEvents();
+    await store.prompt("go");
+
+    listener?.({
+      type: "message-update",
+      sessionId: session.id,
+      messageId: "long-response",
+      updates: [
+        { type: "text-start", contentIndex: 0, text: "" },
+        {
+          type: "text-delta",
+          contentIndex: 0,
+          delta: "x".repeat(1_000),
+        },
+      ],
+    });
+
+    expect(store.messages).toHaveLength(1);
+    expect(store.messages[0]?.blocks).toEqual([
+      { type: "text", text: "x".repeat(1_000) },
+    ]);
   });
 
   it("keeps the prompt title when a runtime summary omits display fields", async () => {

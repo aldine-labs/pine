@@ -141,6 +141,7 @@ async function confirmExternalLink(): Promise<void> {
       custom-id="pine-chat"
       :smooth-streaming="false"
       :parse-coalesce-ms="100"
+      :max-live-nodes="0"
       :is-dark="isDark"
     />
 
@@ -183,8 +184,9 @@ async function confirmExternalLink(): Promise<void> {
   overflow-wrap: anywhere;
 }
 
-/* The transcript owns scrolling. Offscreen Markdown must contribute its real
-   height immediately, not swap a 600px intrinsic placeholder on first visit. */
+/* The transcript owns scrolling and preserves its own viewport anchor.
+   Markstream's document-level intrinsic placeholder would otherwise replace
+   an estimated height with the real height as a chat message enters view. */
 .markdown-content :deep(.markdown-renderer) {
   content-visibility: visible;
   contain-intrinsic-size: none;

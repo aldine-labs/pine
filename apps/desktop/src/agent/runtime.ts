@@ -25,6 +25,7 @@ import path from "node:path";
 import {
   isSandboxDeniedPayload,
   type PineAgentEvent,
+  type PineAssistantMessageUpdate,
   type PineApprovalMode,
 } from "../shared/agent";
 import type {
@@ -79,6 +80,10 @@ import {
   type UserApprovalRequest,
 } from "./gate";
 import { createPineToolDefinitions, PineAttachedPathAccess } from "./tools";
+import {
+  coalesceAssistantMessageUpdates,
+  compactAssistantMessageUpdate,
+} from "./messageStream";
 import type {
   AskUserQuestionParams,
   AskUserQuestionSubmission,
@@ -784,6 +789,14 @@ export function titleFromAssistantMessage(
 
 export class PineAgentRuntime {
   private readonly activeMessageIds = new Map<string, string>();
+  private readonly pendingMessageUpdates = new Map<
+    string,
+    {
+      messageId: string;
+      timer: ReturnType<typeof setTimeout>;
+      updates: PineAssistantMessageUpdate[];
+    }
+  >();
   private readonly activeCompactionIds = new Map<string, string>();
   private readonly liveSessions = new Map<string, LiveAgentSession>();
   private readonly modelRuntimes = new Map<string, Promise<ModelRuntime>>();
@@ -942,6 +955,7 @@ export class PineAgentRuntime {
 
     this.liveSessions.delete(sessionId);
     this.activeMessageIds.delete(sessionId);
+    this.clearPendingMessageUpdates(sessionId);
     this.activeCompactionIds.delete(sessionId);
     for (const [requestId, pending] of this.pendingApprovals) {
       if (pending.sessionId !== sessionId) continue;
@@ -2002,8 +2016,10 @@ export class PineAgentRuntime {
             ? randomUUID()
             : (this.activeMessageIds.get(sessionId) ?? randomUUID());
         if (event.type === "message_start") {
+          this.clearPendingMessageUpdates(sessionId);
           this.activeMessageIds.set(sessionId, messageId);
         } else {
+          this.flushPendingMessageUpdates(sessionId);
           this.activeMessageIds.delete(sessionId);
         }
         this.options.emit({
@@ -2025,13 +2041,18 @@ export class PineAgentRuntime {
         break;
       }
       case "message_update":
-        this.options.emit({
-          type: "message-update",
-          sessionId,
-          messageId: this.activeMessageIds.get(sessionId) ?? randomUUID(),
-          message: toPineJsonValue(event.message),
-          update: toPineJsonValue(event.assistantMessageEvent),
-        });
+        {
+          const update = compactAssistantMessageUpdate(
+            event.assistantMessageEvent,
+          );
+          if (update) {
+            this.queueMessageUpdate(
+              sessionId,
+              this.activeMessageIds.get(sessionId) ?? randomUUID(),
+              update,
+            );
+          }
+        }
         break;
       case "queue_update":
         this.options.emit({
@@ -2041,6 +2062,7 @@ export class PineAgentRuntime {
         });
         break;
       case "tool_execution_start":
+        this.flushPendingMessageUpdates(sessionId);
         this.options.emit({
           type: "tool-start",
           sessionId,
@@ -2141,6 +2163,50 @@ export class PineAgentRuntime {
       default:
         break;
     }
+  }
+
+  private queueMessageUpdate(
+    sessionId: string,
+    messageId: string,
+    update: PineAssistantMessageUpdate,
+  ): void {
+    const pending = this.pendingMessageUpdates.get(sessionId);
+    if (pending && pending.messageId === messageId) {
+      pending.updates.push(update);
+      return;
+    }
+    if (pending) this.flushPendingMessageUpdates(sessionId);
+
+    const timer = setTimeout(() => {
+      this.flushPendingMessageUpdates(sessionId);
+    }, 32);
+    this.pendingMessageUpdates.set(sessionId, {
+      messageId,
+      timer,
+      updates: [update],
+    });
+  }
+
+  private flushPendingMessageUpdates(sessionId: string): void {
+    const pending = this.pendingMessageUpdates.get(sessionId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingMessageUpdates.delete(sessionId);
+    const updates = coalesceAssistantMessageUpdates(pending.updates);
+    if (updates.length === 0) return;
+    this.options.emit({
+      type: "message-update",
+      sessionId,
+      messageId: pending.messageId,
+      updates,
+    });
+  }
+
+  private clearPendingMessageUpdates(sessionId: string): void {
+    const pending = this.pendingMessageUpdates.get(sessionId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingMessageUpdates.delete(sessionId);
   }
 
   /** Pushes the live context usage estimate so the renderer's composer

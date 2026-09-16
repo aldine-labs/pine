@@ -3,6 +3,7 @@ import { ref, shallowRef } from "vue";
 import {
   isSandboxDeniedPayload,
   type PineAgentEvent,
+  type PineAssistantMessageUpdate,
   type PineApprovalAction,
   type PineApprovalMode,
   type PineApprovalTrigger,
@@ -86,20 +87,21 @@ function mergeBlockStatuses(
   previous: readonly PineContentBlock[] | undefined,
 ): PineContentBlock[] {
   if (!previous || previous.length === 0) return blocks;
+  const previousToolCalls = new Map(
+    previous.flatMap((block) =>
+      block.type === "toolCall" ? [[block.toolCall.id, block.toolCall]] : [],
+    ),
+  );
   return blocks.map((block) => {
     if (block.type !== "toolCall") return block;
-    const prior = previous.find(
-      (candidate) =>
-        candidate.type === "toolCall" &&
-        candidate.toolCall.id === block.toolCall.id,
-    );
-    if (prior?.type !== "toolCall") return block;
+    const prior = previousToolCalls.get(block.toolCall.id);
+    if (!prior) return block;
     // Execution runtime fields (status/startedAt/durationMs/output) come from
     // the prior snapshot, but streaming input grows on every update — a stale
     // snapshot (e.g. an empty arguments object from toolcall_start) must not
     // shadow the freshly parsed progressive arguments.
     const toolCall = {
-      ...prior.toolCall,
+      ...prior,
       id: block.toolCall.id,
       name: block.toolCall.name,
     };
@@ -119,11 +121,85 @@ function messageCreatedAt(value: PineJsonValue): string {
     : new Date().toISOString();
 }
 
-function eventUpdateType(value: PineJsonValue): string | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
+function applyAssistantMessageUpdates(
+  previous: readonly PineContentBlock[],
+  updates: readonly PineAssistantMessageUpdate[],
+): PineContentBlock[] {
+  const blocks = [...previous];
+  for (const update of updates) {
+    const current = blocks[update.contentIndex];
+    switch (update.type) {
+      case "text-start":
+        blocks[update.contentIndex] = { type: "text", text: update.text };
+        break;
+      case "text-delta":
+        blocks[update.contentIndex] = {
+          type: "text",
+          text:
+            current?.type === "text"
+              ? current.text + update.delta
+              : update.delta,
+        };
+        break;
+      case "text-end":
+        blocks[update.contentIndex] = { type: "text", text: update.text };
+        break;
+      case "thinking-start":
+        blocks[update.contentIndex] = {
+          type: "thinking",
+          thinking: update.thinking,
+        };
+        break;
+      case "thinking-delta":
+        blocks[update.contentIndex] = {
+          type: "thinking",
+          thinking:
+            current?.type === "thinking"
+              ? current.thinking + update.delta
+              : update.delta,
+        };
+        break;
+      case "thinking-end":
+        blocks[update.contentIndex] = {
+          type: "thinking",
+          thinking: update.thinking,
+        };
+        break;
+      case "tool-call-start":
+        blocks[update.contentIndex] = {
+          type: "toolCall",
+          toolCall: {
+            id: update.id,
+            name: update.name,
+            status: "pending",
+            ...(update.input === undefined ? {} : { input: update.input }),
+          },
+        };
+        break;
+      case "tool-call-delta":
+        // Raw argument deltas stay append-only on the wire. Rendering a
+        // repeatedly reparsed cumulative JSON object here would reintroduce
+        // quadratic work for large write/patch tool calls; tool-call-end
+        // supplies the final parsed arguments once.
+        break;
+      case "tool-call-end":
+        blocks[update.contentIndex] = {
+          type: "toolCall",
+          toolCall: {
+            ...(current?.type === "toolCall" ? current.toolCall : {}),
+            id: update.id,
+            name: update.name,
+            status:
+              current?.type === "toolCall"
+                ? current.toolCall.status
+                : "pending",
+            ...(update.input === undefined ? {} : { input: update.input }),
+          },
+        };
+        break;
+    }
   }
-  return typeof value.type === "string" ? value.type : undefined;
+  return blocks;
 }
 
 function compactionMessage(
@@ -162,6 +238,60 @@ export const useSessionStore = defineStore("session", () => {
   const reviewingToolCallIds = ref<ReadonlySet<string>>(new Set());
   const hasEarlierMessages = ref(false);
   const nextBefore = ref<string | undefined>();
+  const messageIndexes = new Map<string, number>();
+  const toolCallMessageIndexes = new Map<string, number>();
+
+  function messageIndexFor(messageId: string): number {
+    const cached = messageIndexes.get(messageId);
+    if (cached !== undefined && messages.value[cached]?.id === messageId) {
+      return cached;
+    }
+    const index = messages.value.findIndex(
+      (message) => message.id === messageId,
+    );
+    if (index >= 0) messageIndexes.set(messageId, index);
+    else messageIndexes.delete(messageId);
+    return index;
+  }
+
+  function toolCallMessageIndexFor(toolCallId: string): number {
+    const cached = toolCallMessageIndexes.get(toolCallId);
+    if (
+      cached !== undefined &&
+      messages.value[cached]?.blocks.some(
+        (block) =>
+          block.type === "toolCall" && block.toolCall.id === toolCallId,
+      )
+    ) {
+      return cached;
+    }
+    const index = messages.value.findIndex((message) =>
+      message.blocks.some(
+        (block) =>
+          block.type === "toolCall" && block.toolCall.id === toolCallId,
+      ),
+    );
+    if (index >= 0) toolCallMessageIndexes.set(toolCallId, index);
+    else toolCallMessageIndexes.delete(toolCallId);
+    return index;
+  }
+
+  function rememberMessageIndex(
+    message: PineTranscriptMessage,
+    index: number,
+  ): void {
+    messageIndexes.set(message.id, index);
+    for (const block of message.blocks) {
+      if (block.type === "toolCall") {
+        toolCallMessageIndexes.set(block.toolCall.id, index);
+      }
+    }
+  }
+
+  function clearMessageIndexes(): void {
+    messageIndexes.clear();
+    toolCallMessageIndexes.clear();
+  }
 
   // Each open session keeps its own transcript slice so switching tabs never
   // clobbers a sibling's loaded messages or forces a re-fetch. `messages` (
@@ -200,12 +330,7 @@ export const useSessionStore = defineStore("session", () => {
     toolCallId: string,
     patch: Partial<PineToolCall>,
   ): void {
-    const messageIndex = messages.value.findIndex((message) =>
-      message.blocks.some(
-        (block) =>
-          block.type === "toolCall" && block.toolCall.id === toolCallId,
-      ),
-    );
+    const messageIndex = toolCallMessageIndexFor(toolCallId);
     if (messageIndex < 0) return;
     const message = messages.value[messageIndex];
     messages.value[messageIndex] = {
@@ -297,6 +422,7 @@ export const useSessionStore = defineStore("session", () => {
     if (cached && cached.summary) {
       activeSession.value = cached.summary;
       messages.value = cached.messages;
+      clearMessageIndexes();
       contextUsage.value = cached.contextUsage;
       steeringMessages.value = cached.steeringMessages;
       isLoadingMessages.value = false;
@@ -308,6 +434,7 @@ export const useSessionStore = defineStore("session", () => {
 
     activeSession.value = null;
     messages.value = [];
+    clearMessageIndexes();
     hasEarlierMessages.value = false;
     nextBefore.value = undefined;
     contextUsage.value = null;
@@ -349,6 +476,7 @@ export const useSessionStore = defineStore("session", () => {
           ? { thinkingStatus: "complete" as const }
           : {}),
       }));
+      clearMessageIndexes();
       hasEarlierMessages.value = result.hasMore;
       nextBefore.value = result.nextBefore;
       syncSessionCache(sessionId);
@@ -386,6 +514,7 @@ export const useSessionStore = defineStore("session", () => {
         })),
         ...messages.value,
       ];
+      clearMessageIndexes();
       hasEarlierMessages.value = result.hasMore;
       nextBefore.value = result.nextBefore;
       syncSessionCache(sessionId);
@@ -706,13 +835,7 @@ export const useSessionStore = defineStore("session", () => {
     ) {
       const status: PineCompactionStatus =
         event.type === "compaction-start" ? "running" : event.status;
-      const messageIndex = messages.value.findIndex((message) =>
-        message.blocks.some(
-          (block) =>
-            block.type === "compaction" &&
-            block.compaction.id === event.compactionId,
-        ),
-      );
+      const messageIndex = messageIndexFor(`compaction-${event.compactionId}`);
       const previous =
         messageIndex >= 0 ? messages.value[messageIndex] : undefined;
       const nextMessage = previous
@@ -730,8 +853,13 @@ export const useSessionStore = defineStore("session", () => {
             ],
           }
         : compactionMessage(event.compactionId, status);
-      if (messageIndex < 0) messages.value.push(nextMessage);
-      else messages.value[messageIndex] = nextMessage;
+      if (messageIndex < 0) {
+        messages.value.push(nextMessage);
+        rememberMessageIndex(nextMessage, messages.value.length - 1);
+      } else {
+        messages.value[messageIndex] = nextMessage;
+        rememberMessageIndex(nextMessage, messageIndex);
+      }
       return;
     }
     if (
@@ -741,12 +869,7 @@ export const useSessionStore = defineStore("session", () => {
       currentSessionId === event.sessionId
     ) {
       const now = Date.now();
-      let messageIndex = messages.value.findIndex((message) =>
-        message.blocks.some(
-          (block) =>
-            block.type === "toolCall" && block.toolCall.id === event.toolCallId,
-        ),
-      );
+      let messageIndex = toolCallMessageIndexFor(event.toolCallId);
       if (messageIndex < 0) {
         messages.value.push({
           createdAt: new Date(now).toISOString(),
@@ -765,6 +888,7 @@ export const useSessionStore = defineStore("session", () => {
           ],
         });
         messageIndex = messages.value.length - 1;
+        rememberMessageIndex(messages.value[messageIndex], messageIndex);
       }
 
       const message = messages.value[messageIndex];
@@ -814,6 +938,7 @@ export const useSessionStore = defineStore("session", () => {
         ...message,
         blocks: mergeToolCallBlocks(message.blocks, event.toolCallId, patch),
       };
+      rememberMessageIndex(messages.value[messageIndex], messageIndex);
       return;
     }
     if (
@@ -825,12 +950,58 @@ export const useSessionStore = defineStore("session", () => {
       return;
     }
 
+    const previousIndex = messageIndexFor(event.messageId);
+    const previous =
+      previousIndex >= 0 ? messages.value[previousIndex] : undefined;
+    const now = Date.now();
+    if (event.type === "message-update") {
+      const blocks = applyAssistantMessageUpdates(
+        previous?.blocks ?? [],
+        event.updates,
+      );
+      const hasThinking = blocksHasThinking(blocks);
+      const thinkingStarted = event.updates.some(
+        (update) =>
+          update.type === "thinking-start" || update.type === "thinking-delta",
+      );
+      const thinkingEnded = event.updates.some(
+        (update) => update.type === "thinking-end",
+      );
+      const thinkingStartedAt = hasThinking
+        ? (previous?.thinkingStartedAt ?? (thinkingStarted ? now : undefined))
+        : undefined;
+      const thinkingStatus = hasThinking
+        ? thinkingEnded || previous?.thinkingStatus === "complete"
+          ? ("complete" as const)
+          : ("streaming" as const)
+        : undefined;
+      const thinkingDurationMs =
+        thinkingStartedAt && thinkingStatus === "complete"
+          ? (previous?.thinkingDurationMs ??
+            Math.max(0, now - thinkingStartedAt))
+          : undefined;
+      const nextMessage: PineTranscriptMessage = {
+        createdAt: previous?.createdAt ?? new Date(now).toISOString(),
+        id: event.messageId,
+        role: "assistant",
+        status: "streaming",
+        blocks,
+        ...(thinkingDurationMs ? { thinkingDurationMs } : {}),
+        ...(thinkingStatus ? { thinkingStatus } : {}),
+        ...(thinkingStartedAt ? { thinkingStartedAt } : {}),
+      };
+      if (previousIndex < 0) {
+        messages.value.push(nextMessage);
+        rememberMessageIndex(nextMessage, messages.value.length - 1);
+      } else {
+        messages.value[previousIndex] = nextMessage;
+        rememberMessageIndex(nextMessage, previousIndex);
+      }
+      return;
+    }
+
     const role = messageRole(event.message);
     if (!role) return;
-    const previous = messages.value.find(
-      (message) => message.id === event.messageId,
-    );
-    const now = Date.now();
     const blocks = mergeBlockStatuses(
       parseMessageBlocks(event.message),
       previous?.blocks,
@@ -839,12 +1010,7 @@ export const useSessionStore = defineStore("session", () => {
     const thinkingStartedAt = hasThinking
       ? (previous?.thinkingStartedAt ?? now)
       : undefined;
-    const updateType =
-      event.type === "message-update"
-        ? eventUpdateType(event.update)
-        : undefined;
-    const thinkingEnded =
-      event.type === "message-end" || updateType === "thinking_end";
+    const thinkingEnded = event.type === "message-end";
     const thinkingStatus = hasThinking
       ? thinkingEnded || previous?.thinkingStatus === "complete"
         ? ("complete" as const)
@@ -865,11 +1031,13 @@ export const useSessionStore = defineStore("session", () => {
       ...(thinkingStartedAt ? { thinkingStartedAt } : {}),
     };
 
-    const index = messages.value.findIndex(
-      (message) => message.id === event.messageId,
-    );
-    if (index < 0) messages.value.push(nextMessage);
-    else messages.value[index] = nextMessage;
+    if (previousIndex < 0) {
+      messages.value.push(nextMessage);
+      rememberMessageIndex(nextMessage, messages.value.length - 1);
+    } else {
+      messages.value[previousIndex] = nextMessage;
+      rememberMessageIndex(nextMessage, previousIndex);
+    }
   }
 
   function connectAgentEvents(): void {
@@ -883,6 +1051,7 @@ export const useSessionStore = defineStore("session", () => {
     activeSession.value = null;
     currentSessionId = null;
     messages.value = [];
+    clearMessageIndexes();
     hasEarlierMessages.value = false;
     nextBefore.value = undefined;
     contextUsage.value = null;
@@ -901,6 +1070,7 @@ export const useSessionStore = defineStore("session", () => {
     activeSession.value = null;
     currentSessionId = null;
     messages.value = [];
+    clearMessageIndexes();
     recentSessions.value = [];
     searchResults.value = [];
     sessionCache.clear();

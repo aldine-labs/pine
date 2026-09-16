@@ -96,7 +96,7 @@ type Mode =
   | "anchored-to-message"
   | "settling-jump";
 
-interface PrependRestore {
+interface ViewportAnchor {
   element: HTMLElement;
   viewportTop: number;
 }
@@ -186,10 +186,9 @@ function getRelativeTop(element: HTMLElement, viewport: HTMLElement): number {
   );
 }
 
-function measureContentHeight({
+export function measureContentHeight({
   content,
   spacer,
-  viewport,
 }: {
   content: HTMLElement;
   spacer: HTMLElement | null;
@@ -197,17 +196,19 @@ function measureContentHeight({
 }): number {
   const children = getMessageChildren(content, spacer);
   const padding = getPadding(content);
-  const viewportRect = viewport.getBoundingClientRect();
-  const scrollTop = viewport.scrollTop;
-  let height = padding.start + padding.end;
-  for (const child of children) {
-    const rect = child.getBoundingClientRect();
-    height = Math.max(
-      height,
-      rect.bottom - viewportRect.top + scrollTop + padding.end,
-    );
-  }
-  return height;
+  const lastChild = children.at(-1);
+  if (!lastChild) return padding.start + padding.end;
+
+  // A transcript is an ordered, non-overlapping flex column. Its last message
+  // therefore defines the content bottom; measuring every historical message
+  // on each streaming resize caused forced-layout work to grow with the whole
+  // conversation. Two layout reads keep this independent of message count.
+  const contentRect = content.getBoundingClientRect();
+  const lastRect = lastChild.getBoundingClientRect();
+  return Math.max(
+    padding.start + padding.end,
+    lastRect.bottom - contentRect.top + padding.end,
+  );
 }
 
 function maxScrollTop(element: HTMLElement): number {
@@ -311,22 +312,51 @@ function computeVisibility({
   const viewportRect = viewport.getBoundingClientRect();
   const anchorLine = viewportRect.top + scrollMargin + scrollPreviousItemPeek;
   const noIntersectionObserver = typeof IntersectionObserver === "undefined";
+  const children = getMessageChildren(content, spacer);
   const visible: string[] = [];
+  const anchorsBelowLine = new Set<string>();
   let currentAnchorId: string | null = null;
+  let firstVisibleIndex = -1;
 
-  for (const child of getMessageChildren(content, spacer)) {
+  for (let index = 0; index < children.length; index++) {
+    const child = children[index];
     const messageId = child.dataset.messageId;
     if (!messageId) continue;
     const isAnchor = child.dataset.scrollAnchor === "true";
-    const rect =
-      isAnchor || noIntersectionObserver ? child.getBoundingClientRect() : null;
+    const rect = noIntersectionObserver ? child.getBoundingClientRect() : null;
     const isVisible =
       noIntersectionObserver && rect
         ? rect.bottom > anchorLine && rect.top < viewportRect.bottom
         : visibleMessageIds.has(messageId);
-    if (isVisible) visible.push(messageId);
-    if (isAnchor && rect && rect.top <= anchorLine + SCROLL_EPSILON)
-      currentAnchorId = messageId;
+    if (isVisible) {
+      if (firstVisibleIndex < 0) firstVisibleIndex = index;
+      visible.push(messageId);
+      if (isAnchor) {
+        const anchorRect = rect ?? child.getBoundingClientRect();
+        if (anchorRect.top <= anchorLine + SCROLL_EPSILON) {
+          currentAnchorId = messageId;
+        } else {
+          anchorsBelowLine.add(messageId);
+        }
+      }
+    }
+  }
+
+  // When one assistant response is taller than the viewport its owning user
+  // anchor is offscreen. Walk DOM siblings without layout reads to recover it.
+  if (currentAnchorId === null && firstVisibleIndex >= 0) {
+    for (let index = firstVisibleIndex; index >= 0; index--) {
+      const child = children[index];
+      const messageId = child.dataset.messageId;
+      if (
+        child.dataset.scrollAnchor === "true" &&
+        messageId &&
+        !anchorsBelowLine.has(messageId)
+      ) {
+        currentAnchorId = messageId;
+        break;
+      }
+    }
   }
 
   return visible.length === 0 && currentAnchorId === null
@@ -459,7 +489,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   let lastScrollTop = 0;
   let defaultScrollPositionApplied = false;
   let preserveScrollOnPrepend = true;
-  let prependRestore: PrependRestore | null = null;
+  let viewportAnchor: ViewportAnchor | null = null;
   let pendingScrollToMessage: PendingScrollToMessage | null = null;
   let stateFrame: number | null = null;
   let visibilityFrame: number | null = null;
@@ -678,7 +708,7 @@ function createEngine(props: MessageScrollerProviderProps) {
         viewport,
       }),
     );
-    prependRestore = {
+    viewportAnchor = {
       element,
       viewportTop: getRelativeTop(element, viewport),
     };
@@ -735,18 +765,18 @@ function createEngine(props: MessageScrollerProviderProps) {
     return true;
   }
 
-  // --- prepend preservation --------------------------------------------------
+  // --- viewport anchoring ----------------------------------------------------
 
-  function applyPrependRestore(): boolean {
-    if (!prependRestore || !viewport || !prependRestore.element.isConnected)
+  function applyViewportAnchorRestore(): boolean {
+    if (!viewportAnchor || !viewport || !viewportAnchor.element.isConnected)
       return false;
     const delta =
-      getRelativeTop(prependRestore.element, viewport) -
-      prependRestore.viewportTop;
+      getRelativeTop(viewportAnchor.element, viewport) -
+      viewportAnchor.viewportTop;
     if (Math.abs(delta) <= SCROLL_EPSILON) return false;
     viewport.scrollTop += delta;
-    prependRestore.viewportTop = getRelativeTop(
-      prependRestore.element,
+    viewportAnchor.viewportTop = getRelativeTop(
+      viewportAnchor.element,
       viewport,
     );
     scheduleStateCommit();
@@ -754,13 +784,13 @@ function createEngine(props: MessageScrollerProviderProps) {
     return true;
   }
 
-  function capturePrependAnchor() {
+  function captureViewportAnchor() {
     if (!content || !viewport) {
-      prependRestore = null;
+      viewportAnchor = null;
       return;
     }
     const element = findFirstVisibleMessage({ content, spacer, viewport });
-    prependRestore = element
+    viewportAnchor = element
       ? { element, viewportTop: getRelativeTop(element, viewport) }
       : null;
   }
@@ -769,7 +799,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (pendingScrollFrame === null) {
       pendingScrollFrame = window.requestAnimationFrame(() => {
         pendingScrollFrame = null;
-        if (flushPendingScrollToMessage()) capturePrependAnchor();
+        if (flushPendingScrollToMessage()) captureViewportAnchor();
       });
     }
   }
@@ -839,7 +869,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     }
     const previousIndex = previousFirst ? children.indexOf(previousFirst) : -1;
     if (preserveScrollOnPrepend && previousIndex > 0) {
-      applyPrependRestore();
+      applyViewportAnchorRestore();
       return;
     }
     if (children.length > previousCount) {
@@ -886,7 +916,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     firstItem = children[0] ?? null;
 
     applyContentChange(children, previousCount, previousFirst);
-    capturePrependAnchor();
+    captureViewportAnchor();
   }
 
   function handleResize() {
@@ -907,6 +937,10 @@ function createEngine(props: MessageScrollerProviderProps) {
         scrollToEnd({ behavior: "auto", animated: true });
       return;
     }
+    // Markdown, syntax highlighting, fonts, and media may settle after the
+    // scroll event. Preserve the first visible message across those async
+    // height changes instead of relying on browser scroll anchoring heuristics.
+    if (applyViewportAnchorRestore()) return;
     scheduleStateCommit();
     scheduleVisibilitySync();
   }
@@ -1028,7 +1062,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   function syncAfterScroll() {
     commitScrollState();
     scheduleVisibilitySync();
-    capturePrependAnchor();
+    captureViewportAnchor();
   }
 
   function onAutoScrollChange() {

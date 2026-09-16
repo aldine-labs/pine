@@ -39,9 +39,8 @@ let resizeFrame = 0;
 let scrollFrame = 0;
 
 function onScroll(): void {
-  // Scroll is a high-frequency event; computing scrollable state reads the
-  // height of every message child (getBoundingClientRect), so coalesce all
-  // events within a frame into a single rAF commit.
+  // Scroll is a high-frequency event; coalesce state and anchor bookkeeping
+  // into one commit per animation frame.
   window.cancelAnimationFrame(scrollFrame);
   scrollFrame = window.requestAnimationFrame(syncAfterScroll);
 }

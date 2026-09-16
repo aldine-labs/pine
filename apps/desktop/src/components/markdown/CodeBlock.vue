@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  onMounted,
+  onUnmounted,
+  ref,
+  useTemplateRef,
+  watch,
+} from "vue";
 import { storeToRefs } from "pinia";
 import { CheckIcon, CopyIcon } from "@lucide/vue";
 import { toast } from "vue-sonner";
@@ -39,6 +46,34 @@ const lineNumbers = computed(() =>
 const isLoading = computed(
   () => props.loading === true || props.node.loading === true,
 );
+const rootElement = useTemplateRef<HTMLElement>("root");
+const isNearViewport = ref(
+  props.layout === "preview" || typeof IntersectionObserver === "undefined",
+);
+let visibilityObserver: IntersectionObserver | undefined;
+
+onMounted(() => {
+  const root = rootElement.value;
+  if (
+    props.layout === "preview" ||
+    !root ||
+    typeof IntersectionObserver === "undefined"
+  ) {
+    isNearViewport.value = true;
+    return;
+  }
+  visibilityObserver = new IntersectionObserver(
+    ([entry]) => {
+      if (entry?.isIntersecting) {
+        isNearViewport.value = true;
+        visibilityObserver?.disconnect();
+        visibilityObserver = undefined;
+      }
+    },
+    { rootMargin: "600px 0px" },
+  );
+  visibilityObserver.observe(root);
+});
 
 const html = ref("");
 interface HighlightRequest {
@@ -85,12 +120,18 @@ async function drainHighlightQueue(): Promise<void> {
 }
 
 watch(
-  () => [props.node.code, language.value, isLoading.value] as const,
-  ([code, currentLanguage, loading]) => {
+  () =>
+    [
+      props.node.code,
+      language.value,
+      isLoading.value,
+      isNearViewport.value,
+    ] as const,
+  ([code, currentLanguage, loading, visible]) => {
     // An open fence changes on every stream update. Keep it as escaped plain
     // text until it closes instead of repeatedly highlighting its full prefix.
     html.value = "";
-    if (loading) {
+    if (loading || !visible) {
       pendingHighlight = undefined;
       return;
     }
@@ -110,6 +151,7 @@ let resetTimer: ReturnType<typeof setTimeout> | undefined;
 onUnmounted(() => {
   disposed = true;
   pendingHighlight = undefined;
+  visibilityObserver?.disconnect();
   clearTimeout(resetTimer);
 });
 
@@ -129,6 +171,7 @@ async function copyCode(): Promise<void> {
 
 <template>
   <div
+    ref="root"
     :class="cn('relative', layout === 'preview' ? 'w-full' : 'my-6')"
     data-slot="code-block"
     @mouseenter="hovered = true"

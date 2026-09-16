@@ -30,6 +30,36 @@ export function toolRunKeys(
   return keys;
 }
 
+function latestToolRunKeys(
+  messages: readonly PineTranscriptMessage[],
+  limit: number,
+): string[] {
+  const keys: string[] = [];
+  for (
+    let messageIndex = messages.length - 1;
+    messageIndex >= 0 && keys.length < limit;
+    messageIndex--
+  ) {
+    const message = messages[messageIndex];
+    const blocks = message.blocks;
+    let blockIndex = blocks.length - 1;
+    while (blockIndex >= 0 && keys.length < limit) {
+      if (blocks[blockIndex]?.type !== "toolCall") {
+        blockIndex--;
+        continue;
+      }
+      let start = blockIndex;
+      while (start > 0 && blocks[start - 1]?.type === "toolCall") start--;
+      const block = blocks[start];
+      if (block?.type === "toolCall") {
+        keys.push(`${message.id}:${block.toolCall.id}`);
+      }
+      blockIndex = start - 1;
+    }
+  }
+  return keys.reverse();
+}
+
 /**
  * Transcript-level expansion policy for tool runs: while a response is
  * active, its last two tool units stay expanded (a standalone call counts
@@ -43,8 +73,16 @@ export function useToolActivityExpansion(options: {
   messages: Ref<readonly PineTranscriptMessage[]>;
   isRunning: Ref<boolean>;
 }): ComputedRef<Set<string>> {
-  const keys = computed(() => toolRunKeys(options.messages.value));
-  return computed(() =>
-    options.isRunning.value ? new Set(keys.value.slice(-2)) : new Set(),
-  );
+  const keys = computed(() => latestToolRunKeys(options.messages.value, 2));
+  return computed((previous) => {
+    const nextKeys = options.isRunning.value ? keys.value.slice(-2) : [];
+    if (
+      previous &&
+      previous.size === nextKeys.length &&
+      nextKeys.every((key) => previous.has(key))
+    ) {
+      return previous;
+    }
+    return new Set(nextKeys);
+  });
 }

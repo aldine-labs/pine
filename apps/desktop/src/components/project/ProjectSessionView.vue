@@ -37,7 +37,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
 import { useToolActivityExpansion } from "@/composables/useToolActivityExpansion";
 import { useContentTabsStore } from "@/stores/contentTabs";
-import { useSessionStore } from "@/stores/session";
+import { useSessionStore, type PineTranscriptMessage } from "@/stores/session";
 import ProjectSessionComposer from "./ProjectSessionComposer.vue";
 import ProjectTranscriptMessage from "./ProjectTranscriptMessage.vue";
 import ProjectTranscriptOutline from "./ProjectTranscriptOutline.vue";
@@ -68,6 +68,14 @@ const hasEarlierMessages = tabValue(liveState.hasEarlierMessages);
 const isLoadingMessages = tabValue(liveState.isLoadingMessages);
 const isRunning = tabValue(liveState.isRunning);
 const messages = tabValue(liveState.messages);
+const transcriptTurns = computed((previous?: PineTranscriptMessage[]) => {
+  const next = messages.value.filter((message) => message.role === "user");
+  return previous &&
+    previous.length === next.length &&
+    next.every((message, index) => previous[index] === message)
+    ? previous
+    : next;
+});
 const pendingApprovals = tabValue(liveState.pendingApprovals);
 const pendingQuestionnaires = tabValue(liveState.pendingQuestionnaires);
 const steeringMessages = tabValue(liveState.steeringMessages);
@@ -307,6 +315,12 @@ async function handleDrop(event: DragEvent): Promise<void> {
               <MessageScrollerItem
                 v-for="(message, index) in messages"
                 :key="message.id"
+                v-memo="[
+                  message,
+                  expandedToolRuns,
+                  reviewingToolCallIds,
+                  awaitingApprovalToolCallIds,
+                ]"
                 :message-id="message.id"
                 :scroll-anchor="message.role === 'user'"
                 :class="
@@ -326,7 +340,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
           </MessageScrollerViewport>
         </MessageScroller>
 
-        <ProjectTranscriptOutline :messages="messages" />
+        <ProjectTranscriptOutline :turns="transcriptTurns" />
       </div>
 
       <ProjectSessionComposer

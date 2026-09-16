@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { PineTranscriptMessage } from "@/stores/session";
 
 const props = defineProps<{
-  messages: PineTranscriptMessage[];
+  turns: PineTranscriptMessage[];
 }>();
 
 const minimumTurnCount = 3;
@@ -23,14 +23,11 @@ const maximumMarkerCount = 9;
 const { t } = useI18n();
 const { scrollToMessage } = useMessageScroller();
 const visibility = useMessageScrollerVisibility();
-const turns = computed(() =>
-  props.messages.filter((message) => message.role === "user"),
-);
 const markerCount = computed(() =>
-  Math.min(turns.value.length, maximumMarkerCount),
+  Math.min(props.turns.length, maximumMarkerCount),
 );
 const activeTurnIndex = computed(() =>
-  turns.value.findIndex(
+  props.turns.findIndex(
     (message) => message.id === visibility.value.currentAnchorId,
   ),
 );
@@ -40,7 +37,7 @@ const activeMarkerIndex = computed(() => {
   }
 
   return Math.round(
-    (activeTurnIndex.value / (turns.value.length - 1)) *
+    (activeTurnIndex.value / (props.turns.length - 1)) *
       (markerCount.value - 1),
   );
 });
@@ -64,7 +61,7 @@ function scrollToTurn(messageId: string): void {
 
 <template>
   <div
-    v-if="turns.length >= minimumTurnCount"
+    v-if="props.turns.length >= minimumTurnCount"
     class="absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 sm:block"
   >
     <HoverCard :open-delay="120" :close-delay="120">
@@ -100,7 +97,7 @@ function scrollToTurn(messageId: string): void {
           :aria-label="t('project.transcript.outline')"
         >
           <Button
-            v-for="message in turns"
+            v-for="message in props.turns"
             :key="message.id"
             class="w-full min-w-0 justify-start"
             :variant="

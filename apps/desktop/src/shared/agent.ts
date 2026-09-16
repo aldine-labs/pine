@@ -107,6 +107,38 @@ export type PineJsonValue =
 
 export type PineAgentRunState = "idle" | "running" | "aborting" | "failed";
 
+/**
+ * Compact, append-only assistant stream updates. Cumulative message snapshots
+ * are deliberately excluded so token streaming stays O(output size) across the
+ * utility-process and renderer IPC boundaries.
+ */
+export type PineAssistantMessageUpdate =
+  | { type: "text-start"; contentIndex: number; text: string }
+  | { type: "text-delta"; contentIndex: number; delta: string }
+  | { type: "text-end"; contentIndex: number; text: string }
+  | { type: "thinking-start"; contentIndex: number; thinking: string }
+  | { type: "thinking-delta"; contentIndex: number; delta: string }
+  | { type: "thinking-end"; contentIndex: number; thinking: string }
+  | {
+      type: "tool-call-start";
+      contentIndex: number;
+      id: string;
+      name: string;
+      input?: PineJsonValue;
+    }
+  | {
+      type: "tool-call-delta";
+      contentIndex: number;
+      delta: string;
+    }
+  | {
+      type: "tool-call-end";
+      contentIndex: number;
+      id: string;
+      name: string;
+      input?: PineJsonValue;
+    };
+
 export type PineAgentEvent =
   | {
       type: "run-state";
@@ -130,8 +162,7 @@ export type PineAgentEvent =
       type: "message-update";
       sessionId: string;
       messageId: string;
-      message: PineJsonValue;
-      update: PineJsonValue;
+      updates: PineAssistantMessageUpdate[];
     }
   | {
       type: "tool-start" | "tool-update" | "tool-end";
