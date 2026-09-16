@@ -11,7 +11,7 @@
     },
     "apps/desktop": {
       "name": "@pine/desktop",
-      "version": "0.4.2",
+      "version": "0.4.4",
       "dependencies": {
         "@anthropic-ai/sandbox-runtime": "0.0.75",
         "@earendil-works/pi-agent-core": "0.85.1",

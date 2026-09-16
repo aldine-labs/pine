@@ -4,8 +4,24 @@ All notable changes to Pine are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Starting with 0.4.4, release notes are written in both Chinese and English.
+从 0.4.4 起，发布记录使用中英双语。
 
 ## [Unreleased]
+
+## [0.4.4] - 2026-09-16
+
+### 新增 / Added
+
+- 图片、HTML 等可视预览支持触控板缩放，并可平移放大后的图片。Visual previews such as images and HTML now support trackpad zoom, with panning for enlarged images.
+- 新会话背景增加更均衡的图标布局和办公任务图标候选，并优化带轻微模糊的入场动画。The new-session background gains a more balanced icon layout, office-task icon candidates, and a refined entrance with subtle blur.
+
+### 修复 / Fixed
+
+- 切回正在流式输出的会话时，自动刷新到最新内容。Returning to a streaming session now refreshes it to the latest content automatically.
+- 关闭标签页时保留横向滚动缓动和标签补位动画，并修复顶栏部分空白区域无法拖动窗口的问题。Closing tabs now preserves horizontal scroll easing and tab movement; empty title-bar areas remain draggable.
+- 修复消息流式输出、窗口缩放和思考内容展开时的滚动跟随与动画。Fixed scroll following and animation during streamed messages, window resizing, and thinking expansion.
+- 发送消息后，新会话背景图标立即消失。The new-session background icons now disappear immediately when a message is sent.
 
 ## [0.4.3] - 2026-09-16
 
@@ -158,7 +174,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/phosphoros-works/pine/compare/v0.4.3...v0.4.4
+[0.4.3]: https://github.com/phosphoros-works/pine/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/phosphoros-works/pine/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/phosphoros-works/pine/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/phosphoros-works/pine/compare/v0.3.1...v0.4.0
