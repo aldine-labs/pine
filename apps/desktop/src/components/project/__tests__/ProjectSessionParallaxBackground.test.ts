@@ -4,13 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ProjectSessionParallaxBackground from "../ProjectSessionParallaxBackground.vue";
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 describe("ProjectSessionParallaxBackground", () => {
-  it("spreads icons on reveal and draws them inward before disappearing", async () => {
-    vi.useFakeTimers();
+  it("spreads icons and clears their blur on reveal", async () => {
     let reveal: FrameRequestCallback | undefined;
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       reveal = callback;
@@ -72,34 +70,6 @@ describe("ProjectSessionParallaxBackground", () => {
       "transition-[left,top,opacity,scale,filter]",
     );
 
-    const mostVisibleIndex = icons.reduce(
-      (best, entry, index) =>
-        Number((entry.element as HTMLElement).style.opacity) >
-        Number((icons[best].element as HTMLElement).style.opacity)
-          ? index
-          : best,
-      0,
-    );
-    await wrapper.setProps({ fadeOut: true });
-    expect(icon.attributes("style")).toContain(`left: ${inwardLeft}%`);
-    expect(icon.attributes("style")).toContain("scale: 0.96");
-    expect(icon.attributes("style")).toContain("filter: blur(8px)");
-    const exitStyles = icons.map(
-      (entry) => (entry.element as HTMLElement).style,
-    );
-    const mostVisible = exitStyles[mostVisibleIndex];
-    expect(mostVisible.transitionDelay).toBe("40ms, 40ms, 0ms, 40ms, 0ms");
-    expect(mostVisible.transitionDuration).toBe(
-      "700ms, 700ms, 420ms, 700ms, 420ms",
-    );
-    expect(mostVisible.transitionTimingFunction).toBe("var(--ease-out-expo)");
-    expect(new Set(exitStyles.map((style) => style.transitionDelay)).size).toBe(
-      16,
-    );
-    vi.advanceTimersByTime(1039);
-    expect(wrapper.emitted("faded")).toBeUndefined();
-    vi.advanceTimersByTime(1);
-    expect(wrapper.emitted("faded")).toHaveLength(1);
     wrapper.unmount();
   });
 });

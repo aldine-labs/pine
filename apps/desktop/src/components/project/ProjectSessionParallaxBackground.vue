@@ -38,7 +38,7 @@ import {
   WrenchIcon,
 } from "@lucide/vue";
 import type { Component } from "vue";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ParallaxFloat,
   ParallaxFloatElement,
@@ -55,25 +55,12 @@ interface ParallaxIcon {
   size: "size-12" | "size-14" | "size-16" | "size-20";
   iconSize: "size-8" | "size-10" | "size-12";
   fadeDelay: number;
-  exitDelay: number;
 }
 
-const props = withDefaults(defineProps<{ fadeOut?: boolean }>(), {
-  fadeOut: false,
-});
-const emit = defineEmits<{ faded: [] }>();
 const FADE_STEP_MS = 20;
 const FADE_DURATION_MS = 900;
-const EXIT_MOVE_DELAY_MS = 40;
-const EXIT_MOVE_DURATION_MS = 700;
-const EXIT_FADE_DURATION_MS = 420;
 const ICON_BLUR_PX = 8;
 const isRevealed = ref(false);
-
-function exitTransitionDelay(delay: number): string {
-  const motionDelay = delay + EXIT_MOVE_DELAY_MS;
-  return `${motionDelay}ms, ${motionDelay}ms, ${delay}ms, ${motionDelay}ms, ${delay}ms`;
-}
 
 function inwardPosition(position: string): string {
   return `${50 + (Number.parseFloat(position) - 50) * 0.85}%`;
@@ -269,7 +256,6 @@ const parallaxIcons: readonly ParallaxIcon[] = parallaxSlots.map(
       opacity: opacityForDepth(depth),
       ...shuffledScales[index],
       fadeDelay: 0,
-      exitDelay: 0,
     };
   },
 );
@@ -279,45 +265,14 @@ const fadeOrder = new Map(
     .sort((first, second) => first.depth - second.depth)
     .map((item, index) => [item.id, index]),
 );
-const exitOrder = new Map(
-  [...parallaxIcons]
-    .sort((first, second) => second.depth - first.depth)
-    .map((item, index) => [item.id, index]),
-);
 const parallaxIconsWithFade: readonly ParallaxIcon[] = parallaxIcons.map(
   (item) => ({
     ...item,
     fadeDelay: (fadeOrder.get(item.id) ?? 0) * FADE_STEP_MS,
-    exitDelay: (exitOrder.get(item.id) ?? 0) * FADE_STEP_MS,
   }),
 );
 
-let fadeTimer: number | undefined;
 let revealFrame: number | undefined;
-watch(
-  () => props.fadeOut,
-  (fadeOut) => {
-    if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
-    if (!fadeOut) return;
-
-    const reducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    fadeTimer = window.setTimeout(
-      () => {
-        fadeTimer = undefined;
-        emit("faded");
-      },
-      reducedMotion
-        ? 0
-        : (parallaxIconsWithFade.length - 1) * FADE_STEP_MS +
-            EXIT_MOVE_DELAY_MS +
-            EXIT_MOVE_DURATION_MS,
-    );
-  },
-  { immediate: true },
-);
-
 onMounted(() => {
   revealFrame = window.requestAnimationFrame(() => {
     revealFrame = undefined;
@@ -326,7 +281,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
   if (revealFrame !== undefined) window.cancelAnimationFrame(revealFrame);
 });
 </script>
@@ -348,22 +302,14 @@ onBeforeUnmount(() => {
         :data-parallax-icon="item.id"
         :depth="item.depth"
         :style="{
-          left: props.fadeOut || !isRevealed ? inwardPosition(item.x) : item.x,
-          top: props.fadeOut || !isRevealed ? inwardPosition(item.y) : item.y,
-          opacity: props.fadeOut || !isRevealed ? 0 : item.opacity,
-          scale: props.fadeOut ? 0.96 : !isRevealed ? 0.92 : 1,
-          filter: `blur(${props.fadeOut || !isRevealed ? ICON_BLUR_PX : 0}px)`,
-          transitionDelay: isRevealed
-            ? props.fadeOut
-              ? exitTransitionDelay(item.exitDelay)
-              : `${item.fadeDelay}ms`
-            : '0ms',
-          transitionDuration: props.fadeOut
-            ? `${EXIT_MOVE_DURATION_MS}ms, ${EXIT_MOVE_DURATION_MS}ms, ${EXIT_FADE_DURATION_MS}ms, ${EXIT_MOVE_DURATION_MS}ms, ${EXIT_FADE_DURATION_MS}ms`
-            : `${FADE_DURATION_MS}ms`,
-          transitionTimingFunction: props.fadeOut
-            ? 'var(--ease-out-expo)'
-            : 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+          left: isRevealed ? item.x : inwardPosition(item.x),
+          top: isRevealed ? item.y : inwardPosition(item.y),
+          opacity: isRevealed ? item.opacity : 0,
+          scale: isRevealed ? 1 : 0.92,
+          filter: `blur(${isRevealed ? 0 : ICON_BLUR_PX}px)`,
+          transitionDelay: isRevealed ? `${item.fadeDelay}ms` : '0ms',
+          transitionDuration: `${FADE_DURATION_MS}ms`,
+          transitionTimingFunction: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
         }"
         :class="
           cn(
