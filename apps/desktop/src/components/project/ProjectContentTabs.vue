@@ -92,6 +92,8 @@ const tabList = useTemplateRef<HTMLDivElement>("tabList");
 const tabItems = useTemplateRef<HTMLDivElement>("tabItems");
 const tabListHasOverflow = ref<boolean | null>(null);
 let tabListResizeObserver: ResizeObserver | null = null;
+let closingTab = false;
+const tabShiftAnimations = new WeakMap<HTMLElement, Animation>();
 const draggingTabId = ref<string | null>(null);
 const dropPosition = ref<{ tabId: string; side: "before" | "after" } | null>(
   null,
@@ -104,35 +106,40 @@ function updateTabListOverflow(): void {
 }
 
 async function closeTab(tabId: string): Promise<void> {
-  const viewport = tabList.value;
-  const previousScrollLeft = viewport?.scrollLeft ?? 0;
+  closingTab = true;
+  const items = tabItems.value;
+  const positions = new Map<string, number>();
+  for (const element of items?.querySelectorAll<HTMLElement>(
+    "[data-tab-id], [data-tab-separator-id]",
+  ) ?? []) {
+    const key =
+      element.dataset.tabId ?? `separator:${element.dataset.tabSeparatorId}`;
+    positions.set(key, element.getBoundingClientRect().left);
+  }
   tabNavigation.close(tabId);
   await nextTick();
-  const items = tabItems.value;
-  if (
-    !viewport ||
-    !items ||
-    previousScrollLeft <= 0 ||
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
-    viewport.scrollWidth > viewport.clientWidth
-  )
-    return;
+  closingTab = false;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
 
-  // When overflow disappears Chromium clamps scrollLeft immediately. Preserve
-  // the old visual position and animate the items into their new position.
-  items.style.transform = `translateX(-${previousScrollLeft}px)`;
-  items.style.transition = "none";
-  void items.offsetWidth;
-  items.style.transition = "transform 300ms ease-out";
-  items.style.transform = "translateX(0)";
-  items.addEventListener(
-    "transitionend",
-    () => {
-      items.style.transition = "";
-      items.style.transform = "";
-    },
-    { once: true },
-  );
+  // Browser scroll clamping may shift the entire strip in the same frame as
+  // removal. Animate each surviving item from its former screen position so
+  // both that shift and ordinary gap filling keep their momentum.
+  for (const element of items?.querySelectorAll<HTMLElement>(
+    "[data-tab-id], [data-tab-separator-id]",
+  ) ?? []) {
+    const key =
+      element.dataset.tabId ?? `separator:${element.dataset.tabSeparatorId}`;
+    const before = positions.get(key);
+    if (before === undefined) continue;
+    tabShiftAnimations.get(element)?.cancel();
+    const delta = before - element.getBoundingClientRect().left;
+    if (Math.abs(delta) < 0.5) continue;
+    const animation = element.animate?.(
+      [{ transform: `translateX(${delta}px)` }, { transform: "translateX(0)" }],
+      { duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+    );
+    if (animation) tabShiftAnimations.set(element, animation);
+  }
 }
 
 onMounted(() => {
@@ -239,7 +246,7 @@ function revealTab(tabId: string): void {
 watch(
   [activeTabId, tabList, tabs],
   () => {
-    revealTab(activeTabId.value);
+    if (!closingTab) revealTab(activeTabId.value);
     updateTabListOverflow();
   },
   { flush: "post" },
@@ -380,6 +387,7 @@ watch(activeSession, (session) => {
           <template v-for="(tab, index) in tabs" :key="tab.id">
             <Separator
               v-if="index > 0"
+              :data-tab-separator-id="tab.id"
               orientation="vertical"
               :class="
                 cn(

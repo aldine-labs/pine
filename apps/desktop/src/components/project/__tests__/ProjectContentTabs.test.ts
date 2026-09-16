@@ -362,12 +362,21 @@ describe("ProjectContentTabs", () => {
     const { wrapper } = await mountTabs();
     const tabsStore = useContentTabsStore();
     const viewport = wrapper.get<HTMLDivElement>('[role="tablist"]').element;
+    let scrollOffset = 0;
     Object.defineProperties(viewport, {
       clientWidth: { configurable: true, value: 300 },
       scrollWidth: {
         configurable: true,
         get: () =>
           wrapper.findAll('[data-slot="project-content-tab"]').length * 160,
+      },
+      scrollLeft: {
+        configurable: true,
+        get: () =>
+          Math.min(scrollOffset, Math.max(0, viewport.scrollWidth - 300)),
+        set: (value: number) => {
+          scrollOffset = value;
+        },
       },
     });
 
@@ -376,6 +385,14 @@ describe("ProjectContentTabs", () => {
     await flushPromises();
     expect(viewport.classList.contains("scroll-fade-none")).toBe(false);
     viewport.scrollLeft = 20;
+    const firstTab = wrapper.get<HTMLElement>(
+      '[data-tab-id="session-1"]',
+    ).element;
+    vi.spyOn(firstTab, "getBoundingClientRect").mockImplementation(
+      () => new DOMRect(100 - viewport.scrollLeft, 0, 160, 32),
+    );
+    const animate = vi.fn();
+    firstTab.animate = animate;
 
     await wrapper
       .get(
@@ -384,10 +401,58 @@ describe("ProjectContentTabs", () => {
       .trigger("click");
     await flushPromises();
     expect(viewport.classList.contains("scroll-fade-none")).toBe(true);
-    expect(
-      wrapper.get<HTMLElement>('[data-slot="project-content-tab-items"]')
-        .element.style.transition,
-    ).toContain("transform");
+    expect(animate).toHaveBeenCalledWith(
+      [{ transform: "translateX(-20px)" }, { transform: "translateX(0)" }],
+      expect.objectContaining({ duration: 320 }),
+    );
+    wrapper.unmount();
+  });
+
+  it("animates surviving tabs when the last tab closes and overflow remains", async () => {
+    const { wrapper } = await mountTabs();
+    const tabsStore = useContentTabsStore();
+    const viewport = wrapper.get<HTMLDivElement>('[role="tablist"]').element;
+    let scrollOffset = 240;
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollWidth: {
+        configurable: true,
+        get: () =>
+          wrapper.findAll('[data-slot="project-content-tab"]').length * 160,
+      },
+      scrollLeft: {
+        configurable: true,
+        get: () =>
+          Math.min(scrollOffset, Math.max(0, viewport.scrollWidth - 200)),
+        set: (value: number) => {
+          scrollOffset = value;
+        },
+      },
+    });
+    tabsStore.createSessionTab({ reuseDraft: false });
+    const lastTab = tabsStore.createSessionTab({ reuseDraft: false });
+    await flushPromises();
+    const firstTab = wrapper.get<HTMLElement>(
+      '[data-tab-id="session-1"]',
+    ).element;
+    vi.spyOn(firstTab, "getBoundingClientRect").mockImplementation(
+      () => new DOMRect(100 - viewport.scrollLeft, 0, 160, 32),
+    );
+    const animate = vi.fn();
+    firstTab.animate = animate;
+
+    await wrapper
+      .get(
+        `[data-tab-id="${lastTab.id}"] button[aria-label="Close New session"]`,
+      )
+      .trigger("click");
+    await flushPromises();
+
+    expect(viewport.scrollWidth).toBe(320);
+    expect(animate).toHaveBeenCalledWith(
+      [{ transform: "translateX(-120px)" }, { transform: "translateX(0)" }],
+      expect.objectContaining({ duration: 320 }),
+    );
     wrapper.unmount();
   });
 
