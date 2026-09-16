@@ -87,13 +87,12 @@ export interface AnimateScrollTopOptions {
 
 type CancelAnimation = () => void;
 
-interface ActiveAnimation {
-  cancel: CancelAnimation;
-  retarget: (top: number) => void;
-}
-
-/** Keep one animation clock per element while streaming updates its target. */
-const activeAnimations = new WeakMap<HTMLElement, ActiveAnimation>();
+/**
+ * One in-flight animation per element: calling again retargets from wherever
+ * the element currently is, which is what a streaming follow-scroll wants.
+ * Wheel / touch input cancels the animation so the reader always wins.
+ */
+const activeAnimations = new WeakMap<HTMLElement, CancelAnimation>();
 
 const USER_INPUT_EVENTS = ["wheel", "touchstart"] as const;
 
@@ -102,23 +101,16 @@ export function animateScrollTop(
   top: number,
   options: AnimateScrollTopOptions = {},
 ): CancelAnimation {
+  activeAnimations.get(element)?.();
   const target = Math.max(0, Math.round(top));
-  const current = activeAnimations.get(element);
-  if (current) {
-    current.retarget(target);
-    return current.cancel;
-  }
   const distance = target - element.scrollTop;
-
-  let frame: number | null = null;
 
   function cleanup(): void {
     for (const event of USER_INPUT_EVENTS) {
       element.removeEventListener(event, handleUserInput);
     }
     if (frame !== null) window.cancelAnimationFrame(frame);
-    if (activeAnimations.get(element) === active)
-      activeAnimations.delete(element);
+    activeAnimations.delete(element);
   }
 
   function handleUserInput(): void {
@@ -133,21 +125,14 @@ export function animateScrollTop(
   const duration = options.duration ?? DEFAULT_DURATION_MS;
   const startTop = element.scrollTop;
   const startTime = performance.now();
-  let latestTarget = target;
-
-  const active: ActiveAnimation = {
-    cancel: cleanup,
-    retarget(nextTarget) {
-      latestTarget = nextTarget;
-    },
-  };
+  let frame: number | null = null;
 
   function step(now: number): void {
     frame = null;
     const progress = easeOutExpo((now - startTime) / duration);
-    element.scrollTop = startTop + (latestTarget - startTop) * progress;
+    element.scrollTop = startTop + (target - startTop) * progress;
     if (now - startTime >= duration) {
-      element.scrollTop = latestTarget;
+      element.scrollTop = target;
       cleanup();
       return;
     }
@@ -157,7 +142,7 @@ export function animateScrollTop(
   for (const event of USER_INPUT_EVENTS) {
     element.addEventListener(event, handleUserInput, { passive: true });
   }
-  activeAnimations.set(element, active);
+  activeAnimations.set(element, cleanup);
   frame = window.requestAnimationFrame(step);
 
   return cleanup;
