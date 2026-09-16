@@ -81,6 +81,24 @@ function mountView() {
 }
 
 describe("ProjectSessionView file drop", () => {
+  it("keeps the empty state content above the parallax background", async () => {
+    const { wrapper } = mountView();
+    await flushPromises();
+
+    expect(
+      wrapper.find('[data-slot="session-parallax-background"]').exists(),
+    ).toBe(true);
+    expect(
+      wrapper.get('[data-slot="session-parallax-background"]').element
+        .parentElement,
+    ).toBe(wrapper.get('[data-slot="session-transcript-region"]').element);
+    expect(wrapper.text()).toContain("不妨大胆想象");
+    expect(wrapper.text()).toContain(
+      "从一个问题、一项任务，或一个大胆的想法开始。",
+    );
+    wrapper.unmount();
+  });
+
   it("shows a loading indicator while earlier messages are fetched", async () => {
     const { wrapper } = mountView();
     const sessionStore = useSessionStore();

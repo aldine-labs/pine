@@ -37,6 +37,7 @@ import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
 import { useToolActivityExpansion } from "@/composables/useToolActivityExpansion";
 import { useContentTabsStore } from "@/stores/contentTabs";
 import { useSessionStore, type PineTranscriptMessage } from "@/stores/session";
+import ProjectSessionParallaxBackground from "./ProjectSessionParallaxBackground.vue";
 import ProjectSessionComposer from "./ProjectSessionComposer.vue";
 import ProjectTranscriptMessage from "./ProjectTranscriptMessage.vue";
 import ProjectTranscriptOutline from "./ProjectTranscriptOutline.vue";
@@ -88,6 +89,13 @@ const pendingQuestionnaires = tabValue(liveState.pendingQuestionnaires);
 const steeringMessages = tabValue(liveState.steeringMessages);
 const reviewingToolCallIds = tabValue(liveState.reviewingToolCallIds);
 const draft = ref("");
+const shouldFadeParallax = ref(false);
+const hasConversation = computed(
+  () => messages.value.length > 0 || outlineMessages.value.length > 0,
+);
+const isNewConversation = computed(
+  () => props.sessionId === undefined && !hasConversation.value,
+);
 const attachments = computed<PineAttachment[]>({
   get: () => contentTabsStore.attachmentsFor(props.tabId),
   set: (value) => {
@@ -145,6 +153,7 @@ function submit(message: string): void {
   ) {
     return;
   }
+  shouldFadeParallax.value = true;
   draft.value = "";
   void sessionStore
     .prompt(message, sessionId, approvalMode.value)
@@ -301,7 +310,17 @@ async function handleDrop(event: DragEvent): Promise<void> {
       @dragleave="handleDragLeave"
       @drop="handleDrop"
     >
-      <div class="relative min-h-0 w-full flex-1">
+      <div
+        data-slot="session-transcript-region"
+        class="relative isolate min-h-0 w-full flex-1"
+      >
+        <ProjectSessionParallaxBackground
+          v-if="isNewConversation || shouldFadeParallax"
+          class="-z-10"
+          :fade-out="shouldFadeParallax"
+          @faded="shouldFadeParallax = false"
+        />
+
         <div
           v-if="isLoadingMessages && messages.length"
           data-slot="history-loading"
@@ -320,9 +339,9 @@ async function handleDrop(event: DragEvent): Promise<void> {
               <Empty v-if="!messages.length && !isLoadingMessages">
                 <EmptyHeader>
                   <PineCharacter decorative size="lg" />
-                  <EmptyTitle class="font-semibold">{{
-                    t("project.transcript.emptyTitle")
-                  }}</EmptyTitle>
+                  <EmptyTitle class="font-semibold">
+                    {{ t("project.transcript.emptyTitle") }}
+                  </EmptyTitle>
                   <EmptyDescription>
                     {{ t("project.transcript.emptyDescription") }}
                   </EmptyDescription>

@@ -47,6 +47,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import WindowTitleBar from "@/components/window/WindowTitleBar.vue";
 import { ROUTE_NAMES } from "@/router/routes";
 import type { PineProject } from "@/shared/projects";
@@ -176,6 +177,17 @@ onMounted(() => {
     :aria-busy="isProjectOpening ? 'true' : undefined"
     :inert="isProjectOpening"
   >
+    <FlickeringGrid
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,white_0%,transparent_76%)]"
+      :style="{ opacity: 0.7 }"
+      :flicker-chance="0.1"
+      :grid-gap="6"
+      color="oklch(0.56 0.09 107.3)"
+      :max-opacity="0.42"
+      :square-size="4"
+    />
+
     <WindowTitleBar>
       <template #leading>
         <span
@@ -233,7 +245,7 @@ onMounted(() => {
     </WindowTitleBar>
 
     <div
-      class="mx-auto flex h-0 min-h-0 w-full max-w-4xl flex-1 flex-col overflow-hidden px-6 pb-10 [padding-top:calc(var(--window-titlebar-height)+2rem)]"
+      class="relative z-10 mx-auto flex h-0 min-h-0 w-full max-w-4xl flex-1 flex-col overflow-hidden px-6 pb-10 [padding-top:calc(var(--window-titlebar-height)+2rem)]"
     >
       <div
         data-testid="project-list-container"
@@ -286,7 +298,7 @@ onMounted(() => {
                 type="button"
                 variant="outline"
                 size="sm"
-                class="min-h-16 cursor-pointer pr-14 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                class="min-h-16 cursor-pointer bg-background pr-14 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
                 :disabled="isProjectOpening"
                 :aria-busy="
                   isProjectOpening && openingProjectId === project.id

@@ -10,17 +10,19 @@
     "cssVariables": true,
     "prefix": ""
   },
-  "aliases": {
-    "components": "@/components",
-    "composables": "@/composables",
-    "utils": "@/lib/utils",
-    "ui": "@/components/ui",
-    "lib": "@/lib"
-  },
   "iconLibrary": "lucide",
-  "menuColor": "default-translucent",
-  "menuAccent": "subtle",
   "rtl": false,
   "pointer": false,
-  "registries": {}
+  "menuColor": "default-translucent",
+  "menuAccent": "subtle",
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "composables": "@/composables"
+  },
+  "registries": {
+    "@inspira-ui": "https://registry.inspira-ui.com/{name}.json"
+  }
 }

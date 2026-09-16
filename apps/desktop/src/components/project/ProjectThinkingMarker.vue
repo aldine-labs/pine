@@ -98,7 +98,8 @@ function syncElapsedTimer(streaming: boolean): void {
 function scrollThinkingToBottom(): void {
   const content = thinkingContent.value;
   if (!content) return;
-  scrollAnimation = animateScrollTop(content, content.scrollHeight);
+  const target = Math.max(0, content.scrollHeight - content.clientHeight);
+  scrollAnimation = animateScrollTop(content, target);
 }
 
 async function toggleExpanded(): Promise<void> {
