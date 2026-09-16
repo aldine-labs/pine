@@ -225,7 +225,16 @@ function indexedTextMessages(entries: Entry[]): IndexedTextMessage[] {
             status: entryMessage.isError
               ? ("error" as const)
               : ("complete" as const),
-            output: entryMessage.content,
+            // Keep the structured details envelope used by live tool events.
+            // Questionnaire markers read `details.answers`, and other tools
+            // use details for metadata such as fetched page titles.
+            output:
+              "details" in entryMessage && entryMessage.details !== undefined
+                ? {
+                    content: entryMessage.content,
+                    details: entryMessage.details,
+                  }
+                : entryMessage.content,
             ...(approval ? { approval } : {}),
           },
         };

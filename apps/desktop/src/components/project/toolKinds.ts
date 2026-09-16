@@ -1,13 +1,17 @@
 import {
+  BookOpenIcon,
   EyeIcon,
   FilePlusIcon,
   FileTextIcon,
   GlobeIcon,
   MonitorCogIcon,
   PanelTopIcon,
+  PlusIcon,
   SearchIcon,
   SquarePenIcon,
   TerminalIcon,
+  Trash2Icon,
+  WandSparklesIcon,
   WrenchIcon,
 } from "@lucide/vue";
 import type { Component } from "vue";
@@ -24,6 +28,7 @@ export type ToolKind =
   | "presentFile"
   | "read"
   | "search"
+  | "skill"
   | "write";
 
 /** Icon shown for each tool call, keyed by its kind. */
@@ -37,7 +42,20 @@ export const TOOL_KIND_ICON: Record<ToolKind, Component> = {
   presentFile: EyeIcon,
   read: FileTextIcon,
   search: SearchIcon,
+  skill: WandSparklesIcon,
   write: FilePlusIcon,
+};
+
+export type SkillOperation =
+  "activateAuthoring" | "create" | "edit" | "invoke" | "remove";
+
+/** Icons shown for the individual dynamically activated Skill operations. */
+export const SKILL_OPERATION_ICON: Record<SkillOperation, Component> = {
+  activateAuthoring: WandSparklesIcon,
+  create: PlusIcon,
+  edit: SquarePenIcon,
+  invoke: BookOpenIcon,
+  remove: Trash2Icon,
 };
 
 /** Order used to render a tool run's summary, matching the user's example
@@ -52,8 +70,28 @@ export const TOOL_KIND_ORDER: readonly ToolKind[] = [
   "computer",
   "browser",
   "bash",
+  "skill",
   "generic",
 ];
+
+const SKILL_OPERATION_KEYS: Record<string, SkillOperation> = {
+  activate_skill_authoring: "activateAuthoring",
+  create_skill: "create",
+  edit_skill: "edit",
+  invoke_skill: "invoke",
+  remove_skill: "remove",
+};
+
+export function skillOperationKey(name: string): SkillOperation | undefined {
+  return SKILL_OPERATION_KEYS[name.toLowerCase().split(/[.:/]/).at(-1) ?? name];
+}
+
+/** Resolve the most specific icon for a tool call, including Skill operations. */
+export function toolIconForName(name: string): Component {
+  const skillOperation = skillOperationKey(name);
+  if (skillOperation) return SKILL_OPERATION_ICON[skillOperation];
+  return TOOL_KIND_ICON[toolKind(name)];
+}
 
 export function toolKind(name: string): ToolKind {
   const normalized = name.toLowerCase().split(/[.:/]/).at(-1) ?? name;
@@ -106,6 +144,7 @@ export function toolKind(name: string): ToolKind {
   if (["write", "write_file", "create_file"].includes(normalized)) {
     return "write";
   }
+  if (skillOperationKey(normalized)) return "skill";
   return "generic";
 }
 

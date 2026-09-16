@@ -1,5 +1,10 @@
 import { mount } from "@vue/test-utils";
-import { EyeIcon, ShieldBanIcon } from "@lucide/vue";
+import {
+  BookOpenIcon,
+  EyeIcon,
+  ShieldBanIcon,
+  WandSparklesIcon,
+} from "@lucide/vue";
 import { describe, expect, it } from "vitest";
 import { createAppI18n } from "@/app/i18n";
 import type { PineToolCall } from "@/shared/sessions";
@@ -158,6 +163,31 @@ describe("ProjectToolCallGroup", () => {
     const trigger = wrapper.get('button[data-slot="marker"]');
     expect(trigger.text()).toContain("打开了 2 个文件");
     expect(wrapper.findAllComponents(EyeIcon)).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it("summarizes Skill operations and keeps their operation icons", () => {
+    const wrapper = mountGroup({
+      toolCalls: [
+        {
+          id: "t-skill-authoring",
+          input: {},
+          name: "activate_skill_authoring",
+          status: "complete",
+        },
+        {
+          id: "t-skill-invoke",
+          input: { name: "release-notes" },
+          name: "invoke_skill",
+          status: "complete",
+        },
+      ],
+    });
+
+    const trigger = wrapper.get('button[data-slot="marker"]');
+    expect(trigger.text()).toContain("处理了 2 项工作技能");
+    expect(wrapper.findComponent(WandSparklesIcon).exists()).toBe(true);
+    expect(wrapper.findComponent(BookOpenIcon).exists()).toBe(true);
     wrapper.unmount();
   });
 });

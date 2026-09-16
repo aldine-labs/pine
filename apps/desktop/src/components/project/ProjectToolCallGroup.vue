@@ -11,9 +11,8 @@ import {
   countToolKinds,
   isDeniedTool,
   isRunningTool,
-  toolKind,
-  TOOL_KIND_ICON,
   TOOL_KIND_ORDER,
+  toolIconForName,
 } from "./toolKinds";
 
 const props = defineProps<{
@@ -56,7 +55,7 @@ const summaryLabel = computed(() => {
 });
 
 const iconByToolCall = computed(() =>
-  props.toolCalls.map((toolCall) => toolKind(toolCall.name)),
+  props.toolCalls.map((toolCall) => toolIconForName(toolCall.name)),
 );
 
 /**
@@ -94,7 +93,7 @@ function toggleExpanded(): void {
           :is="
             isDeniedTool(toolCalls[index])
               ? ShieldBanIcon
-              : TOOL_KIND_ICON[iconByToolCall[index]]
+              : iconByToolCall[index]
           "
           v-for="(_, index) in iconByToolCall"
           :key="index"

@@ -239,9 +239,16 @@ export default {
     scope: { global: "全局", project: "项目" },
     globalEnabledLabel: "在当前项目中使用 {name}",
     new: "新建 Skill",
+    create: "新建",
     empty: "这个空间还没有 Skill",
+    nameLabel: "Skill 名称",
+    descriptionLabel: "Skill 描述",
+    instructionsLabel: "Skill 指令正文",
     namePlaceholder: "skill-name",
-    contentPlaceholder: "输入完整的 SKILL.md 内容",
+    descriptionPlaceholder: "Skill 描述（何时使用）",
+    contentPlaceholder: "输入 Skill 指令正文",
+    deleteTitle: "删除工作技能？",
+    deleteDescription: "确定要删除“{name}”吗？此操作无法撤销。",
   },
   sessions: {
     searchTitle: "搜索会话",
@@ -456,6 +463,10 @@ export default {
           active: "正在写入 {count} 个文件",
           complete: "写入了 {count} 个文件",
         },
+        skill: {
+          active: "正在处理 {count} 项工作技能",
+          complete: "处理了 {count} 项工作技能",
+        },
       },
       toolKinds: {
         bash: "命令执行",
@@ -467,6 +478,7 @@ export default {
         search: "搜索",
         fetch: "网页抓取",
         presentFile: "打开文件",
+        skill: "工作技能",
         write: "写入",
       },
       toolParams: {
@@ -549,6 +561,42 @@ export default {
         writeLines: "（{count} 行）",
         denied: "已拒绝 {tool}：",
         awaitingApproval: "等待确认 {tool}：",
+        skillScopes: {
+          global: "全局",
+          project: "项目",
+        },
+        skillOperations: {
+          activateAuthoring: {
+            label: "启用技能创作",
+            complete: "已启用技能创作",
+            running: "正在启用技能创作",
+            error: "启用技能创作失败",
+          },
+          invoke: {
+            label: "调用工作技能",
+            complete: "已调用工作技能",
+            running: "正在调用工作技能",
+            error: "调用工作技能失败",
+          },
+          create: {
+            label: "创建工作技能",
+            complete: "已创建{scope}工作技能",
+            running: "正在创建{scope}工作技能",
+            error: "创建{scope}工作技能失败",
+          },
+          edit: {
+            label: "编辑工作技能",
+            complete: "已编辑{scope}工作技能",
+            running: "正在编辑{scope}工作技能",
+            error: "编辑{scope}工作技能失败",
+          },
+          remove: {
+            label: "删除工作技能",
+            complete: "已删除{scope}工作技能",
+            running: "正在删除{scope}工作技能",
+            error: "删除{scope}工作技能失败",
+          },
+        },
         bash: {
           complete: { before: "已执行 ", after: "" },
           error: { before: "执行 ", after: " 失败" },

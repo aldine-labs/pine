@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { PlusIcon, Trash2Icon } from "@lucide/vue";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { handleError } from "@/app/errors/errorHandler";
@@ -8,11 +9,33 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,21 +48,72 @@ interface Props {
 const props = defineProps<Props>();
 const open = defineModel<boolean>("open", { default: false });
 const { t } = useI18n();
+const skillScopes = ["global", "project"] as const;
 const activeScope = ref<PineSkillScope>("global");
 const skills = ref<PineSkillSummary[]>([]);
 const selectedName = ref("");
-const content = ref("");
+const description = ref("");
+const body = ref("");
+const frontmatter = ref<Record<string, unknown>>({});
 const isCreating = ref(false);
 const isLoading = ref(false);
 const isSaving = ref(false);
+const isDeleteConfirmOpen = ref(false);
+const isRemoving = ref(false);
+const deleteName = ref("");
 const togglingNames = ref(new Set<string>());
 const canSave = computed(
   () =>
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(selectedName.value) &&
     selectedName.value.length <= 64 &&
-    content.value.trim().length > 0 &&
+    description.value.trim().length > 0 &&
+    description.value.trim().length <= 1_024 &&
+    body.value.trim().length > 0 &&
     !isSaving.value,
 );
+
+interface ParsedSkillDocument {
+  body: string;
+  frontmatter: Record<string, unknown>;
+}
+
+function parseSkillDocument(rawContent: string): ParsedSkillDocument {
+  const normalized = rawContent
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    return { body: normalized.trim(), frontmatter: {} };
+  }
+
+  const endIndex = normalized.indexOf("\n---", 4);
+  if (endIndex < 0) return { body: normalized.trim(), frontmatter: {} };
+
+  try {
+    const parsed = parseYaml(normalized.slice(4, endIndex));
+    const metadata =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    return {
+      body: normalized.slice(endIndex + 4).trim(),
+      frontmatter: metadata,
+    };
+  } catch {
+    return { body: normalized.slice(endIndex + 4).trim(), frontmatter: {} };
+  }
+}
+
+function serializeSkillDocument(): string {
+  const metadata = {
+    ...frontmatter.value,
+    name: selectedName.value,
+    description: description.value.trim(),
+  };
+  const header = stringifyYaml(metadata).trimEnd();
+  const instructions = body.value.trim();
+  return `---\n${header}\n---\n\n${instructions}\n`;
+}
 
 function scopeRequest(scope = activeScope.value) {
   return { projectId: props.projectId, scope };
@@ -53,16 +127,16 @@ function reportError(error: unknown, operation: "load" | "save" | "remove") {
   });
 }
 
-async function load(): Promise<void> {
+async function load(nameToSelect?: string): Promise<void> {
   isLoading.value = true;
   try {
     skills.value = (await window.pine.listSkills(scopeRequest())).skills;
-    const current = skills.value.find(
-      (skill) => skill.name === selectedName.value,
-    );
-    if (current) await selectSkill(current.name);
-    else if (skills.value[0]) await selectSkill(skills.value[0].name);
-    else startCreating();
+    if (
+      nameToSelect &&
+      skills.value.some((skill) => skill.name === nameToSelect)
+    ) {
+      await selectSkill(nameToSelect);
+    }
   } catch (error) {
     reportError(error, "load");
   } finally {
@@ -71,11 +145,16 @@ async function load(): Promise<void> {
 }
 
 async function selectSkill(name: string): Promise<void> {
-  selectedName.value = name;
+  const result = await window.pine.readSkill({ ...scopeRequest(), name });
+  const parsed = parseSkillDocument(result.content);
+  selectedName.value = result.skill.name;
+  description.value =
+    typeof parsed.frontmatter.description === "string"
+      ? parsed.frontmatter.description
+      : result.skill.description;
+  body.value = parsed.body;
+  frontmatter.value = parsed.frontmatter;
   isCreating.value = false;
-  content.value = (
-    await window.pine.readSkill({ ...scopeRequest(), name })
-  ).content;
 }
 
 async function selectSkillSafely(name: string): Promise<void> {
@@ -88,18 +167,14 @@ async function selectSkillSafely(name: string): Promise<void> {
 
 function startCreating(): void {
   selectedName.value = "";
-  content.value = `---\nname: \ndescription: \n---\n\n# Skill\n\n`;
+  description.value = "";
+  body.value = "";
+  frontmatter.value = {};
   isCreating.value = true;
 }
 
-function syncFrontmatterName(name: string): void {
-  selectedName.value = name.trim().toLowerCase();
-  if (isCreating.value) {
-    content.value = content.value.replace(
-      /^name:\s*.*$/m,
-      `name: ${selectedName.value}`,
-    );
-  }
+function updateName(name: string | number): void {
+  selectedName.value = String(name).trim().toLowerCase();
 }
 
 async function save(): Promise<void> {
@@ -109,12 +184,13 @@ async function save(): Promise<void> {
     const request = {
       ...scopeRequest(),
       name: selectedName.value,
-      content: content.value,
+      content: serializeSkillDocument(),
     };
     if (isCreating.value) await window.pine.createSkill(request);
     else await window.pine.editSkill(request);
+    const savedName = selectedName.value;
     isCreating.value = false;
-    await load();
+    await load(savedName);
   } catch (error) {
     reportError(error, "save");
   } finally {
@@ -122,17 +198,28 @@ async function save(): Promise<void> {
   }
 }
 
-async function removeSelected(): Promise<void> {
+function removeSelected(): void {
   if (!selectedName.value || isCreating.value) return;
+  deleteName.value = selectedName.value;
+  isDeleteConfirmOpen.value = true;
+}
+
+async function confirmRemoveSelected(): Promise<void> {
+  const name = deleteName.value;
+  if (!name || isRemoving.value) return;
+  isRemoving.value = true;
   try {
     await window.pine.removeSkill({
       ...scopeRequest(),
-      name: selectedName.value,
+      name,
     });
-    selectedName.value = "";
+    isDeleteConfirmOpen.value = false;
+    startCreating();
     await load();
   } catch (error) {
     reportError(error, "remove");
+  } finally {
+    isRemoving.value = false;
   }
 }
 
@@ -161,133 +248,212 @@ async function setGlobalSkillEnabled(
 }
 
 watch(open, (value) => {
-  if (value) void load();
+  if (!value) return;
+  startCreating();
+  void load();
 });
 
 watch(activeScope, () => {
   if (!open.value) return;
-  selectedName.value = "";
+  skills.value = [];
+  startCreating();
   void load();
 });
 </script>
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent
-      class="max-h-[min(88vh,48rem)] gap-0 overflow-hidden p-0 sm:max-w-3xl"
-    >
+    <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-3xl">
       <DialogHeader class="px-6 pt-6 pb-4 pr-16">
         <DialogTitle>{{ t("skills.title") }}</DialogTitle>
         <DialogDescription>{{ t("skills.description") }}</DialogDescription>
       </DialogHeader>
 
-      <Tabs v-model="activeScope" class="flex min-h-0 flex-1 flex-col">
+      <Tabs v-model="activeScope" class="min-h-0 gap-0">
         <div class="px-6 pb-4">
-          <TabsList class="grid w-full grid-cols-2 items-stretch">
-            <TabsTrigger value="global" class="data-active:-translate-y-px">
+          <TabsList class="w-full">
+            <TabsTrigger value="global">
               {{ t("skills.scope.global") }}
             </TabsTrigger>
-            <TabsTrigger value="project" class="data-active:-translate-y-px">
+            <TabsTrigger value="project">
               {{ t("skills.scope.project") }}
             </TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent
-          :value="activeScope"
-          class="grid min-h-0 flex-1 grid-cols-[14rem_1fr] border-y"
-        >
-          <div class="flex min-h-0 flex-col border-r bg-muted/20">
-            <div class="p-3">
-              <Button
-                class="w-full"
-                variant="outline"
-                size="sm"
-                @click="startCreating"
-              >
-                <PlusIcon data-icon="inline-start" />
-                {{ t("skills.new") }}
-              </Button>
-            </div>
-            <ScrollArea class="min-h-0 flex-1 px-2 pb-3">
-              <div
-                v-for="skill in skills"
-                :key="skill.name"
-                class="mb-1 flex items-center rounded-md hover:bg-muted"
-                :class="
-                  skill.name === selectedName && !isCreating ? 'bg-muted' : ''
-                "
-              >
-                <button
-                  type="button"
-                  class="min-w-0 flex-1 px-3 py-2 text-left"
-                  @click="selectSkillSafely(skill.name)"
-                >
-                  <span class="block truncate font-medium">{{
-                    skill.name
-                  }}</span>
-                  <span class="line-clamp-2 text-xs text-muted-foreground">
-                    {{ skill.description }}
-                  </span>
-                </button>
-                <Switch
-                  v-if="activeScope === 'global'"
-                  class="mr-3 shrink-0"
-                  :model-value="skill.enabled !== false"
-                  :disabled="togglingNames.has(skill.name)"
-                  :aria-label="
-                    t('skills.globalEnabledLabel', { name: skill.name })
-                  "
-                  @update:model-value="setGlobalSkillEnabled(skill, $event)"
-                />
-              </div>
-              <p
-                v-if="!isLoading && skills.length === 0"
-                class="px-3 py-6 text-center text-sm text-muted-foreground"
-              >
-                {{ t("skills.empty") }}
-              </p>
-            </ScrollArea>
-          </div>
+        <Separator />
 
-          <div class="flex min-h-0 flex-col gap-4 p-5">
-            <div class="flex items-center gap-2">
-              <Input
-                :model-value="selectedName"
-                :disabled="!isCreating"
-                :placeholder="t('skills.namePlaceholder')"
-                @update:model-value="syncFrontmatterName(String($event))"
-              />
-            </div>
-            <Textarea
-              v-model="content"
-              class="min-h-80 flex-1 resize-none font-mono text-xs"
-              spellcheck="false"
-              :placeholder="t('skills.contentPlaceholder')"
-            />
-            <div class="flex justify-between gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                :disabled="isCreating || !selectedName"
-                @click="removeSelected"
+        <template v-for="scope in skillScopes" :key="scope">
+          <TabsContent
+            v-if="scope === activeScope"
+            :value="scope"
+            class="m-0 h-[35rem] min-h-0 flex-none overflow-hidden"
+          >
+            <div
+              class="grid h-full min-h-0 grid-cols-[14rem_auto_minmax(0,1fr)] overflow-hidden"
+            >
+              <aside class="min-h-0 overflow-hidden bg-muted/20">
+                <ScrollArea
+                  class="h-full min-h-0 overflow-hidden [&_[data-slot=scroll-area-viewport]]:scroll-fade-y"
+                >
+                  <ItemGroup class="gap-2 p-3">
+                    <Item
+                      as="button"
+                      type="button"
+                      variant="muted"
+                      size="sm"
+                      class="min-h-20 justify-center hover:bg-muted"
+                      @click="startCreating"
+                    >
+                      <ItemMedia variant="icon">
+                        <PlusIcon />
+                      </ItemMedia>
+                      <ItemContent class="flex-none">
+                        <ItemTitle>{{ t("skills.new") }}</ItemTitle>
+                      </ItemContent>
+                    </Item>
+                    <Item
+                      v-for="skill in skills"
+                      :key="skill.name"
+                      :variant="
+                        skill.name === selectedName && !isCreating
+                          ? 'muted'
+                          : 'default'
+                      "
+                      size="sm"
+                      role="listitem"
+                      class="min-w-0 hover:bg-muted"
+                    >
+                      <ItemContent class="min-w-0">
+                        <button
+                          type="button"
+                          class="min-w-0 text-left"
+                          @click="selectSkillSafely(skill.name)"
+                        >
+                          <ItemTitle class="w-full">{{ skill.name }}</ItemTitle>
+                          <ItemDescription>
+                            {{ skill.description }}
+                          </ItemDescription>
+                        </button>
+                      </ItemContent>
+                      <ItemActions
+                        v-if="scope === 'global'"
+                        class="mr-1 shrink-0"
+                      >
+                        <Switch
+                          :model-value="skill.enabled !== false"
+                          :disabled="togglingNames.has(skill.name)"
+                          :aria-label="
+                            t('skills.globalEnabledLabel', { name: skill.name })
+                          "
+                          @update:model-value="
+                            setGlobalSkillEnabled(skill, $event)
+                          "
+                        />
+                      </ItemActions>
+                    </Item>
+                  </ItemGroup>
+                </ScrollArea>
+              </aside>
+
+              <Separator orientation="vertical" />
+
+              <form
+                class="flex h-full min-h-0 flex-col p-5"
+                @submit.prevent="save"
               >
-                <Trash2Icon data-icon="inline-start" />
-                {{ t("common.delete") }}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                :disabled="!canSave"
-                @click="save"
-              >
-                {{ isSaving ? t("common.saving") : t("common.save") }}
-              </Button>
+                <FieldGroup class="grid grid-cols-2 gap-2">
+                  <Field class="gap-0">
+                    <FieldLabel :for="`skill-${scope}-name`" class="sr-only">
+                      {{ t("skills.nameLabel") }}
+                    </FieldLabel>
+                    <Input
+                      :id="`skill-${scope}-name`"
+                      :model-value="selectedName"
+                      :disabled="!isCreating"
+                      :placeholder="t('skills.namePlaceholder')"
+                      @update:model-value="updateName"
+                    />
+                  </Field>
+                  <Field class="gap-0">
+                    <FieldLabel
+                      :for="`skill-${scope}-description`"
+                      class="sr-only"
+                    >
+                      {{ t("skills.descriptionLabel") }}
+                    </FieldLabel>
+                    <Input
+                      :id="`skill-${scope}-description`"
+                      v-model="description"
+                      :placeholder="t('skills.descriptionPlaceholder')"
+                    />
+                  </Field>
+                </FieldGroup>
+
+                <Field class="mt-4 h-[26rem] min-h-0 gap-0">
+                  <FieldLabel :for="`skill-${scope}-body`" class="sr-only">
+                    {{ t("skills.instructionsLabel") }}
+                  </FieldLabel>
+                  <Textarea
+                    :id="`skill-${scope}-body`"
+                    v-model="body"
+                    class="h-full min-h-0 overflow-y-auto [field-sizing:fixed] font-mono text-xs"
+                    spellcheck="false"
+                    :placeholder="t('skills.contentPlaceholder')"
+                  />
+                </Field>
+
+                <DialogFooter
+                  class="mt-4 flex-row justify-between sm:justify-between"
+                >
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    :disabled="isCreating || !selectedName"
+                    @click="removeSelected"
+                  >
+                    <Trash2Icon data-icon="inline-start" />
+                    {{ t("common.delete") }}
+                  </Button>
+                  <Button type="submit" size="sm" :disabled="!canSave">
+                    {{
+                      isSaving
+                        ? t("common.saving")
+                        : isCreating
+                          ? t("skills.create")
+                          : t("common.save")
+                    }}
+                  </Button>
+                </DialogFooter>
+              </form>
             </div>
-          </div>
-        </TabsContent>
+          </TabsContent>
+        </template>
       </Tabs>
     </DialogContent>
   </Dialog>
+
+  <AlertDialog v-model:open="isDeleteConfirmOpen">
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>{{ t("skills.deleteTitle") }}</AlertDialogTitle>
+        <AlertDialogDescription>
+          {{ t("skills.deleteDescription", { name: deleteName }) }}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel :disabled="isRemoving">
+          {{ t("common.cancel") }}
+        </AlertDialogCancel>
+        <AlertDialogAction
+          variant="destructive"
+          :disabled="isRemoving"
+          @click="confirmRemoveSelected"
+        >
+          {{ t("common.delete") }}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 </template>

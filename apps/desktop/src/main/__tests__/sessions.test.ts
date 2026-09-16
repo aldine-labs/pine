@@ -432,6 +432,63 @@ describe("ProjectSessionService", () => {
     }
   });
 
+  it("preserves structured tool details when replaying old questionnaires", async () => {
+    const rootPath = await createTemporaryProjectData();
+    const options = serviceOptions(rootPath);
+    await mkdir(options.cwd, { recursive: true });
+    const environment = new NodeExecutionEnv({ cwd: options.cwd });
+    const repository = createRepository(environment, options.sessionsRoot);
+    const session = await createSession(repository, options.cwd);
+    const toolCallId = "call-questionnaire-main";
+    const details = {
+      answers: [{ questionIndex: 0 }, { questionIndex: 1 }],
+      cancelled: false,
+    };
+    await appendMessage(
+      session,
+      fauxAssistantMessage(
+        [
+          fauxToolCall(
+            "ask_user_question",
+            { questions: [{ question: "Pick one" }] },
+            { id: toolCallId },
+          ),
+        ],
+        { stopReason: "toolUse" },
+      ),
+    );
+    await appendMessage(session, {
+      role: "toolResult",
+      toolCallId,
+      toolName: "ask_user_question",
+      content: [{ type: "text", text: "User has answered your questions." }],
+      details,
+      isError: false,
+      timestamp: Date.now(),
+    });
+    const metadata = session.metadata;
+    const service = await ProjectSessionService.create(options);
+
+    try {
+      const result = await service.loadMessages(metadata.id);
+      const toolCall = result.messages[0]?.blocks[0];
+      expect(toolCall).toEqual(
+        expect.objectContaining({
+          type: "toolCall",
+          toolCall: expect.objectContaining({
+            output: {
+              content: [{ type: "text", text: expect.any(String) }],
+              details,
+            },
+          }),
+        }),
+      );
+    } finally {
+      await service.dispose();
+      await environment.cleanup(BACKGROUND_CONTEXT);
+    }
+  });
+
   it("restores denied approval markers from persisted decisions", async () => {
     const rootPath = await createTemporaryProjectData();
     const options = serviceOptions(rootPath);

@@ -15,6 +15,11 @@ export default defineConfig({
         "@anthropic-ai/sandbox-runtime",
         "@earendil-works/pi-ai",
         "@earendil-works/pi-coding-agent",
+        "yaml",
+        // This bundle runs in Electron's Node-enabled utility process. Vite's
+        // browser externalization otherwise replaces Node built-ins with empty
+        // shims (for example, AsyncLocalStorage becomes undefined).
+        /^node:/,
       ],
       output: {
         chunkFileNames: "[name]-[hash].mjs",

@@ -1,9 +1,14 @@
 import { mount } from "@vue/test-utils";
 import {
+  BookOpenIcon,
   CircleHelpIcon,
   EyeIcon,
   MonitorCogIcon,
   PanelTopIcon,
+  PlusIcon,
+  SquarePenIcon,
+  Trash2Icon,
+  WandSparklesIcon,
 } from "@lucide/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAppI18n } from "@/app/i18n";
@@ -395,6 +400,61 @@ describe("project transcript markers", () => {
 
     expect(content.text()).toBe("已获得 2 个问题的答案");
     expect(content.classes()).not.toContain("shimmer");
+  });
+
+  it("renders Skill operations with dedicated copy, targets, and icons", () => {
+    const cases = [
+      {
+        name: "activate_skill_authoring",
+        input: {},
+        expected: "已启用技能创作",
+        icon: WandSparklesIcon,
+      },
+      {
+        name: "invoke_skill",
+        input: { name: "release-notes" },
+        expected: "已调用工作技能 release-notes",
+        icon: BookOpenIcon,
+      },
+      {
+        name: "create_skill",
+        input: { name: "release-notes", scope: "global" },
+        expected: "已创建全局工作技能 release-notes",
+        icon: PlusIcon,
+      },
+      {
+        name: "edit_skill",
+        input: { name: "release-notes", scope: "project" },
+        expected: "已编辑项目工作技能 release-notes",
+        icon: SquarePenIcon,
+      },
+      {
+        name: "remove_skill",
+        input: { name: "release-notes", scope: "project" },
+        expected: "已删除项目工作技能 release-notes",
+        icon: Trash2Icon,
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const wrapper = mount(ProjectToolCallMarker, {
+        props: {
+          toolCall: {
+            id: `skill-${testCase.name}`,
+            input: testCase.input,
+            name: testCase.name,
+            status: "complete",
+          },
+        },
+        global: { plugins: [createAppI18n("zh-CN")] },
+      });
+
+      const content = wrapper.get('[data-slot="marker-content"]');
+      expect(content.text()).toBe(testCase.expected);
+      expect(wrapper.findComponent(testCase.icon).exists()).toBe(true);
+      expect(content.text()).not.toContain(testCase.name);
+      wrapper.unmount();
+    }
   });
 
   it("shows the presented filename instead of the raw tool name", async () => {

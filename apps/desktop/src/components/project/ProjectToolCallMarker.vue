@@ -6,7 +6,7 @@ import {
   EyeIcon,
   ShieldBanIcon,
 } from "@lucide/vue";
-import { computed, ref, type Component, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { UI_PRESENT_FILE_TOOL_NAME } from "@/shared/agent";
@@ -15,7 +15,8 @@ import ProjectToolCallDialog from "./ProjectToolCallDialog.vue";
 import {
   isDeniedTool,
   isRunningTool,
-  TOOL_KIND_ICON,
+  skillOperationKey,
+  toolIconForName,
   toolKind,
 } from "./toolKinds";
 
@@ -136,13 +137,13 @@ function computerUseOperationVariant(
 }
 
 /** Tools whose meaning is more specific than their generic kind. */
-function toolIcon(name: string): Component {
+function toolIcon(name: string) {
   if (isAskUserQuestionTool(name)) return CircleHelpIcon;
   if (isPresentFileTool(name)) return EyeIcon;
-  return TOOL_KIND_ICON[toolKind(name)];
+  return toolIconForName(name);
 }
 
-const kindIcon: Component = toolIcon(props.toolCall.name);
+const kindIcon = toolIcon(props.toolCall.name);
 
 const isRunning = computed(() => isRunningTool(props.toolCall));
 const isDenied = computed(() => isDeniedTool(props.toolCall));
@@ -645,6 +646,15 @@ const presentation = computed(() => {
       ? webFetchFaviconDataUrl(props.toolCall.output)
       : undefined;
   const suffix = kind === "read" ? readRangeSuffix(input) : "";
+  const skillName = kind === "skill" ? firstString(input, ["name"]) : undefined;
+  const skillScope =
+    kind === "skill" ? firstString(input, ["scope"]) : undefined;
+  const skillScopeLabel =
+    skillScope === "global"
+      ? t("project.transcript.tools.skillScopes.global")
+      : skillScope === "project"
+        ? t("project.transcript.tools.skillScopes.project")
+        : "";
   const target =
     kind === "bash" && command
       ? compactInline(command)
@@ -660,23 +670,33 @@ const presentation = computed(() => {
                 props.contextToolCalls ?? [],
                 props.toolCall.id,
               )
-            : path
-              ? `${filename(path)}${suffix}`
-              : props.toolCall.name;
+            : kind === "skill"
+              ? skillName
+              : path
+                ? `${filename(path)}${suffix}`
+                : props.toolCall.name;
   const targetMono =
     kind === "bash" ||
     kind === "read" ||
     kind === "edit" ||
     kind === "write" ||
+    kind === "skill" ||
     ((kind === "computer" || kind === "browser") &&
       computerUseTargetMono(
         input,
         props.contextToolCalls ?? [],
         props.toolCall.id,
       ));
-  const operationKey =
+  const computerOperationKey =
     kind === "computer" || kind === "browser"
       ? computerUseOperationKey(props.toolCall.name)
+      : undefined;
+  const skillOperation =
+    kind === "skill" ? skillOperationKey(props.toolCall.name) : undefined;
+  const operationPath = computerOperationKey
+    ? `project.transcript.tools.computerOperations.${computerOperationKey}`
+    : skillOperation
+      ? `project.transcript.tools.skillOperations.${skillOperation}`
       : undefined;
   // Review holds replace the tense label entirely: the reader must see that
   // the call is gated, not that it is running.
@@ -731,10 +751,8 @@ const presentation = computed(() => {
       // The gate label carries its own trailing separator so the target
       // reads as one sentence, e.g. "正在审核 读取文档目录：ls ~/Documents".
       before: t(`project.transcript.tools.${stateKey}`, {
-        tool: operationKey
-          ? t(
-              `project.transcript.tools.computerOperations.${operationKey}.label`,
-            )
+        tool: operationPath
+          ? t(`${operationPath}.label`)
           : kind === "bash" && description
             ? compactInline(description)
             : t(`project.transcript.toolKinds.${kind}`),
@@ -762,18 +780,21 @@ const presentation = computed(() => {
       after: "",
     };
   }
-  if (operationKey) {
-    const operationPath = `project.transcript.tools.computerOperations.${operationKey}`;
-    const embeddedTarget = computerUseEmbeddedTarget(
-      operationKey,
-      input,
-      target,
-    );
-    const operationVariant = computerUseOperationVariant(
-      operationKey,
-      input,
-      embeddedTarget,
-    );
+  if (operationPath) {
+    let embeddedTarget: string | undefined;
+    let operationVariant: "NoApp" | "NoTarget" | undefined;
+    if (computerOperationKey) {
+      embeddedTarget = computerUseEmbeddedTarget(
+        computerOperationKey,
+        input,
+        target ?? "",
+      );
+      operationVariant = computerUseOperationVariant(
+        computerOperationKey,
+        input,
+        embeddedTarget,
+      );
+    }
     const operationState = `${state}${operationVariant ?? ""}`;
     return {
       before: operationVariant
@@ -785,6 +806,7 @@ const presentation = computed(() => {
             key: firstString(input, ["key"]) ?? "",
             direction: firstString(input, ["direction"]) ?? "",
             tab: typeof input.tab_id === "number" ? `tab ${input.tab_id}` : "",
+            scope: skillScopeLabel,
           }),
       operation: undefined,
       separator: embeddedTarget ? "" : target ? " " : "",

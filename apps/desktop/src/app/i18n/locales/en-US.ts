@@ -254,9 +254,17 @@ export default {
     scope: { global: "Global", project: "Project" },
     globalEnabledLabel: "Use {name} in this project",
     new: "New Skill",
+    create: "Create",
     empty: "No Skills in this space",
+    nameLabel: "Skill name",
+    descriptionLabel: "Skill description",
+    instructionsLabel: "Skill instructions",
     namePlaceholder: "skill-name",
-    contentPlaceholder: "Enter complete SKILL.md content",
+    descriptionPlaceholder: "Skill description (when to use)",
+    contentPlaceholder: "Enter Skill instructions",
+    deleteTitle: "Delete Skill?",
+    deleteDescription:
+      'Are you sure you want to delete "{name}"? This cannot be undone.',
   },
   sessions: {
     searchTitle: "Search sessions",
@@ -480,6 +488,10 @@ export default {
           active: "Writing {count} files",
           complete: "Wrote {count} files",
         },
+        skill: {
+          active: "Processing {count} Skills",
+          complete: "Processed {count} Skills",
+        },
       },
       toolKinds: {
         bash: "command execution",
@@ -491,6 +503,7 @@ export default {
         search: "search",
         fetch: "web fetch",
         presentFile: "present file",
+        skill: "Skill",
         write: "write",
       },
       toolParams: {
@@ -573,6 +586,42 @@ export default {
         writeLines: "({count} lines)",
         denied: "Denied {tool}: ",
         awaitingApproval: "Awaiting your approval for this {tool}: ",
+        skillScopes: {
+          global: "global",
+          project: "project",
+        },
+        skillOperations: {
+          activateAuthoring: {
+            label: "enable Skill authoring",
+            complete: "Enabled Skill authoring",
+            running: "Enabling Skill authoring",
+            error: "Couldn’t enable Skill authoring",
+          },
+          invoke: {
+            label: "invoke a Skill",
+            complete: "Invoked Skill",
+            running: "Invoking Skill",
+            error: "Couldn’t invoke Skill",
+          },
+          create: {
+            label: "create a Skill",
+            complete: "Created a {scope} Skill",
+            running: "Creating a {scope} Skill",
+            error: "Couldn’t create a {scope} Skill",
+          },
+          edit: {
+            label: "edit a Skill",
+            complete: "Edited a {scope} Skill",
+            running: "Editing a {scope} Skill",
+            error: "Couldn’t edit a {scope} Skill",
+          },
+          remove: {
+            label: "remove a Skill",
+            complete: "Removed a {scope} Skill",
+            running: "Removing a {scope} Skill",
+            error: "Couldn’t remove a {scope} Skill",
+          },
+        },
         bash: {
           complete: { before: "Ran ", after: "" },
           error: { before: "Failed to run ", after: "" },
