@@ -183,6 +183,14 @@ describe("ProjectFilePreview", () => {
       }),
     );
     await flushPromises();
+    const image = wrapper.get<HTMLImageElement>("img").element;
+    Object.defineProperties(image, {
+      naturalWidth: { value: 1000 },
+      naturalHeight: { value: 800 },
+    });
+    image.dispatchEvent(new Event("load"));
+    await flushPromises();
+    expect(image.style.width).toBe("1000px");
     const section = wrapper.element;
     const ordinaryWheel = new WheelEvent("wheel", {
       bubbles: true,
@@ -197,6 +205,11 @@ describe("ProjectFilePreview", () => {
     expect(wrapper.get('[aria-label="File metadata"]').text()).toContain(
       "120%",
     );
+    expect(image.style.width).toBe("1200px");
+    expect(image.style.height).toBe("960px");
+    expect(
+      wrapper.get('[data-slot="image-preview-viewport"]').classes(),
+    ).toContain("overflow-auto");
   });
 
   it("switches Markdown between source and rendered content and locates rendered selections", async () => {

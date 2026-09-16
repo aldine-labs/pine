@@ -9,7 +9,7 @@ import {
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
-import { useEventListener } from "@vueuse/core";
+import { useElementSize, useEventListener } from "@vueuse/core";
 import { getMarkdown, parseMarkdownToStructure } from "markstream-vue";
 import {
   ExternalLink,
@@ -155,6 +155,9 @@ const mediaDetails = ref<{
   height: number;
   duration?: number;
 }>();
+const imageViewport = useTemplateRef<HTMLDivElement>("imageViewport");
+const { width: imageViewportWidth, height: imageViewportHeight } =
+  useElementSize(imageViewport);
 const pageCount = ref<number>();
 const previewInverted = ref(false);
 const previewZoom = ref([100]);
@@ -170,6 +173,20 @@ const canZoomPreview = computed(
     preview.value?.kind === "image",
 );
 const zoom = computed(() => previewZoom.value[0] ?? 100);
+const imageSize = computed(() => {
+  const width = mediaDetails.value?.width ?? 0;
+  const height = mediaDetails.value?.height ?? 0;
+  if (!width || !height) return undefined;
+  const fit = Math.min(
+    1,
+    imageViewportWidth.value > 48 ? (imageViewportWidth.value - 48) / width : 1,
+    imageViewportHeight.value > 48
+      ? (imageViewportHeight.value - 48) / height
+      : 1,
+  );
+  const scale = (fit * appliedZoom.value) / 100;
+  return { width: `${width * scale}px`, height: `${height * scale}px` };
+});
 let zoomFrame: number | undefined;
 let zoomCommitTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingZoom = 100;
@@ -434,20 +451,27 @@ onBeforeUnmount(() => {
       @selection-change="selectedRange = $event"
     />
     <div
+      v-else-if="preview.kind === 'image'"
+      ref="imageViewport"
+      data-slot="image-preview-viewport"
+      class="scroll-fade min-h-0 flex-1 overflow-auto p-6"
+    >
+      <div class="grid min-h-full min-w-full h-max w-max place-items-center">
+        <img
+          :src="preview.url"
+          :alt="fileName"
+          class="block max-w-none shrink-0 object-contain"
+          :style="imageSize"
+          @load="imageLoaded"
+          @error="failed = true"
+        />
+      </div>
+    </div>
+    <div
       v-else
       class="scroll-fade flex min-h-0 flex-1 items-center justify-center overflow-auto p-6"
     >
-      <img
-        v-if="preview.kind === 'image'"
-        :src="preview.url"
-        :alt="fileName"
-        class="max-h-full max-w-full object-contain"
-        :style="{ zoom: `${appliedZoom}%` }"
-        @load="imageLoaded"
-        @error="failed = true"
-      />
       <video
-        v-else
         ref="video"
         :src="preview.url"
         :aria-label="fileName"
