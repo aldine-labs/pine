@@ -24,7 +24,12 @@ describe("ProjectSessionParallaxBackground", () => {
         },
       },
     });
-    const icon = wrapper.findAll("[data-parallax-icon]")[0];
+    const icons = wrapper.findAll("[data-parallax-icon]");
+    expect(icons).toHaveLength(16);
+    expect(
+      new Set(icons.map((icon) => icon.attributes("data-parallax-icon"))).size,
+    ).toBe(16);
+    const icon = icons[0];
     const inwardLeft = Number.parseFloat(
       icon.attributes("style")!.match(/left: ([\d.]+)%/)![1],
     );
@@ -32,6 +37,25 @@ describe("ProjectSessionParallaxBackground", () => {
 
     reveal?.(0);
     await nextTick();
+    const positions = icons.map((entry) => {
+      const { left, top } = (entry.element as HTMLElement).style;
+      return { x: Number.parseFloat(left), y: Number.parseFloat(top) };
+    });
+    expect(positions.filter((position) => position.x < 50)).toHaveLength(8);
+    expect(positions.filter((position) => position.x > 50)).toHaveLength(8);
+    expect(
+      positions.some(({ x, y }) => x > 38 && x < 62 && y > 30 && y < 70),
+    ).toBe(false);
+    for (let index = 0; index < positions.length; index += 1) {
+      for (let other = index + 1; other < positions.length; other += 1) {
+        expect(
+          Math.hypot(
+            positions[index].x - positions[other].x,
+            positions[index].y - positions[other].y,
+          ),
+        ).toBeGreaterThan(16);
+      }
+    }
     const outwardLeft = Number.parseFloat(
       icon.attributes("style")!.match(/left: ([\d.]+)%/)![1],
     );
