@@ -643,17 +643,17 @@ function createEngine(props: MessageScrollerProviderProps) {
     } = {},
   ) {
     if (!viewport) return;
-    cancelScrollAnimation?.();
-    cancelScrollAnimation = null;
     const target = Math.max(0, top);
     if (Math.abs(viewport.scrollTop - target) <= SCROLL_EPSILON) {
+      cancelScrollAnimation?.();
+      cancelScrollAnimation = null;
       viewport.scrollTop = target;
       commitScrollState();
       return;
     }
     if (shouldAnimateFollow(animated, followAnimated())) {
-      // Shared expo-curve tween (see lib/animateScroll). Retarget-safe for
-      // streaming follow; wheel/touch input cancels it via the lib. Only a
+      // Keep the current animation clock while streaming changes its target.
+      // Wheel/touch input cancels it via the lib. Only a
       // live turn glides — hydrating or re-entering a finished conversation
       // snaps to the anchor so no animation plays on entry.
       if (isAutoscrolling) setAutoscrolling(true);
@@ -661,6 +661,8 @@ function createEngine(props: MessageScrollerProviderProps) {
       scheduleStateCommit();
       return;
     }
+    cancelScrollAnimation?.();
+    cancelScrollAnimation = null;
     if (isAutoscrolling) setAutoscrolling(true);
     viewport.scrollTo({ top: target, behavior });
     scheduleStateCommit();
