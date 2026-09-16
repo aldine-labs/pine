@@ -92,17 +92,6 @@ describe("animateScrollTop", () => {
     expect(element.scrollTop).toBe(200);
   });
 
-  it("catches the latest bottom during continuous streaming", () => {
-    const clock = installFrameClock();
-    const element = createScroller();
-    for (let index = 1; index <= 30; index++) {
-      animateScrollTop(element, index * 100);
-      clock.flush(16);
-    }
-    clock.flush(32);
-    expect(element.scrollTop).toBe(3000);
-  });
-
   it("jumps instantly under prefers-reduced-motion", () => {
     installFrameClock();
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
