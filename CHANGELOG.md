@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-15
+
+### Added
+
+- Global and project skills, with localized skill activity in the transcript.
+- Persistent approval state and execution cache-hit reporting.
+- Native dragging of project files into Pine.
+
+### Changed
+
+- Optimized streaming transcript rendering and preserved project library order.
+
+### Fixed
+
+- Improved file presentation summaries and handling of missing Computer Use parameters.
+
 ## [0.3.1] - 2026-09-14
 
 ### Fixed
@@ -114,7 +130,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/phosphoros-works/pine/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/phosphoros-works/pine/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/phosphoros-works/pine/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/phosphoros-works/pine/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/phosphoros-works/pine/compare/v0.2.0...v0.2.1
