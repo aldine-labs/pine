@@ -365,6 +365,8 @@ function startDrag(event: DragEvent, node: ProjectTreeNode): void {
   );
   // Even read-only folders can be attached to a message.
   event.dataTransfer.effectAllowed = "copyMove";
+  event.preventDefault();
+  window.pine.startProjectFileDrag(reference(node));
 }
 
 function dragOver(event: DragEvent, node: ProjectTreeNode): void {

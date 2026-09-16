@@ -7,6 +7,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { lstatSync, realpathSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
@@ -88,6 +89,36 @@ export async function resolveProjectEntry(
   const folder = folders.find((candidate) => candidate.id === entry.folderId);
   if (!folder) throw new Error("Project folder not found.");
   return resolveProjectPath(folder, entry.relativePath);
+}
+
+/**
+ * Resolve a visible project entry synchronously so Electron can start a native
+ * drag while the browser's dragstart event is still active.
+ */
+export function resolveProjectEntryForNativeDrag(
+  folders: PineProjectFolder[],
+  entry: ProjectEntryReference,
+): string {
+  const folder = folders.find((candidate) => candidate.id === entry.folderId);
+  if (!folder) throw new Error("Project folder not found.");
+  if (path.isAbsolute(entry.relativePath) || entry.relativePath.includes("\0"))
+    throw new Error("Expected a relative project path.");
+
+  const resolvedRoot = realpathSync(folder.path);
+  const requestedPath = path.resolve(resolvedRoot, entry.relativePath);
+  if (!contains(resolvedRoot, requestedPath)) {
+    throw new Error("Directory is outside the selected project folder.");
+  }
+
+  const resolvedPath = realpathSync(requestedPath);
+  if (!contains(resolvedRoot, resolvedPath)) {
+    throw new Error("Directory resolves outside the selected project folder.");
+  }
+  const metadata = lstatSync(resolvedPath);
+  if (!metadata.isFile() && !metadata.isDirectory()) {
+    throw new Error("Only files and folders can be dragged.");
+  }
+  return resolvedPath;
 }
 
 async function assertMissing(destination: string): Promise<void> {

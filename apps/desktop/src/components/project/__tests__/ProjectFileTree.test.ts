@@ -74,6 +74,7 @@ function mountTree(
         })),
   );
   const operateProjectFile = vi.fn(() => Promise.resolve());
+  const startProjectFileDrag = vi.fn();
   const unsubscribeProjectFilesChanged = vi.fn();
   const onProjectFilesChanged = vi.fn<
     (listener: (event: unknown) => void) => () => void
@@ -84,6 +85,7 @@ function mountTree(
     value: {
       listProjectDirectory,
       operateProjectFile,
+      startProjectFileDrag,
       setWatchedProjectDirectories,
       onProjectFilesChanged,
       getPathForFile: (file: File) => `/external/${file.name}`,
@@ -103,6 +105,7 @@ function mountTree(
     folderId,
     listProjectDirectory,
     operateProjectFile,
+    startProjectFileDrag,
     onProjectFilesChanged,
     setWatchedProjectDirectories,
     unsubscribeProjectFilesChanged,
@@ -308,8 +311,13 @@ describe("ProjectFileTree", () => {
   );
 
   it("drags an internal reference and moves it onto a folder", async () => {
-    const { wrapper, folderId, operateProjectFile, listProjectDirectory } =
-      mountTree();
+    const {
+      wrapper,
+      folderId,
+      operateProjectFile,
+      listProjectDirectory,
+      startProjectFileDrag,
+    } = mountTree();
     await expandRoot(wrapper);
     const data = new Map<string, string>();
     const transfer = {
@@ -326,6 +334,10 @@ describe("ProjectFileTree", () => {
     expect(JSON.parse(data.get(PROJECT_ENTRY_DRAG_TYPE)!)).toEqual([
       { folderId, relativePath: "notes.md" },
     ]);
+    expect(startProjectFileDrag).toHaveBeenCalledWith({
+      folderId,
+      relativePath: "notes.md",
+    });
     await wrapper
       .get('[data-path="docs"]')
       .trigger("dragover", { dataTransfer: transfer });

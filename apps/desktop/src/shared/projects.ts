@@ -43,6 +43,7 @@ import type {
   ProjectFilePreviewRequest,
   PresentedFilePreviewRequest,
   ProjectFileOperation,
+  StartProjectFileDragRequest,
   ListProjectDirectoryRequest,
   ListProjectDirectoryResult,
   ProjectFilesChangedEvent,
@@ -198,6 +199,7 @@ export interface PineDesktopApi extends PineWindowApi {
     listener: (event: ProjectFilesChangedEvent) => void,
   ) => () => void;
   operateProjectFile: (request: ProjectFileOperation) => Promise<void>;
+  startProjectFileDrag: (request: StartProjectFileDragRequest) => void;
   inspectProjectAttachments: (
     entries: ProjectEntryReference[],
   ) => Promise<PickAttachmentsResult>;

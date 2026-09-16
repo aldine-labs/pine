@@ -122,6 +122,7 @@ import {
   PROJECT_FILE_OPERATION_CHANNEL,
   PROJECT_FILE_ATTACHMENTS_CHANNEL,
   LIST_PROJECT_DIRECTORY_CHANNEL,
+  START_PROJECT_FILE_DRAG_CHANNEL,
   READ_PROJECT_FILE_PREVIEW_CHANNEL,
   READ_PRESENTED_FILE_PREVIEW_CHANNEL,
   PROJECT_FILES_CHANGED_CHANNEL,
@@ -250,6 +251,8 @@ const pineApi: PineDesktopApi = {
   },
   operateProjectFile: (request) =>
     ipcRenderer.invoke(PROJECT_FILE_OPERATION_CHANNEL, request),
+  startProjectFileDrag: (request) =>
+    ipcRenderer.send(START_PROJECT_FILE_DRAG_CHANNEL, request),
   inspectProjectAttachments: (entries) =>
     ipcRenderer.invoke(PROJECT_FILE_ATTACHMENTS_CHANNEL, entries),
   listProjects: (): Promise<ListProjectsResult> =>

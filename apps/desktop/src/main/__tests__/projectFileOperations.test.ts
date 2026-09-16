@@ -17,6 +17,7 @@ import {
   isCaseOnlyRename,
   operateProjectFile,
   resolveProjectEntry,
+  resolveProjectEntryForNativeDrag,
 } from "../projectFileOperations";
 
 const directories: string[] = [];
@@ -78,6 +79,17 @@ describe("project file operations", () => {
     expect(
       isCaseOnlyRename("/Project/Readme.md", "/Project/README.md", "darwin"),
     ).toBe(false);
+  });
+
+  it("resolves native drag paths without allowing symlink escapes", async () => {
+    const root = await folder();
+    await writeFile(path.join(root.path, "notes.md"), "notes");
+    expect(
+      resolveProjectEntryForNativeDrag([root], ref(root, "notes.md")),
+    ).toBe(path.join(root.path, "notes.md"));
+    await expect(
+      resolveProjectEntry([root], ref(root, "../outside")),
+    ).rejects.toThrow("outside");
   });
 
   it("creates, renames, and moves files and directories", async () => {

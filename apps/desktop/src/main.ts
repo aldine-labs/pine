@@ -169,6 +169,7 @@ import {
   PROJECT_FILE_OPERATION_CHANNEL,
   PROJECT_FILE_ATTACHMENTS_CHANNEL,
   LIST_PROJECT_DIRECTORY_CHANNEL,
+  START_PROJECT_FILE_DRAG_CHANNEL,
   READ_PROJECT_FILE_PREVIEW_CHANNEL,
   PROJECT_MEDIA_PROTOCOL,
   PROJECT_FILES_CHANGED_CHANNEL,
@@ -1551,6 +1552,20 @@ ipcMain.handle(PROJECT_FILE_OPERATION_CHANNEL, (event, request: unknown) => {
   );
   projectFileOperationQueue = pending.catch(() => undefined);
   return pending;
+});
+
+ipcMain.on(START_PROJECT_FILE_DRAG_CHANNEL, (event, request: unknown): void => {
+  try {
+    const entry = ProjectEntryReferenceSchema.parse(request);
+    const filePath = getProjectRuntimes().projectEntryPathForNativeDrag(
+      event.sender.id,
+      entry,
+    );
+    if (!event.sender.isDestroyed())
+      event.sender.startDrag({ file: filePath, icon: appIconPath });
+  } catch (error) {
+    console.error("Failed to start project file drag.", error);
+  }
 });
 
 ipcMain.handle(

@@ -31,6 +31,7 @@ import type {
 import {
   operateProjectFile,
   resolveProjectEntry,
+  resolveProjectEntryForNativeDrag,
   type ProjectFileNativeActions,
 } from "./projectFileOperations";
 import { listProjectDirectory, resolveProjectPath } from "./projectFiles";
@@ -250,6 +251,16 @@ export class ProjectRuntimeRegistry {
     const { project } = this.get(webContentsId);
     return Promise.all(
       entries.map((entry) => resolveProjectEntry(project.folders, entry)),
+    );
+  }
+
+  projectEntryPathForNativeDrag(
+    webContentsId: number,
+    entry: ProjectEntryReference,
+  ): string {
+    return resolveProjectEntryForNativeDrag(
+      this.get(webContentsId).project.folders,
+      entry,
     );
   }
 
