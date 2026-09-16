@@ -21,7 +21,6 @@ const spacerRef = useTemplateRef<HTMLElement>("spacer");
 
 let mutationObserver: MutationObserver | null = null;
 let resizeObserver: ResizeObserver | null = null;
-let resizeFrame = 0;
 
 onMounted(() => {
   const content = contentRef.value;
@@ -38,15 +37,15 @@ onMounted(() => {
 
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => {
-      window.cancelAnimationFrame(resizeFrame);
-      resizeFrame = window.requestAnimationFrame(handleResize);
+      // ResizeObserver runs before paint. Restore the anchor here so a new
+      // content height cannot be displayed at the old scroll position.
+      handleResize();
     });
     resizeObserver.observe(content);
   }
 });
 
 onBeforeUnmount(() => {
-  window.cancelAnimationFrame(resizeFrame);
   mutationObserver?.disconnect();
   resizeObserver?.disconnect();
   mutationObserver = null;
