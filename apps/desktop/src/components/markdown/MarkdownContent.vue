@@ -41,6 +41,9 @@ defineProps<{
   final?: boolean;
   /** Preparsed file preview nodes carrying source line metadata. */
   nodes?: BaseNode[];
+  /** Muted, small-scale typography for secondary surfaces (thinking
+   * panels); tightens markstream's `--ms-*` type scale. */
+  compact?: boolean;
 }>();
 
 // markstream themes its code block via the `is-dark` prop (its inline style vars
@@ -120,6 +123,7 @@ async function confirmExternalLink(): Promise<void> {
     class="markdown-content"
     data-slot="markdown-content"
     :data-streaming="final === false ? 'true' : undefined"
+    :data-compact="compact ? 'true' : undefined"
     @click="handleMarkdownClick"
   >
     <!--
@@ -229,6 +233,33 @@ async function confirmExternalLink(): Promise<void> {
   --ms-weight-h4: 600;
   /* Match the streamdown/ElevenLabs Response fade duration for stream deltas. */
   --stream-update-fade-duration: 180ms;
+}
+
+/* Compact variant for secondary surfaces (thinking panels): body matches the
+   panel's previous text-sm size; headings collapse toward body size so
+   markdown headings stay inside the muted small-type panel. */
+.markdown-content[data-compact] :deep(.markstream-vue) {
+  --ms-text-body: 0.875rem;
+  --ms-leading-body: 1.6;
+  --ms-text-h1: 0.875rem;
+  --ms-text-h2: 0.875rem;
+  --ms-text-h3: 0.875rem;
+  --ms-text-h4: 0.875rem;
+  --ms-text-h5: 0.875rem;
+  --ms-text-h6: 0.875rem;
+  --ms-weight-h1: 600;
+  --ms-weight-h2: 600;
+  --ms-weight-h3: 600;
+  --ms-weight-h4: 600;
+  --ms-flow-paragraph-y: 0.375rem;
+  --ms-flow-list-y: 0.375rem;
+  --ms-flow-codeblock-y: 0.5rem;
+  --ms-flow-heading-1-mt: 0.75rem;
+  --ms-flow-heading-2-mt: 0.75rem;
+  --ms-flow-heading-3-mt: 0.75rem;
+  --ms-flow-heading-1-mb: 0.25rem;
+  --ms-flow-heading-2-mb: 0.25rem;
+  --ms-flow-heading-3-mb: 0.25rem;
 }
 
 /* App-specific affordances that differ from markstream's defaults (it uses its

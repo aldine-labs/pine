@@ -11,6 +11,7 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 import { animateScrollTop } from "@/lib/animateScroll";
+import MarkdownContent from "@/components/markdown/MarkdownContent.vue";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import type { PineTranscriptMessage } from "@/stores/session";
 
@@ -194,10 +195,19 @@ onBeforeUnmount(() => {
         <div
           ref="thinkingContent"
           data-thinking-content
-          class="scroll-fade no-scrollbar mt-3 max-h-64 overflow-y-auto overscroll-contain pl-6 pr-3 text-sm text-muted-foreground whitespace-pre-wrap"
+          class="scroll-fade no-scrollbar mt-3 max-h-64 overflow-y-auto overscroll-contain pl-6 pr-3 text-sm text-muted-foreground"
           @scroll.passive="handleThinkingScroll"
         >
-          {{ thinkingText }}
+          <!-- Thinking renders through the same markdown pipeline as the
+               message body (reasoning carries lists/code/math too); the
+               compact variant keeps the muted small-type panel. `final`
+               follows the thinking block, not the whole message, so deltas
+               fade only while thinking streams. -->
+          <MarkdownContent
+            :source="thinkingText"
+            :final="message.thinkingStatus !== 'streaming'"
+            compact
+          />
         </div>
       </div>
     </div>

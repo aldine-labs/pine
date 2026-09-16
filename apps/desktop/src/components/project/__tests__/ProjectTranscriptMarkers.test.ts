@@ -12,6 +12,7 @@ import {
 } from "@lucide/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAppI18n } from "@/app/i18n";
+import { createPinia } from "pinia";
 import ProjectCompactionMarker from "../ProjectCompactionMarker.vue";
 import ProjectThinkingMarker from "../ProjectThinkingMarker.vue";
 import ProjectToolCallMarker from "../ProjectToolCallMarker.vue";
@@ -70,7 +71,7 @@ describe("project transcript markers", () => {
         },
       },
       global: {
-        plugins: [createAppI18n("en-US")],
+        plugins: [createPinia(), createAppI18n("en-US")],
       },
     });
 
@@ -125,7 +126,7 @@ describe("project transcript markers", () => {
         },
       },
       global: {
-        plugins: [createAppI18n("en-US")],
+        plugins: [createPinia(), createAppI18n("en-US")],
       },
     });
 
@@ -172,7 +173,7 @@ describe("project transcript markers", () => {
         },
       },
       global: {
-        plugins: [createAppI18n("zh-CN")],
+        plugins: [createPinia(), createAppI18n("zh-CN")],
       },
     });
 
