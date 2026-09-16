@@ -81,8 +81,8 @@ import {
 } from "./gate";
 import { createPineToolDefinitions, PineAttachedPathAccess } from "./tools";
 import {
+  AssistantMessageUpdateCompactor,
   coalesceAssistantMessageUpdates,
-  compactAssistantMessageUpdate,
 } from "./messageStream";
 import type {
   AskUserQuestionParams,
@@ -789,6 +789,10 @@ export function titleFromAssistantMessage(
 
 export class PineAgentRuntime {
   private readonly activeMessageIds = new Map<string, string>();
+  private readonly messageUpdateCompactors = new Map<
+    string,
+    { messageId: string; compactor: AssistantMessageUpdateCompactor }
+  >();
   private readonly pendingMessageUpdates = new Map<
     string,
     {
@@ -955,6 +959,7 @@ export class PineAgentRuntime {
 
     this.liveSessions.delete(sessionId);
     this.activeMessageIds.delete(sessionId);
+    this.messageUpdateCompactors.delete(sessionId);
     this.clearPendingMessageUpdates(sessionId);
     this.activeCompactionIds.delete(sessionId);
     for (const [requestId, pending] of this.pendingApprovals) {
@@ -2018,9 +2023,14 @@ export class PineAgentRuntime {
         if (event.type === "message_start") {
           this.clearPendingMessageUpdates(sessionId);
           this.activeMessageIds.set(sessionId, messageId);
+          this.messageUpdateCompactors.set(sessionId, {
+            messageId,
+            compactor: new AssistantMessageUpdateCompactor(),
+          });
         } else {
           this.flushPendingMessageUpdates(sessionId);
           this.activeMessageIds.delete(sessionId);
+          this.messageUpdateCompactors.delete(sessionId);
         }
         this.options.emit({
           type:
@@ -2042,15 +2052,19 @@ export class PineAgentRuntime {
       }
       case "message_update":
         {
-          const update = compactAssistantMessageUpdate(
-            event.assistantMessageEvent,
-          );
+          const messageId =
+            this.activeMessageIds.get(sessionId) ?? randomUUID();
+          let stream = this.messageUpdateCompactors.get(sessionId);
+          if (!stream || stream.messageId !== messageId) {
+            stream = {
+              messageId,
+              compactor: new AssistantMessageUpdateCompactor(),
+            };
+            this.messageUpdateCompactors.set(sessionId, stream);
+          }
+          const update = stream.compactor.compact(event.assistantMessageEvent);
           if (update) {
-            this.queueMessageUpdate(
-              sessionId,
-              this.activeMessageIds.get(sessionId) ?? randomUUID(),
-              update,
-            );
+            this.queueMessageUpdate(sessionId, messageId, update);
           }
         }
         break;
@@ -2192,7 +2206,12 @@ export class PineAgentRuntime {
     if (!pending) return;
     clearTimeout(pending.timer);
     this.pendingMessageUpdates.delete(sessionId);
-    const updates = coalesceAssistantMessageUpdates(pending.updates);
+    const compacted = coalesceAssistantMessageUpdates(pending.updates);
+    const stream = this.messageUpdateCompactors.get(sessionId);
+    const updates =
+      stream?.messageId === pending.messageId
+        ? stream.compactor.addToolInputPreviews(compacted)
+        : compacted;
     if (updates.length === 0) return;
     this.options.emit({
       type: "message-update",

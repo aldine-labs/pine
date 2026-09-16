@@ -1,8 +1,9 @@
 import type { AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import {
+  AssistantMessageUpdateCompactor,
   coalesceAssistantMessageUpdates,
-  compactAssistantMessageUpdate,
+  MAX_STREAMED_TOOL_PREVIEW_CHARS,
 } from "../messageStream";
 
 describe("assistant message stream transport", () => {
@@ -17,7 +18,7 @@ describe("assistant message stream transport", () => {
       },
     } as AssistantMessageEvent;
 
-    expect(compactAssistantMessageUpdate(event)).toEqual({
+    expect(new AssistantMessageUpdateCompactor().compact(event)).toEqual({
       type: "text-delta",
       contentIndex: 0,
       delta: "world",
@@ -42,7 +43,7 @@ describe("assistant message stream transport", () => {
       },
     } as AssistantMessageEvent;
 
-    expect(compactAssistantMessageUpdate(event)).toEqual({
+    expect(new AssistantMessageUpdateCompactor().compact(event)).toEqual({
       type: "tool-call-start",
       contentIndex: 1,
       id: "call-1",
@@ -70,10 +71,134 @@ describe("assistant message stream transport", () => {
       },
     } as AssistantMessageEvent;
 
-    expect(compactAssistantMessageUpdate(event)).toEqual({
+    expect(new AssistantMessageUpdateCompactor().compact(event)).toEqual({
       type: "tool-call-delta",
       contentIndex: 1,
       delta: '"command":"bun run check"',
+    });
+  });
+
+  it("adds a parsed live preview to bounded tool argument batches", () => {
+    const compactor = new AssistantMessageUpdateCompactor();
+    const partial = {
+      role: "assistant",
+      content: [
+        { type: "toolCall", id: "call-1", name: "bash", arguments: {} },
+      ],
+    };
+    const start = compactor.compact({
+      type: "toolcall_start",
+      contentIndex: 0,
+      partial,
+    } as AssistantMessageEvent);
+    const delta = compactor.compact({
+      type: "toolcall_delta",
+      contentIndex: 0,
+      delta: '{"command":"bun run',
+      partial,
+    } as AssistantMessageEvent);
+
+    expect(
+      compactor.addToolInputPreviews(
+        [start, delta].filter((update) => update !== undefined),
+      ),
+    ).toEqual([
+      {
+        type: "tool-call-start",
+        contentIndex: 0,
+        id: "call-1",
+        name: "bash",
+        input: {},
+      },
+      {
+        type: "tool-call-delta",
+        contentIndex: 0,
+        delta: '{"command":"bun run',
+        input: { command: "bun run" },
+      },
+    ]);
+  });
+
+  it("stops live tool parsing when the bounded preview limit is exceeded", () => {
+    const compactor = new AssistantMessageUpdateCompactor();
+    const update = {
+      type: "tool-call-delta" as const,
+      contentIndex: 0,
+      delta: "x".repeat(MAX_STREAMED_TOOL_PREVIEW_CHARS + 1),
+    };
+
+    expect(compactor.addToolInputPreviews([update])).toEqual([update]);
+  });
+
+  it("does not replay text already visible through a shared start partial", () => {
+    const compactor = new AssistantMessageUpdateCompactor();
+    const partial = {
+      role: "assistant",
+      content: [{ type: "text", text: "Hello" }],
+    };
+
+    expect(
+      compactor.compact({
+        type: "text_start",
+        contentIndex: 0,
+        partial,
+      } as AssistantMessageEvent),
+    ).toEqual({ type: "text-start", contentIndex: 0, text: "Hello" });
+    expect(
+      compactor.compact({
+        type: "text_delta",
+        contentIndex: 0,
+        delta: "Hel",
+        partial,
+      } as AssistantMessageEvent),
+    ).toBeUndefined();
+    expect(
+      compactor.compact({
+        type: "text_delta",
+        contentIndex: 0,
+        delta: "lo!",
+        partial,
+      } as AssistantMessageEvent),
+    ).toEqual({ type: "text-delta", contentIndex: 0, delta: "!" });
+  });
+
+  it("does not replay thinking already visible through a shared start partial", () => {
+    const compactor = new AssistantMessageUpdateCompactor();
+    const partial = {
+      role: "assistant",
+      content: [{ type: "thinking", thinking: "Plan" }],
+    };
+
+    expect(
+      compactor.compact({
+        type: "thinking_start",
+        contentIndex: 0,
+        partial,
+      } as AssistantMessageEvent),
+    ).toEqual({
+      type: "thinking-start",
+      contentIndex: 0,
+      thinking: "Plan",
+    });
+    expect(
+      compactor.compact({
+        type: "thinking_delta",
+        contentIndex: 0,
+        delta: "Plan",
+        partial,
+      } as AssistantMessageEvent),
+    ).toBeUndefined();
+    expect(
+      compactor.compact({
+        type: "thinking_delta",
+        contentIndex: 0,
+        delta: " ahead",
+        partial,
+      } as AssistantMessageEvent),
+    ).toEqual({
+      type: "thinking-delta",
+      contentIndex: 0,
+      delta: " ahead",
     });
   });
 

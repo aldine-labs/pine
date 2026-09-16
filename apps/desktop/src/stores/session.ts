@@ -177,10 +177,12 @@ function applyAssistantMessageUpdates(
         };
         break;
       case "tool-call-delta":
-        // Raw argument deltas stay append-only on the wire. Rendering a
-        // repeatedly reparsed cumulative JSON object here would reintroduce
-        // quadratic work for large write/patch tool calls; tool-call-end
-        // supplies the final parsed arguments once.
+        if (current?.type === "toolCall" && update.input !== undefined) {
+          blocks[update.contentIndex] = {
+            ...current,
+            toolCall: { ...current.toolCall, input: update.input },
+          };
+        }
         break;
       case "tool-call-end":
         blocks[update.contentIndex] = {

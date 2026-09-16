@@ -287,14 +287,14 @@ watch(activeScope, () => {
           <TabsContent
             v-if="scope === activeScope"
             :value="scope"
-            class="m-0 h-[35rem] min-h-0 flex-none overflow-hidden"
+            class="m-0 min-h-0 flex-none overflow-hidden"
           >
             <div
-              class="grid h-full min-h-0 grid-cols-[14rem_auto_minmax(0,1fr)] overflow-hidden"
+              class="grid min-h-0 grid-cols-[14rem_auto_minmax(0,1fr)] overflow-hidden"
             >
-              <aside class="min-h-0 overflow-hidden bg-muted/20">
+              <aside class="relative min-h-0 overflow-hidden bg-muted/20">
                 <ScrollArea
-                  class="h-full min-h-0 overflow-hidden [&_[data-slot=scroll-area-viewport]]:scroll-fade-y"
+                  class="absolute inset-0 min-h-0 overflow-hidden [&_[data-slot=scroll-area-viewport]]:scroll-fade-y"
                 >
                   <ItemGroup class="gap-2 p-3">
                     <Item
@@ -358,10 +358,7 @@ watch(activeScope, () => {
 
               <Separator orientation="vertical" />
 
-              <form
-                class="flex h-full min-h-0 flex-col p-5"
-                @submit.prevent="save"
-              >
+              <form class="flex flex-col p-5" @submit.prevent="save">
                 <FieldGroup class="grid grid-cols-2 gap-2">
                   <Field class="gap-0">
                     <FieldLabel :for="`skill-${scope}-name`" class="sr-only">

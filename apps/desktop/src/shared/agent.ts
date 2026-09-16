@@ -130,6 +130,8 @@ export type PineAssistantMessageUpdate =
       type: "tool-call-delta";
       contentIndex: number;
       delta: string;
+      /** Parsed live preview while the bounded argument buffer is enabled. */
+      input?: PineJsonValue;
     }
   | {
       type: "tool-call-end";

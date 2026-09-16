@@ -750,7 +750,7 @@ describe("session store", () => {
     }
   });
 
-  it("defers streamed tool argument parsing until the final payload", async () => {
+  it("shows bounded live tool argument previews before execution", async () => {
     let listener: ((event: PineAgentEvent) => void) | undefined;
     Object.defineProperty(window, "pine", {
       configurable: true,
@@ -787,7 +787,7 @@ describe("session store", () => {
       blocks[0]?.type === "toolCall" && blocks[0].toolCall.input,
     ).toBeUndefined();
 
-    // Raw deltas do not repeatedly parse and clone an ever-growing object.
+    // The utility process adds a parsed preview to bounded raw-delta batches.
     listener?.({
       type: "message-update",
       sessionId,
@@ -797,13 +797,14 @@ describe("session store", () => {
           type: "tool-call-delta",
           contentIndex: 0,
           delta: '{"command":"bun run check"}',
+          input: { command: "bun run check" },
         },
       ],
     });
     blocks = store.messages[0]?.blocks ?? [];
-    expect(
-      blocks[0]?.type === "toolCall" && blocks[0].toolCall.input,
-    ).toBeUndefined();
+    expect(blocks[0]?.type === "toolCall" && blocks[0].toolCall.input).toEqual({
+      command: "bun run check",
+    });
 
     listener?.({
       type: "message-update",
