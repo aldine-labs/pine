@@ -238,6 +238,9 @@ describe("ProjectContentTabs", () => {
     expect(
       wrapper.get('[data-slot="project-content-tab-items"]').classes(),
     ).toContain("window-no-drag");
+    expect(
+      wrapper.get('[data-slot="project-content-tab-drag-space"]').classes(),
+    ).toContain("window-drag");
     expect(wrapper.get(".project-content-tab-separator").classes()).toContain(
       "window-no-drag",
     );
@@ -372,6 +375,7 @@ describe("ProjectContentTabs", () => {
     await nextTick();
     await flushPromises();
     expect(viewport.classList.contains("scroll-fade-none")).toBe(false);
+    viewport.scrollLeft = 20;
 
     await wrapper
       .get(
@@ -380,6 +384,10 @@ describe("ProjectContentTabs", () => {
       .trigger("click");
     await flushPromises();
     expect(viewport.classList.contains("scroll-fade-none")).toBe(true);
+    expect(
+      wrapper.get<HTMLElement>('[data-slot="project-content-tab-items"]')
+        .element.style.transition,
+    ).toContain("transform");
     wrapper.unmount();
   });
 

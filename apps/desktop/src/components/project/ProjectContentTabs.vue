@@ -89,6 +89,7 @@ const shouldReserveWindowControlsSpace = computed(
 
 const tabButtons = new Map<string, HTMLButtonElement>();
 const tabList = useTemplateRef<HTMLDivElement>("tabList");
+const tabItems = useTemplateRef<HTMLDivElement>("tabItems");
 const tabListHasOverflow = ref<boolean | null>(null);
 let tabListResizeObserver: ResizeObserver | null = null;
 const draggingTabId = ref<string | null>(null);
@@ -100,6 +101,38 @@ function updateTabListOverflow(): void {
   const viewport = tabList.value;
   if (!viewport) return;
   tabListHasOverflow.value = viewport.scrollWidth > viewport.clientWidth;
+}
+
+async function closeTab(tabId: string): Promise<void> {
+  const viewport = tabList.value;
+  const previousScrollLeft = viewport?.scrollLeft ?? 0;
+  tabNavigation.close(tabId);
+  await nextTick();
+  const items = tabItems.value;
+  if (
+    !viewport ||
+    !items ||
+    previousScrollLeft <= 0 ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+    viewport.scrollWidth > viewport.clientWidth
+  )
+    return;
+
+  // When overflow disappears Chromium clamps scrollLeft immediately. Preserve
+  // the old visual position and animate the items into their new position.
+  items.style.transform = `translateX(-${previousScrollLeft}px)`;
+  items.style.transition = "none";
+  void items.offsetWidth;
+  items.style.transition = "transform 300ms ease-out";
+  items.style.transform = "translateX(0)";
+  items.addEventListener(
+    "transitionend",
+    () => {
+      items.style.transition = "";
+      items.style.transform = "";
+    },
+    { once: true },
+  );
 }
 
 onMounted(() => {
@@ -340,6 +373,7 @@ watch(activeSession, (session) => {
         @dragleave="leaveTabList"
       >
         <div
+          ref="tabItems"
           data-slot="project-content-tab-items"
           class="window-no-drag flex min-w-max shrink-0 items-center gap-1 py-1"
         >
@@ -405,13 +439,18 @@ watch(activeSession, (session) => {
                 :aria-label="
                   t('project.contentTabs.closeTab', { name: getTabLabel(tab) })
                 "
-                @click.stop="tabNavigation.close(tab.id)"
+                @click.stop="closeTab(tab.id)"
               >
                 <XIcon />
               </Button>
             </div>
           </template>
         </div>
+        <div
+          aria-hidden="true"
+          data-slot="project-content-tab-drag-space"
+          class="window-drag min-w-0 flex-1 self-stretch"
+        />
       </div>
 
       <ProjectTabsOverflowMenu v-if="tabs.length" />
