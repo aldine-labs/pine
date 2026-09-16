@@ -237,6 +237,10 @@ async function animateExpansion(
   clip.style.height = `${height}px`;
   clip.style.overflow = "hidden";
   clip.style.pointerEvents = "none";
+  const content = document.createElement("div");
+  content.style.position = "relative";
+  content.style.height = `${height}px`;
+  clip.appendChild(content);
   for (const [, row] of subtreeRows) {
     const ghost = row.element.cloneNode(true) as HTMLElement;
     ghost.removeAttribute("id");
@@ -254,7 +258,7 @@ async function animateExpansion(
     ghost.style.height = `${row.height}px`;
     ghost.style.transform = "none";
     ghost.style.visibility = "visible";
-    clip.appendChild(ghost);
+    content.appendChild(ghost);
     if (opening) row.element.style.visibility = "hidden";
   }
   root.appendChild(clip);
@@ -264,7 +268,16 @@ async function animateExpansion(
       ? [{ height: "0px" }, { height: `${height}px` }]
       : [{ height: `${height}px` }, { height: "0px" }],
   );
+  const opacityAnimation = animation
+    ? animateRow(
+        content,
+        opening
+          ? [{ opacity: 0 }, { opacity: 1 }]
+          : [{ opacity: 1 }, { opacity: 0 }],
+      )
+    : undefined;
   const cleanup = () => {
+    opacityAnimation?.cancel();
     clip.remove();
     if (subtreeClipAnimations.get(toggledKey) === animation)
       subtreeClipAnimations.delete(toggledKey);

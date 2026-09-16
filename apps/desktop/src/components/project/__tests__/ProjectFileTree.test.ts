@@ -189,6 +189,12 @@ describe("ProjectFileTree", () => {
             JSON.stringify(frames).includes('"height":"28px"'),
         ),
       ).toBe(true);
+      expect(
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames) === '[{"opacity":0},{"opacity":1}]',
+        ),
+      ).toBe(true);
 
       animate.mockClear();
       await wrapper.get('[data-path="docs"]').trigger("click");
@@ -204,6 +210,12 @@ describe("ProjectFileTree", () => {
           ([frames]) =>
             JSON.stringify(frames).includes('"height":"28px"') &&
             JSON.stringify(frames).includes('"height":"0px"'),
+        ),
+      ).toBe(true);
+      expect(
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames) === '[{"opacity":1},{"opacity":0}]',
         ),
       ).toBe(true);
     } finally {
