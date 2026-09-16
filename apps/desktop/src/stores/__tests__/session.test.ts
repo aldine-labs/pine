@@ -132,6 +132,42 @@ describe("session store", () => {
     expect(store.isLoadingMessages).toBe(false);
   });
 
+  it("refreshes a cached session after it streams while another tab is active", async () => {
+    const updatedMessage = {
+      id: "reply",
+      blocks: [{ type: "text" as const, text: "Latest reply" }],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      role: "assistant" as const,
+    };
+    const loadSessionMessages = vi
+      .fn()
+      .mockResolvedValueOnce({ hasMore: false, messages: [] })
+      .mockResolvedValueOnce({ hasMore: false, messages: [updatedMessage] });
+    let listener: ((event: PineAgentEvent) => void) | undefined;
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        loadSessionMessages,
+        resumeSession: vi.fn().mockResolvedValue({ session }),
+        onSessionEvent: vi.fn((callback) => {
+          listener = callback;
+          return () => undefined;
+        }),
+      },
+    });
+    const store = useSessionStore();
+    store.connectAgentEvents();
+    await store.resume(session.id);
+    store.startDraft();
+    listener?.({ type: "run-state", sessionId: session.id, state: "running" });
+
+    await store.resume(session.id);
+
+    expect(loadSessionMessages).toHaveBeenCalledTimes(2);
+    expect(store.messages[0]?.blocks).toEqual(updatedMessage.blocks);
+    expect(store.isRunning).toBe(true);
+  });
+
   it("loads the earlier page with the cursor returned by the initial page", async () => {
     const newerMessage = {
       id: "newer-message",
