@@ -454,6 +454,7 @@ export interface MessageScrollerContext {
   releaseVisibility: () => void;
   handleContentChange: () => void;
   handleResize: () => void;
+  followStreamingContent: () => void;
   scrollToEnd: (options?: { behavior?: ScrollBehavior }) => boolean;
   scrollToMessage: (
     messageId: string,
@@ -695,6 +696,18 @@ function createEngine(props: MessageScrollerProviderProps) {
     });
     scheduleVisibilitySync();
     return true;
+  }
+
+  function followStreamingContent() {
+    if (
+      !autoScroll() ||
+      (mode !== "anchored-to-message" && mode !== "following-bottom")
+    )
+      return;
+    // A new turn initially holds the user's anchor in place. Once its
+    // thinking panel opens, follow the panel's expansion and subsequent
+    // streaming growth instead of continuing to hold that anchor.
+    scrollToEnd({ behavior: "auto", animated: true });
   }
 
   function scrollToElement(
@@ -1133,6 +1146,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     releaseVisibility,
     handleContentChange,
     handleResize,
+    followStreamingContent,
     scrollToEnd,
     scrollToMessage,
     scrollToStart,
@@ -1187,6 +1201,10 @@ export function useMessageScrollerContext(): MessageScrollerContext {
       "useMessageScroller must be used within a MessageScroller.",
     );
   return context;
+}
+
+export function useOptionalMessageScrollerContext(): MessageScrollerContext | null {
+  return inject(CONTEXT_KEY, null);
 }
 
 export function useMessageScrollerRegister(): RegisterMessage {

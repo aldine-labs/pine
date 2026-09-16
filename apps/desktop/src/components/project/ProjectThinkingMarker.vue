@@ -13,6 +13,7 @@ import { useI18n } from "vue-i18n";
 import { animateScrollTop } from "@/lib/animateScroll";
 import MarkdownContent from "@/components/markdown/MarkdownContent.vue";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { useOptionalMessageScrollerContext } from "@/components/ui/message-scroller/useMessageScroller";
 import type { PineTranscriptMessage } from "@/stores/session";
 
 const props = defineProps<{
@@ -21,6 +22,7 @@ const props = defineProps<{
 const { locale, t } = useI18n();
 const contentId = useId();
 const thinkingContent = useTemplateRef<HTMLElement>("thinkingContent");
+const scroller = useOptionalMessageScrollerContext();
 const isExpanded = ref(false);
 const isFollowingThinking = ref(true);
 const now = ref(Date.now());
@@ -143,7 +145,10 @@ watch(
     if (isStreaming.value && (messageChanged || thinkingStarted)) {
       isExpanded.value = true;
       isFollowingThinking.value = true;
-      void nextTick(scrollThinkingToBottom);
+      void nextTick(() => {
+        scroller?.followStreamingContent();
+        scrollThinkingToBottom();
+      });
     }
   },
   { immediate: true },
