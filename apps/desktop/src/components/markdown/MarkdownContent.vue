@@ -3,6 +3,7 @@
 // which would re-register on every mount).
 import { enableKatex, setCustomComponents } from "markstream-vue";
 import CodeBlock from "./CodeBlock.vue";
+import MarkdownImage from "./MarkdownImage.vue";
 import MarkdownTable from "./MarkdownTable.vue";
 import "katex/dist/katex.min.css";
 
@@ -10,6 +11,7 @@ enableKatex();
 
 setCustomComponents("pine-chat", {
   code_block: CodeBlock,
+  image: MarkdownImage,
   table: MarkdownTable,
 });
 </script>
