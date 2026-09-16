@@ -787,6 +787,11 @@ export function titleFromAssistantMessage(
   return normalizeGeneratedTitle((call.arguments as { title: string }).title);
 }
 
+/** Streaming deltas batch across IPC at this interval. The renderer fades each
+ * flush in over 180ms (MarkdownContent), so batching may stay sparser than
+ * per-frame while the transcript still reads as continuous typing. */
+const MESSAGE_UPDATE_BATCH_MS = 120;
+
 export class PineAgentRuntime {
   private readonly activeMessageIds = new Map<string, string>();
   private readonly messageUpdateCompactors = new Map<
@@ -2193,7 +2198,7 @@ export class PineAgentRuntime {
 
     const timer = setTimeout(() => {
       this.flushPendingMessageUpdates(sessionId);
-    }, 32);
+    }, MESSAGE_UPDATE_BATCH_MS);
     this.pendingMessageUpdates.set(sessionId, {
       messageId,
       timer,

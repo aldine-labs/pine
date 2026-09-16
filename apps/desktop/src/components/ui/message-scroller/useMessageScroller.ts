@@ -412,13 +412,27 @@ function findFirstVisibleMessage({
   content,
   spacer,
   viewport,
+  visibleMessageIds,
 }: {
   content: HTMLElement;
   spacer: HTMLElement | null;
   viewport: HTMLElement;
+  visibleMessageIds: Set<string>;
 }): HTMLElement | null {
+  const children = getMessageChildren(content, spacer);
+  // Fast path: the IntersectionObserver already tracks which messages
+  // intersect the viewport, so pick the topmost one without any layout read.
+  // captureViewportAnchor runs on every content change and scroll event; a
+  // rect walk here forces layout for every earlier sibling and made streaming
+  // in long transcripts quadratic.
+  if (visibleMessageIds.size > 0) {
+    for (const child of children) {
+      const messageId = child.dataset.messageId;
+      if (messageId && visibleMessageIds.has(messageId)) return child;
+    }
+  }
   const viewportRect = viewport.getBoundingClientRect();
-  for (const child of getMessageChildren(content, spacer)) {
+  for (const child of children) {
     if (!child.dataset.messageId) continue;
     const rect = child.getBoundingClientRect();
     if (rect.bottom > viewportRect.top && rect.top < viewportRect.bottom)
@@ -789,7 +803,19 @@ function createEngine(props: MessageScrollerProviderProps) {
       viewportAnchor = null;
       return;
     }
-    const element = findFirstVisibleMessage({ content, spacer, viewport });
+    // While following the bottom the anchor is meaningless — the viewport is
+    // pinned to live content and grows below the fold. Capturing it would
+    // walk the transcript on every content change and scroll event.
+    if (autoScroll() && mode === "following-bottom") {
+      viewportAnchor = null;
+      return;
+    }
+    const element = findFirstVisibleMessage({
+      content,
+      spacer,
+      viewport,
+      visibleMessageIds,
+    });
     viewportAnchor = element
       ? { element, viewportTop: getRelativeTop(element, viewport) }
       : null;

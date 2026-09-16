@@ -119,6 +119,7 @@ async function confirmExternalLink(): Promise<void> {
   <div
     class="markdown-content"
     data-slot="markdown-content"
+    :data-streaming="final === false ? 'true' : undefined"
     @click="handleMarkdownClick"
   >
     <!--
@@ -131,6 +132,8 @@ async function confirmExternalLink(): Promise<void> {
       posture; the built-in `LinkNode` already emits `target="_blank"` +
       `rel="noopener noreferrer"`.
     -->
+    <!-- New stream deltas fade in (streamdown-style); completed/history
+         content renders without deltas so the animation never applies. -->
     <MarkdownRender
       mode="chat"
       :content="source"
@@ -140,7 +143,8 @@ async function confirmExternalLink(): Promise<void> {
       html-policy="escape"
       custom-id="pine-chat"
       :smooth-streaming="false"
-      :parse-coalesce-ms="100"
+      :parse-coalesce-ms="32"
+      :fade="final === false"
       :max-live-nodes="0"
       :is-dark="isDark"
     />
@@ -184,10 +188,22 @@ async function confirmExternalLink(): Promise<void> {
   overflow-wrap: anywhere;
 }
 
-/* The transcript owns scrolling and preserves its own viewport anchor.
-   Markstream's document-level intrinsic placeholder would otherwise replace
-   an estimated height with the real height as a chat message enters view. */
+/* Offscreen history must skip layout/paint: with content-visibility forced
+   visible, every streaming flush relaid out the entire transcript and pinned
+   the CPU. markstream's default `content-visibility: auto` is restored here
+   with the `auto`-keyword intrinsic size so the browser remembers each
+   renderer's last-rendered height — re-entering view does not resize. The
+   transcript's viewport-anchor restore (useMessageScroller) covers the one
+   remaining estimate → real height swap when a message is first revealed. */
 .markdown-content :deep(.markdown-renderer) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 800px auto 600px;
+}
+
+/* The actively streaming renderer keeps full layout: its height changes on
+   every flush, and a stale intrinsic placeholder would fight the transcript's
+   scroll following. */
+.markdown-content[data-streaming] :deep(.markdown-renderer) {
   content-visibility: visible;
   contain-intrinsic-size: none;
 }
@@ -211,6 +227,8 @@ async function confirmExternalLink(): Promise<void> {
   --ms-weight-h2: 600;
   --ms-weight-h3: 600;
   --ms-weight-h4: 600;
+  /* Match the streamdown/ElevenLabs Response fade duration for stream deltas. */
+  --stream-update-fade-duration: 180ms;
 }
 
 /* App-specific affordances that differ from markstream's defaults (it uses its
