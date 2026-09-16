@@ -34,6 +34,7 @@ describe("ProjectSessionParallaxBackground", () => {
       icon.attributes("style")!.match(/left: ([\d.]+)%/)![1],
     );
     expect(icon.attributes("style")).toContain("scale: 0.92");
+    expect(icon.attributes("style")).toContain("filter: blur(8px)");
 
     reveal?.(0);
     await nextTick();
@@ -66,7 +67,10 @@ describe("ProjectSessionParallaxBackground", () => {
       Math.abs(outwardLeft - 50) * 0.15,
     );
     expect(icon.attributes("style")).toContain("scale: 1");
-    expect(icon.classes()).toContain("transition-[left,top,opacity,scale]");
+    expect(icon.attributes("style")).toContain("filter: blur(0px)");
+    expect(icon.classes()).toContain(
+      "transition-[left,top,opacity,scale,filter]",
+    );
 
     const mostVisibleIndex = icons.reduce(
       (best, entry, index) =>
@@ -78,19 +82,21 @@ describe("ProjectSessionParallaxBackground", () => {
     );
     await wrapper.setProps({ fadeOut: true });
     expect(icon.attributes("style")).toContain(`left: ${inwardLeft}%`);
-    expect(icon.attributes("style")).toContain("scale: 0.92");
+    expect(icon.attributes("style")).toContain("scale: 0.96");
+    expect(icon.attributes("style")).toContain("filter: blur(8px)");
     const exitStyles = icons.map(
       (entry) => (entry.element as HTMLElement).style,
     );
     const mostVisible = exitStyles[mostVisibleIndex];
-    expect(mostVisible.transitionDelay).toBe("0ms");
-    expect(mostVisible.transitionTimingFunction).toContain(
-      "), linear, cubic-bezier(",
+    expect(mostVisible.transitionDelay).toBe("40ms, 40ms, 0ms, 40ms, 0ms");
+    expect(mostVisible.transitionDuration).toBe(
+      "700ms, 700ms, 420ms, 700ms, 420ms",
     );
+    expect(mostVisible.transitionTimingFunction).toBe("var(--ease-out-expo)");
     expect(new Set(exitStyles.map((style) => style.transitionDelay)).size).toBe(
       16,
     );
-    vi.advanceTimersByTime(1199);
+    vi.advanceTimersByTime(1039);
     expect(wrapper.emitted("faded")).toBeUndefined();
     vi.advanceTimersByTime(1);
     expect(wrapper.emitted("faded")).toHaveLength(1);

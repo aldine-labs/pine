@@ -64,7 +64,16 @@ const props = withDefaults(defineProps<{ fadeOut?: boolean }>(), {
 const emit = defineEmits<{ faded: [] }>();
 const FADE_STEP_MS = 20;
 const FADE_DURATION_MS = 900;
+const EXIT_MOVE_DELAY_MS = 40;
+const EXIT_MOVE_DURATION_MS = 700;
+const EXIT_FADE_DURATION_MS = 420;
+const ICON_BLUR_PX = 8;
 const isRevealed = ref(false);
+
+function exitTransitionDelay(delay: number): string {
+  const motionDelay = delay + EXIT_MOVE_DELAY_MS;
+  return `${motionDelay}ms, ${motionDelay}ms, ${delay}ms, ${motionDelay}ms, ${delay}ms`;
+}
 
 function inwardPosition(position: string): string {
   return `${50 + (Number.parseFloat(position) - 50) * 0.85}%`;
@@ -301,7 +310,9 @@ watch(
       },
       reducedMotion
         ? 0
-        : (parallaxIconsWithFade.length - 1) * FADE_STEP_MS + FADE_DURATION_MS,
+        : (parallaxIconsWithFade.length - 1) * FADE_STEP_MS +
+            EXIT_MOVE_DELAY_MS +
+            EXIT_MOVE_DURATION_MS,
     );
   },
   { immediate: true },
@@ -340,18 +351,23 @@ onBeforeUnmount(() => {
           left: props.fadeOut || !isRevealed ? inwardPosition(item.x) : item.x,
           top: props.fadeOut || !isRevealed ? inwardPosition(item.y) : item.y,
           opacity: props.fadeOut || !isRevealed ? 0 : item.opacity,
-          scale: props.fadeOut || !isRevealed ? 0.92 : 1,
+          scale: props.fadeOut ? 0.96 : !isRevealed ? 0.92 : 1,
+          filter: `blur(${props.fadeOut || !isRevealed ? ICON_BLUR_PX : 0}px)`,
           transitionDelay: isRevealed
-            ? `${props.fadeOut ? item.exitDelay : item.fadeDelay}ms`
+            ? props.fadeOut
+              ? exitTransitionDelay(item.exitDelay)
+              : `${item.fadeDelay}ms`
             : '0ms',
-          transitionDuration: `${FADE_DURATION_MS}ms`,
+          transitionDuration: props.fadeOut
+            ? `${EXIT_MOVE_DURATION_MS}ms, ${EXIT_MOVE_DURATION_MS}ms, ${EXIT_FADE_DURATION_MS}ms, ${EXIT_MOVE_DURATION_MS}ms, ${EXIT_FADE_DURATION_MS}ms`
+            : `${FADE_DURATION_MS}ms`,
           transitionTimingFunction: props.fadeOut
-            ? 'cubic-bezier(0.4, 0, 0.6, 1), cubic-bezier(0.4, 0, 0.6, 1), linear, cubic-bezier(0.4, 0, 0.6, 1)'
+            ? 'var(--ease-out-expo)'
             : 'cubic-bezier(0.25, 0.1, 0.25, 1)',
         }"
         :class="
           cn(
-            'flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-chart-2 transition-[left,top,opacity,scale] motion-reduce:transition-none',
+            'flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-chart-2 transition-[left,top,opacity,scale,filter] motion-reduce:transition-none',
             item.size,
             iconSizeClasses[item.iconSize],
           )
