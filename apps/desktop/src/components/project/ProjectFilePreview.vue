@@ -164,10 +164,14 @@ const canInvertPreview = computed(
   () => preview.value?.kind === "pdf" || preview.value?.kind === "office",
 );
 const canZoomPreview = computed(
-  () => canInvertPreview.value || renderedHtml.value,
+  () =>
+    canInvertPreview.value ||
+    renderedHtml.value ||
+    preview.value?.kind === "image",
 );
 const zoom = computed(() => previewZoom.value[0] ?? 100);
 let zoomFrame: number | undefined;
+let zoomCommitTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingZoom = 100;
 const fileType = computed(() => {
   const name = fileName.value;
@@ -221,6 +225,7 @@ function scheduleZoom(value: number): void {
 }
 
 function commitZoom(value: number[]): void {
+  if (zoomCommitTimer) clearTimeout(zoomCommitTimer);
   const committed = value[0] ?? 100;
   pendingZoom = committed;
   if (zoomFrame !== undefined) {
@@ -229,6 +234,16 @@ function commitZoom(value: number[]): void {
   }
   appliedZoom.value = committed;
   renderedZoom.value = committed;
+}
+
+function handlePreviewWheel(event: WheelEvent): void {
+  if (!canZoomPreview.value || !(event.ctrlKey || event.metaKey)) return;
+  event.preventDefault();
+  const next = Math.max(50, Math.min(200, zoom.value - event.deltaY * 0.5));
+  previewZoom.value = [Math.round(next)];
+  scheduleZoom(Math.round(next));
+  if (zoomCommitTimer) clearTimeout(zoomCommitTimer);
+  zoomCommitTimer = setTimeout(() => commitZoom(previewZoom.value), 180);
 }
 
 async function openWithDefaultApplication(): Promise<void> {
@@ -265,6 +280,7 @@ watch(
     pageCount.value = undefined;
     previewInverted.value = false;
     previewZoom.value = [100];
+    if (zoomCommitTimer) clearTimeout(zoomCommitTimer);
     appliedZoom.value = 100;
     renderedZoom.value = 100;
     pendingZoom = 100;
@@ -309,11 +325,16 @@ watch(zoom, scheduleZoom);
 onBeforeUnmount(() => {
   video.value?.pause();
   if (zoomFrame !== undefined) cancelAnimationFrame(zoomFrame);
+  if (zoomCommitTimer) clearTimeout(zoomCommitTimer);
 });
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col" :aria-label="fileName">
+  <section
+    class="flex h-full min-h-0 flex-col"
+    :aria-label="fileName"
+    @wheel.capture="handlePreviewWheel"
+  >
     <Empty v-if="failed" class="flex-1" role="alert">
       <EmptyHeader>
         <EmptyMedia variant="icon"><FileWarning /></EmptyMedia>
@@ -357,6 +378,7 @@ onBeforeUnmount(() => {
       :source="preview.text"
       :title="fileName"
       :zoom="appliedZoom"
+      @zoom-wheel="handlePreviewWheel"
     />
     <ScrollArea
       v-else-if="preview.kind === 'text'"
@@ -420,6 +442,7 @@ onBeforeUnmount(() => {
         :src="preview.url"
         :alt="fileName"
         class="max-h-full max-w-full object-contain"
+        :style="{ zoom: `${appliedZoom}%` }"
         @load="imageLoaded"
         @error="failed = true"
       />

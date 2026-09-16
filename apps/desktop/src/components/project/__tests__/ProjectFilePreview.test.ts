@@ -150,7 +150,7 @@ describe("ProjectFilePreview", () => {
     expect(htmlPreview.exists()).toBe(true);
     const frame = htmlPreview.get("iframe");
     expect(frame.attributes("srcdoc")).toBe(source);
-    expect(frame.attributes("sandbox")).toBe("");
+    expect(frame.attributes("sandbox")).toBe("allow-same-origin");
     expect(frame.attributes("referrerpolicy")).toBe("no-referrer");
     expect(frame.attributes("title")).toBe("index.html");
 
@@ -174,6 +174,31 @@ describe("ProjectFilePreview", () => {
     expect(wrapper.findComponent(Slider).exists()).toBe(false);
   });
 
+  it("zooms an image preview with a trackpad pinch without changing ordinary scrolling", async () => {
+    const wrapper = render(
+      vi.fn().mockResolvedValue({
+        ...info,
+        kind: "image",
+        url: "data:image/png;base64,aGVsbG8=",
+      }),
+    );
+    await flushPromises();
+    const section = wrapper.element;
+    const ordinaryWheel = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: -40,
+    });
+    section.dispatchEvent(ordinaryWheel);
+    expect(ordinaryWheel.defaultPrevented).toBe(false);
+
+    await wrapper.trigger("wheel", { ctrlKey: true, deltaY: -40 });
+    await flushPromises();
+    expect(wrapper.get('[aria-label="File metadata"]').text()).toContain(
+      "120%",
+    );
+  });
+
   it("switches Markdown between source and rendered content and locates rendered selections", async () => {
     const wrapper = render(
       vi.fn().mockResolvedValue({
@@ -188,6 +213,7 @@ describe("ProjectFilePreview", () => {
     const mode = wrapper.get('[role="switch"]');
     expect(mode.attributes("aria-checked")).toBe("true");
     expect(wrapper.find('[data-slot="markdown-content"]').exists()).toBe(true);
+    expect(wrapper.findComponent(Slider).exists()).toBe(false);
     expect(wrapper.find("pre").exists()).toBe(false);
     const headings = wrapper.findAll("h1");
     expect(headings).toHaveLength(2);
