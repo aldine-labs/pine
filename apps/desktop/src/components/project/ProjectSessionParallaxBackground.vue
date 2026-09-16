@@ -42,8 +42,12 @@ const props = withDefaults(defineProps<{ fadeOut?: boolean }>(), {
 });
 const emit = defineEmits<{ faded: [] }>();
 const FADE_STEP_MS = 20;
-const FADE_DURATION_MS = 425;
+const FADE_DURATION_MS = 900;
 const isRevealed = ref(false);
+
+function inwardPosition(position: string): string {
+  return `${50 + (Number.parseFloat(position) - 50) * 0.85}%`;
+}
 
 const iconSizeClasses: Record<ParallaxIcon["iconSize"], string> = {
   "size-8": "[&_svg]:size-8",
@@ -234,12 +238,17 @@ watch(
     if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
     if (!fadeOut) return;
 
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     fadeTimer = window.setTimeout(
       () => {
         fadeTimer = undefined;
         emit("faded");
       },
-      (parallaxIconsWithFade.length - 1) * FADE_STEP_MS + FADE_DURATION_MS,
+      reducedMotion
+        ? 0
+        : (parallaxIconsWithFade.length - 1) * FADE_STEP_MS + FADE_DURATION_MS,
     );
   },
   { immediate: true },
@@ -272,17 +281,22 @@ onBeforeUnmount(() => {
       <ParallaxFloatElement
         v-for="item in parallaxIconsWithFade"
         :key="item.id"
+        :data-parallax-icon="item.id"
         :depth="item.depth"
         :style="{
-          left: item.x,
-          top: item.y,
+          left: props.fadeOut || !isRevealed ? inwardPosition(item.x) : item.x,
+          top: props.fadeOut || !isRevealed ? inwardPosition(item.y) : item.y,
           opacity: props.fadeOut || !isRevealed ? 0 : item.opacity,
+          scale: props.fadeOut || !isRevealed ? 0.92 : 1,
           transitionDelay: isRevealed ? `${item.fadeDelay}ms` : '0ms',
           transitionDuration: `${FADE_DURATION_MS}ms`,
+          transitionTimingFunction: props.fadeOut
+            ? 'cubic-bezier(0.4, 0, 0.6, 1)'
+            : 'cubic-bezier(0.25, 0.1, 0.25, 1)',
         }"
         :class="
           cn(
-            'flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-chart-2 transition-opacity ease-out',
+            'flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-chart-2 transition-[left,top,opacity,scale] motion-reduce:transition-none',
             item.size,
             iconSizeClasses[item.iconSize],
           )
