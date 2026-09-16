@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-16
+
+### Fixed
+
+- Render markdown inline images: remote URLs load directly and local absolute or `file://` paths are served through the validated `pine-attachment://` protocol.
+
+### Changed
+
+- Contain offscreen transcript layout and batch streamed updates at 120ms, ending sustained high CPU during long streaming sessions; new stream deltas fade in so the sparser cadence still reads as continuous typing.
+- Render thinking blocks through the markdown pipeline with a compact, muted panel variant.
+
 ## [0.4.1] - 2026-09-16
 
 ### Changed
@@ -137,7 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/phosphoros-works/pine/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/phosphoros-works/pine/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/phosphoros-works/pine/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/phosphoros-works/pine/compare/v0.3.0...v0.3.1
