@@ -1,24 +1,44 @@
 <script setup lang="ts">
 import {
+  BriefcaseBusinessIcon,
   BotIcon,
   BracesIcon,
+  CalculatorIcon,
+  CalendarDaysIcon,
+  ChartColumnIcon,
+  ChartPieIcon,
+  ClipboardListIcon,
   Code2Icon,
+  ContactRoundIcon,
   CpuIcon,
   DatabaseIcon,
   FileCode2Icon,
+  FileSpreadsheetIcon,
+  FileTextIcon,
   FolderTreeIcon,
+  FolderOpenIcon,
   GitBranchIcon,
   GitPullRequestIcon,
+  HandshakeIcon,
+  ListTodoIcon,
+  MailIcon,
+  MessageCircleIcon,
+  NotebookPenIcon,
   PanelLeftIcon,
+  PresentationIcon,
+  PrinterIcon,
+  ReceiptTextIcon,
   SearchCodeIcon,
   ShieldCheckIcon,
+  SignatureIcon,
   SparklesIcon,
   TerminalIcon,
+  UsersIcon,
   WorkflowIcon,
   WrenchIcon,
 } from "@lucide/vue";
 import type { Component } from "vue";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import {
   ParallaxFloat,
   ParallaxFloatElement,
@@ -37,13 +57,14 @@ interface ParallaxIcon {
   fadeDelay: number;
 }
 
-const props = withDefaults(defineProps<{ fadeOut?: boolean }>(), {
-  fadeOut: false,
-});
-const emit = defineEmits<{ faded: [] }>();
 const FADE_STEP_MS = 20;
-const FADE_DURATION_MS = 425;
+const FADE_DURATION_MS = 900;
+const ICON_BLUR_PX = 8;
 const isRevealed = ref(false);
+
+function inwardPosition(position: string): string {
+  return `${50 + (Number.parseFloat(position) - 50) * 0.85}%`;
+}
 
 const iconSizeClasses: Record<ParallaxIcon["iconSize"], string> = {
   "size-8": "[&_svg]:size-8",
@@ -126,27 +147,49 @@ const parallaxIconDefinitions: readonly IconDefinition[] = [
     id: "spark",
     icon: SparklesIcon,
   },
+  { id: "documents", icon: FileTextIcon },
+  { id: "spreadsheets", icon: FileSpreadsheetIcon },
+  { id: "presentations", icon: PresentationIcon },
+  { id: "mail", icon: MailIcon },
+  { id: "calendar", icon: CalendarDaysIcon },
+  { id: "checklist", icon: ClipboardListIcon },
+  { id: "tasks", icon: ListTodoIcon },
+  { id: "charts", icon: ChartColumnIcon },
+  { id: "reports", icon: ChartPieIcon },
+  { id: "team", icon: UsersIcon },
+  { id: "business", icon: BriefcaseBusinessIcon },
+  { id: "notes", icon: NotebookPenIcon },
+  { id: "contacts", icon: ContactRoundIcon },
+  { id: "messages", icon: MessageCircleIcon },
+  { id: "folders", icon: FolderOpenIcon },
+  { id: "print", icon: PrinterIcon },
+  { id: "sign", icon: SignatureIcon },
+  { id: "receipts", icon: ReceiptTextIcon },
+  { id: "calculate", icon: CalculatorIcon },
+  { id: "collaboration", icon: HandshakeIcon },
 ];
 
 /** Fixed positions keep the composition art-directed while each visual
  * parameter is shuffled independently, so no slot implies a depth or size. */
+// Offset rows keep the composition loose while balancing eight icons on each
+// side and leaving the central copy and bottom composer clear.
 const parallaxSlots: readonly PositionSlot[] = [
-  { x: "22%", y: "34%" },
-  { x: "72%", y: "26%" },
-  { x: "29%", y: "69%" },
-  { x: "79%", y: "61%" },
-  { x: "14%", y: "18%" },
-  { x: "82%", y: "21%" },
-  { x: "18%", y: "79%" },
-  { x: "82%", y: "75%" },
-  { x: "47%", y: "10%" },
-  { x: "57%", y: "88%" },
-  { x: "9%", y: "51%" },
-  { x: "91%", y: "43%" },
-  { x: "26%", y: "12%" },
-  { x: "76%", y: "12%" },
-  { x: "10%", y: "86%" },
-  { x: "89%", y: "86%" },
+  { x: "15%", y: "18%" },
+  { x: "34%", y: "15%" },
+  { x: "66%", y: "16%" },
+  { x: "85%", y: "20%" },
+  { x: "10%", y: "39%" },
+  { x: "28%", y: "35%" },
+  { x: "74%", y: "36%" },
+  { x: "90%", y: "42%" },
+  { x: "11%", y: "62%" },
+  { x: "27%", y: "66%" },
+  { x: "73%", y: "65%" },
+  { x: "89%", y: "60%" },
+  { x: "18%", y: "81%" },
+  { x: "38%", y: "79%" },
+  { x: "64%", y: "80%" },
+  { x: "83%", y: "82%" },
 ];
 
 const depthValues = [
@@ -197,14 +240,17 @@ function opacityForDepth(depth: number): number {
   );
 }
 
-const shuffledIcons = shuffle(parallaxIconDefinitions);
+const selectedIcons = shuffle(parallaxIconDefinitions).slice(
+  0,
+  parallaxSlots.length,
+);
 const shuffledDepths = shuffle(depthValues);
 const shuffledScales = shuffle(iconScaleOptions);
 const parallaxIcons: readonly ParallaxIcon[] = parallaxSlots.map(
   (slot, index) => {
     const depth = shuffledDepths[index];
     return {
-      ...shuffledIcons[index],
+      ...selectedIcons[index],
       ...slot,
       depth,
       opacity: opacityForDepth(depth),
@@ -226,25 +272,7 @@ const parallaxIconsWithFade: readonly ParallaxIcon[] = parallaxIcons.map(
   }),
 );
 
-let fadeTimer: number | undefined;
 let revealFrame: number | undefined;
-watch(
-  () => props.fadeOut,
-  (fadeOut) => {
-    if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
-    if (!fadeOut) return;
-
-    fadeTimer = window.setTimeout(
-      () => {
-        fadeTimer = undefined;
-        emit("faded");
-      },
-      (parallaxIconsWithFade.length - 1) * FADE_STEP_MS + FADE_DURATION_MS,
-    );
-  },
-  { immediate: true },
-);
-
 onMounted(() => {
   revealFrame = window.requestAnimationFrame(() => {
     revealFrame = undefined;
@@ -253,7 +281,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
   if (revealFrame !== undefined) window.cancelAnimationFrame(revealFrame);
 });
 </script>
@@ -272,17 +299,21 @@ onBeforeUnmount(() => {
       <ParallaxFloatElement
         v-for="item in parallaxIconsWithFade"
         :key="item.id"
+        :data-parallax-icon="item.id"
         :depth="item.depth"
         :style="{
-          left: item.x,
-          top: item.y,
-          opacity: props.fadeOut || !isRevealed ? 0 : item.opacity,
+          left: isRevealed ? item.x : inwardPosition(item.x),
+          top: isRevealed ? item.y : inwardPosition(item.y),
+          opacity: isRevealed ? item.opacity : 0,
+          scale: isRevealed ? 1 : 0.92,
+          filter: `blur(${isRevealed ? 0 : ICON_BLUR_PX}px)`,
           transitionDelay: isRevealed ? `${item.fadeDelay}ms` : '0ms',
           transitionDuration: `${FADE_DURATION_MS}ms`,
+          transitionTimingFunction: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
         }"
         :class="
           cn(
-            'flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-chart-2 transition-opacity ease-out',
+            'flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-chart-2 transition-[left,top,opacity,scale,filter] motion-reduce:transition-none',
             item.size,
             iconSizeClasses[item.iconSize],
           )

@@ -322,6 +322,8 @@ export const useSessionStore = defineStore("session", () => {
     nextBefore?: string;
   }
   const sessionCache = new Map<string, CachedSession>();
+  const staleSessions = new Set<string>();
+  const sessionRunStates = new Map<string, boolean>();
 
   /** Snapshot the active transcript projection into the session cache. */
   function syncSessionCache(sessionId: string): void {
@@ -340,6 +342,8 @@ export const useSessionStore = defineStore("session", () => {
   /** Drop a session's cached transcript (e.g. when it is closed/deleted). */
   function dropSessionCache(sessionId: string): void {
     sessionCache.delete(sessionId);
+    staleSessions.delete(sessionId);
+    sessionRunStates.delete(sessionId);
   }
 
   /** Merge transient runtime or approval details into one visible tool call. */
@@ -446,7 +450,11 @@ export const useSessionStore = defineStore("session", () => {
       isLoadingMessages.value = false;
       hasEarlierMessages.value = cached.hasEarlierMessages;
       nextBefore.value = cached.nextBefore;
-      if (sequence === activationSequence) return cached.summary;
+      isRunning.value = sessionRunStates.get(sessionId) ?? false;
+      if (staleSessions.has(sessionId)) {
+        staleSessions.delete(sessionId);
+        await loadInitialMessages(sessionId);
+      }
       return cached.summary;
     }
 
@@ -468,6 +476,7 @@ export const useSessionStore = defineStore("session", () => {
       modelsStore.setSessionSelection(session.id, session.modelSelection);
       activeSession.value = session;
       currentSessionId = session.id;
+      isRunning.value = sessionRunStates.get(session.id) ?? false;
       contextUsage.value = result.contextUsage ?? null;
       await loadInitialMessages(session.id);
       return session;
@@ -712,6 +721,10 @@ export const useSessionStore = defineStore("session", () => {
 
   function handleAgentEvent(event: PineAgentEvent): void {
     if (event.type === "run-state") {
+      sessionRunStates.set(
+        event.sessionId,
+        event.state === "running" || event.state === "aborting",
+      );
       if (
         event.state === "running" &&
         isStartingPrompt &&
@@ -719,7 +732,10 @@ export const useSessionStore = defineStore("session", () => {
       ) {
         currentSessionId = event.sessionId;
       }
-      if (currentSessionId !== event.sessionId) return;
+      if (currentSessionId !== event.sessionId) {
+        staleSessions.add(event.sessionId);
+        return;
+      }
       isRunning.value = event.state === "running" || event.state === "aborting";
       // Aborted turns resolve pending approvals without a decided event.
       if (event.state === "idle") {
@@ -727,6 +743,17 @@ export const useSessionStore = defineStore("session", () => {
         pendingQuestionnaires.value = [];
         reviewingToolCallIds.value = new Set();
         steeringMessages.value = [];
+      }
+      return;
+    }
+    if (currentSessionId !== event.sessionId) {
+      staleSessions.add(event.sessionId);
+      if (event.type === "session-updated") {
+        const cached = sessionCache.get(event.sessionId);
+        const summary = upsertRecentSession(
+          mergeSessionSummary(event.summary, cached?.summary ?? undefined),
+        );
+        if (cached) cached.summary = summary;
       }
       return;
     }
@@ -1084,6 +1111,8 @@ export const useSessionStore = defineStore("session", () => {
 
   function reset(): void {
     activationSequence += 1;
+    staleSessions.clear();
+    sessionRunStates.clear();
     searchSequence += 1;
     recentSequence += 1;
     activeSession.value = null;

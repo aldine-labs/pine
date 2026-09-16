@@ -89,7 +89,7 @@ const pendingQuestionnaires = tabValue(liveState.pendingQuestionnaires);
 const steeringMessages = tabValue(liveState.steeringMessages);
 const reviewingToolCallIds = tabValue(liveState.reviewingToolCallIds);
 const draft = ref("");
-const shouldFadeParallax = ref(false);
+const hasSubmittedPrompt = ref(false);
 const hasConversation = computed(
   () => messages.value.length > 0 || outlineMessages.value.length > 0,
 );
@@ -153,13 +153,14 @@ function submit(message: string): void {
   ) {
     return;
   }
-  shouldFadeParallax.value = true;
+  hasSubmittedPrompt.value = true;
   draft.value = "";
   void sessionStore
     .prompt(message, sessionId, approvalMode.value)
     .then((session) => tabNavigation.bindSession(props.tabId, session))
     .catch(() => {
       tabNavigation.failPrompt(props.tabId);
+      hasSubmittedPrompt.value = false;
       toast.error(t("errors.sessionPrompt.title"), {
         description: t("errors.sessionPrompt.description"),
       });
@@ -315,10 +316,8 @@ async function handleDrop(event: DragEvent): Promise<void> {
         class="relative isolate min-h-0 w-full flex-1"
       >
         <ProjectSessionParallaxBackground
-          v-if="isNewConversation || shouldFadeParallax"
+          v-if="isNewConversation && !hasSubmittedPrompt"
           class="-z-10"
-          :fade-out="shouldFadeParallax"
-          @faded="shouldFadeParallax = false"
         />
 
         <div

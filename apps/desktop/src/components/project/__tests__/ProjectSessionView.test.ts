@@ -70,7 +70,7 @@ function mountView() {
         ProjectSessionComposer: {
           props: ["attachments", "modelValue", "steeringMessages"],
           template:
-            '<div data-slot="composer-stub" :data-attachment-count="attachments?.length ?? 0" :data-draft="modelValue"><button data-slot="submit-steering-stub" @click="$emit(\'submit\', \'Change direction\')" /><button v-if="steeringMessages?.length" data-slot="withdraw-steering-stub" @click="$emit(\'withdrawSteering\', steeringMessages[0])" /></div>',
+            '<div data-slot="composer-stub" :data-attachment-count="attachments?.length ?? 0" :data-draft="modelValue"><button data-slot="submit-new-stub" @click="$emit(\'submit\', \'Start\')" /><button data-slot="submit-steering-stub" @click="$emit(\'submit\', \'Change direction\')" /><button v-if="steeringMessages?.length" data-slot="withdraw-steering-stub" @click="$emit(\'withdrawSteering\', steeringMessages[0])" /></div>',
         },
         ProjectTranscriptMessage: true,
         ProjectTranscriptOutline: true,
@@ -96,6 +96,25 @@ describe("ProjectSessionView file drop", () => {
     expect(wrapper.text()).toContain(
       "从一个问题、一项任务，或一个大胆的想法开始。",
     );
+    wrapper.unmount();
+  });
+
+  it("removes the parallax background as soon as a new prompt is submitted", async () => {
+    const { wrapper } = mountView();
+    const sessionStore = useSessionStore();
+    vi.spyOn(sessionStore, "prompt").mockImplementation(
+      () => new Promise<never>(() => {}),
+    );
+    expect(
+      wrapper.find('[data-slot="session-parallax-background"]').exists(),
+    ).toBe(true);
+
+    await wrapper.get('[data-slot="submit-new-stub"]').trigger("click");
+
+    expect(
+      wrapper.find('[data-slot="session-parallax-background"]').exists(),
+    ).toBe(false);
+    expect(useContentTabsStore().tabs[0]).toMatchObject({ state: "creating" });
     wrapper.unmount();
   });
 
