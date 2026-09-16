@@ -9,7 +9,14 @@ import {
 } from "@lucide/vue";
 import { TreeItem, TreeRoot, TreeVirtualizer } from "reka-ui";
 import { storeToRefs } from "pinia";
-import { computed, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onUnmounted,
+  ref,
+  useTemplateRef,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { isValidProjectEntryName } from "@/shared/fileNames";
 import { handleError } from "@/app/errors/errorHandler";
@@ -83,7 +90,7 @@ const unsubscribeLocalProjectFilesChanged = onProjectFilesChanged(() => {
 });
 
 const items = ref<ProjectTreeNode[]>([]);
-const loadingDirectories = new Set<string>();
+const loadingDirectories = new Map<string, Promise<void>>();
 const sidebarStore = useProjectSidebarStore();
 const expanded = computed<string[]>({
   get: () =>
@@ -95,6 +102,10 @@ const expanded = computed<string[]>({
       sidebarStore.setExpanded(activeProject.value.id, keys);
   },
 });
+const TREE_DISCLOSURE_DURATION_MS = 500;
+const treeRoot = useTemplateRef<{ $el: HTMLElement }>("treeRoot");
+const activeRowAnimations = new Set<Animation>();
+const subtreeClipAnimations = new Map<string, Animation>();
 const dropTarget = ref<string>();
 const contextTarget = ref<string>();
 const busy = ref(false);
@@ -114,6 +125,189 @@ let generation = 0;
 
 function nodeKey(node: ProjectTreeNode): string {
   return `${node.folderId}:${node.relativePath}`;
+}
+
+interface RowPosition {
+  element: HTMLElement;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+function rowPositions(): Map<string, RowPosition> {
+  const positions = new Map<string, RowPosition>();
+  treeRoot.value?.$el
+    .querySelectorAll<HTMLElement>("[data-tree-key]")
+    .forEach((element) => {
+      const key = element.dataset.treeKey;
+      if (!key) return;
+      const rect = element.getBoundingClientRect();
+      positions.set(key, {
+        element,
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    });
+  return positions;
+}
+
+function animateRow(
+  element: HTMLElement,
+  frames: Keyframe[],
+): Animation | undefined {
+  if (!element.animate) return;
+  const animation = element.animate(frames, {
+    duration: TREE_DISCLOSURE_DURATION_MS,
+    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+  });
+  void animation.finished.catch(() => {});
+  activeRowAnimations.add(animation);
+  animation.addEventListener(
+    "finish",
+    () => activeRowAnimations.delete(animation),
+    {
+      once: true,
+    },
+  );
+  animation.addEventListener(
+    "cancel",
+    () => activeRowAnimations.delete(animation),
+    {
+      once: true,
+    },
+  );
+  return animation;
+}
+
+function isDescendantKey(key: string, ancestorKey: string): boolean {
+  return key.startsWith(
+    ancestorKey.endsWith(":") ? ancestorKey : `${ancestorKey}/`,
+  );
+}
+
+async function animateExpansion(
+  previous: Map<string, RowPosition>,
+  toggledKey: string,
+  opening: boolean,
+): Promise<void> {
+  await nextTick();
+  const root = treeRoot.value?.$el;
+  if (!root || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
+    return;
+  const current = rowPositions();
+  const parent = current.get(toggledKey) ?? previous.get(toggledKey);
+  const parentBottom = parent ? parent.top + parent.height : undefined;
+
+  for (const [key, row] of current) {
+    const old = previous.get(key);
+    if (old) {
+      const offset = old.top - row.top;
+      if (Math.abs(offset) > 0.5)
+        animateRow(row.element, [
+          { translate: `0 ${offset}px` },
+          { translate: "0 0" },
+        ]);
+    }
+  }
+
+  if (parentBottom === undefined) return;
+  const rootRect = root.getBoundingClientRect();
+  const subtreeRows = opening
+    ? [...current].filter(
+        ([key]) => !previous.has(key) && isDescendantKey(key, toggledKey),
+      )
+    : [...previous].filter(
+        ([key]) => !current.has(key) && isDescendantKey(key, toggledKey),
+      );
+  if (!subtreeRows.length) return;
+  const height = Math.max(
+    0,
+    ...subtreeRows.map(([, row]) => row.top + row.height - parentBottom),
+  );
+  const clip = document.createElement("div");
+  clip.setAttribute("aria-hidden", "true");
+  clip.className = "bg-sidebar";
+  clip.style.position = "absolute";
+  clip.style.top = `${parentBottom - rootRect.top + root.scrollTop}px`;
+  clip.style.left = "0";
+  clip.style.width = `${root.clientWidth}px`;
+  clip.style.height = `${height}px`;
+  clip.style.overflow = "hidden";
+  clip.style.pointerEvents = "none";
+  const content = document.createElement("div");
+  content.style.position = "relative";
+  content.style.height = `${height}px`;
+  clip.appendChild(content);
+  for (const [, row] of subtreeRows) {
+    const ghost = row.element.cloneNode(true) as HTMLElement;
+    ghost.removeAttribute("id");
+    ghost.removeAttribute("data-path");
+    ghost.removeAttribute("data-tree-key");
+    ghost.removeAttribute("data-index");
+    ghost.removeAttribute("tabindex");
+    ghost
+      .querySelectorAll("[id]")
+      .forEach((element) => element.removeAttribute("id"));
+    ghost.style.position = "absolute";
+    ghost.style.top = `${row.top - parentBottom}px`;
+    ghost.style.left = `${row.left - rootRect.left}px`;
+    ghost.style.width = `${row.width}px`;
+    ghost.style.height = `${row.height}px`;
+    ghost.style.transform = "none";
+    ghost.style.visibility = "visible";
+    content.appendChild(ghost);
+    if (opening) row.element.style.visibility = "hidden";
+  }
+  root.appendChild(clip);
+  const animation = animateRow(
+    clip,
+    opening
+      ? [{ height: "0px" }, { height: `${height}px` }]
+      : [{ height: `${height}px` }, { height: "0px" }],
+  );
+  const opacityAnimation = animation
+    ? animateRow(
+        content,
+        opening
+          ? [{ opacity: 0 }, { opacity: 1 }]
+          : [{ opacity: 1 }, { opacity: 0 }],
+      )
+    : undefined;
+  const cleanup = () => {
+    opacityAnimation?.cancel();
+    clip.remove();
+    if (subtreeClipAnimations.get(toggledKey) === animation)
+      subtreeClipAnimations.delete(toggledKey);
+    if (opening)
+      subtreeRows.forEach(([, row]) => (row.element.style.visibility = ""));
+  };
+  if (!animation) cleanup();
+  else {
+    subtreeClipAnimations.set(toggledKey, animation);
+    animation.addEventListener("finish", cleanup, { once: true });
+    animation.addEventListener("cancel", cleanup, { once: true });
+  }
+}
+
+function handleExpandedChange(nextKeys: string[]): void {
+  const before = new Set(expanded.value);
+  const next = [...new Set(nextKeys)];
+  const toggledKey =
+    next.find((key) => !before.has(key)) ??
+    [...before].find((key) => !next.includes(key));
+  if (toggledKey) {
+    for (const [key, animation] of subtreeClipAnimations) {
+      if (key === toggledKey || isDescendantKey(key, toggledKey))
+        animation.cancel();
+    }
+  }
+  const previous = rowPositions();
+  expanded.value = next;
+  if (toggledKey)
+    void animateExpansion(previous, toggledKey, next.includes(toggledKey));
 }
 
 function loadingPlaceholder(
@@ -189,36 +383,42 @@ async function readDirectory(
 
 async function loadChildren(node: ProjectTreeNode): Promise<void> {
   const key = nodeKey(node);
+  const pending = loadingDirectories.get(key);
+  if (pending) return pending;
   if (
     node.kind !== "directory" ||
     node.isUnavailable ||
-    !node.children?.some((child) => child.isPlaceholder) ||
-    loadingDirectories.has(key)
+    !node.children?.some((child) => child.isPlaceholder)
   ) {
     return;
   }
 
-  loadingDirectories.add(key);
   const currentGeneration = generation;
-  try {
-    const children = await readDirectory(node.folderId, node.relativePath);
-    if (currentGeneration !== generation) return;
-    node.children = children;
-    // Recurse through Vue's proxies so nested loads update the rendered tree.
-    await Promise.all(
-      node.children
-        .filter((child) => expanded.value.includes(nodeKey(child)))
-        .map(loadChildren),
-    );
-  } catch (error) {
-    handleError(error, {
-      id: `project.files.${key}`,
-      title: t("errors.projectFiles.title"),
-      description: t("errors.projectFiles.description"),
-    });
-  } finally {
-    loadingDirectories.delete(key);
-  }
+  const task = (async () => {
+    try {
+      const children = await readDirectory(node.folderId, node.relativePath);
+      if (currentGeneration !== generation) return;
+      node.children = children;
+      // Recurse through Vue's proxies so nested loads update the rendered tree.
+      await Promise.all(
+        node.children
+          .filter((child) => expanded.value.includes(nodeKey(child)))
+          .map(loadChildren),
+      );
+    } catch (error) {
+      handleError(error, {
+        id: `project.files.${key}`,
+        title: t("errors.projectFiles.title"),
+        description: t("errors.projectFiles.description"),
+      });
+    }
+  })();
+  loadingDirectories.set(key, task);
+  const clearPending = () => {
+    if (loadingDirectories.get(key) === task) loadingDirectories.delete(key);
+  };
+  void task.then(clearPending, clearPending);
+  return task;
 }
 
 function isProjectTreeNode(node: unknown): node is ProjectTreeNode {
@@ -232,8 +432,28 @@ function isProjectTreeNode(node: unknown): node is ProjectTreeNode {
   );
 }
 
-function loadTreeNode(node: unknown): void {
-  if (isProjectTreeNode(node)) void loadChildren(node);
+function handleTreeToggle(
+  event: { detail: { isExpanded: boolean }; preventDefault(): void },
+  node: ProjectTreeNode,
+): void {
+  if (
+    event.detail.isExpanded ||
+    node.kind !== "directory" ||
+    !node.children?.some((child) => child.isPlaceholder)
+  )
+    return;
+  event.preventDefault();
+  const currentGeneration = generation;
+  void loadChildren(node).then(() => {
+    const key = nodeKey(node);
+    if (
+      currentGeneration !== generation ||
+      node.children?.some((child) => child.isPlaceholder) ||
+      expanded.value.includes(key)
+    )
+      return;
+    handleExpandedChange([...expanded.value, key]);
+  });
 }
 
 function previewFile(node: ProjectTreeNode): void {
@@ -280,6 +500,10 @@ async function refresh(): Promise<void> {
       !expanded.value.includes(nodeKey(node))
     )
       return;
+    if (node.children?.some((child) => child.isPlaceholder)) {
+      await loadChildren(node);
+      return;
+    }
     const children = await readDirectory(node.folderId, node.relativePath);
     if (currentGeneration !== generation) return;
     node.children = children;
@@ -547,6 +771,7 @@ onUnmounted(() => {
   unsubscribeLocalProjectFilesChanged();
   unsubscribeWatcher();
   clearTimeout(syncWatchTimer);
+  activeRowAnimations.forEach((animation) => animation.cancel());
   pendingWatchedChanges.clear();
   void window.pine.setWatchedProjectDirectories({ folders: [] }).catch(() => {
     // The renderer may already be shutting down.
@@ -566,11 +791,12 @@ onUnmounted(() => {
 
   <TreeRoot
     v-else
-    v-model:expanded="expanded"
+    ref="treeRoot"
+    :expanded="expanded"
     :items="items"
     :get-key="nodeKey"
     :get-children="(item) => item.children"
-    class="scroll-fade no-scrollbar h-full overflow-y-auto p-2 outline-none"
+    class="scroll-fade no-scrollbar relative h-full overflow-y-auto p-2 outline-none"
     @dragover="
       (event: DragEvent) => {
         const root = items.find(
@@ -588,12 +814,14 @@ onUnmounted(() => {
       }
     "
     @dragleave="dropTarget = undefined"
+    @update:expanded="handleExpandedChange"
   >
     <TreeVirtualizer
       v-slot="{ item }"
       :estimate-size="28"
       :overscan="12"
       :text-content="(node) => node.name"
+      class="overflow-hidden transition-[height] duration-500 ease-out-expo motion-reduce:transition-none"
     >
       <TreeItem
         v-if="isProjectTreeNode(item.value)"
@@ -604,6 +832,7 @@ onUnmounted(() => {
           !item.value.isPlaceholder && !item.value.isUnavailable && !busy
         "
         :data-path="item.value.relativePath"
+        :data-tree-key="nodeKey(item.value)"
         :data-context-open="
           contextTarget === nodeKey(item.value) ? '' : undefined
         "
@@ -618,7 +847,7 @@ onUnmounted(() => {
         @dragend="dropTarget = undefined"
         @drop="drop($event, item.value)"
         :style="{ paddingInlineStart: `${(item.level - 1) * 12 + 8}px` }"
-        @toggle="loadTreeNode(item.value)"
+        @toggle="handleTreeToggle($event, item.value)"
         @click="previewFile(item.value)"
       >
         <ContextMenu
@@ -635,7 +864,10 @@ onUnmounted(() => {
             as-child
             :disabled="item.value.isPlaceholder || item.value.isUnavailable"
           >
-            <div class="flex h-full min-w-0 flex-1 items-center gap-1">
+            <div
+              data-tree-item-content
+              class="flex h-full min-w-0 flex-1 items-center gap-1"
+            >
               <template v-if="item.value.isPlaceholder">
                 <Skeleton class="h-4 w-24" />
               </template>
@@ -644,8 +876,10 @@ onUnmounted(() => {
                   v-if="
                     item.value.kind === 'directory' && !item.value.isUnavailable
                   "
-                  class="size-4 shrink-0 transition-transform"
-                  :class="{ 'rotate-90': isExpanded }"
+                  class="size-4 shrink-0 transition-transform duration-500 ease-out-expo motion-reduce:transition-none"
+                  :class="{
+                    'rotate-90': isExpanded,
+                  }"
                 />
                 <span v-else class="size-4 shrink-0" />
                 <FolderOpen

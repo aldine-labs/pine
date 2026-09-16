@@ -130,6 +130,140 @@ async function expandRoot(wrapper: ReturnType<typeof mount>) {
 }
 
 describe("ProjectFileTree", () => {
+  it("moves following rows when a directory opens and closes", async () => {
+    const originalRect = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "getBoundingClientRect",
+    );
+    const originalAnimate = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "animate",
+    );
+    const animate = vi.fn((frames: Keyframe[]) => {
+      void frames;
+      return {
+        addEventListener: vi.fn(),
+        cancel: vi.fn(),
+        finished: Promise.resolve(),
+      };
+    });
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function (this: HTMLElement) {
+        const rows = [...document.querySelectorAll("[data-tree-key]")];
+        const top = rows.indexOf(this) * 28;
+        return { top, bottom: top + 28, left: 0, width: 200, height: 28 };
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "animate", {
+      configurable: true,
+      value: animate,
+    });
+    try {
+      const { wrapper } = mountTree("read-write", ({ relativePath }) =>
+        Promise.resolve({
+          entries:
+            relativePath === ""
+              ? [
+                  { name: "docs", relativePath: "docs", kind: "directory" },
+                  { name: "notes.md", relativePath: "notes.md", kind: "file" },
+                ]
+              : [
+                  {
+                    name: "readme.md",
+                    relativePath: "docs/readme.md",
+                    kind: "file",
+                  },
+                ],
+        }),
+      );
+      await expandRoot(wrapper);
+      animate.mockClear();
+      await wrapper.get('[data-path="docs"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.find('[data-path="docs/readme.md"]').exists()).toBe(true);
+      expect(
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames).includes('"height":"0px"') &&
+            JSON.stringify(frames).includes('"height":"28px"'),
+        ),
+      ).toBe(true);
+      expect(
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames) === '[{"opacity":0},{"opacity":1}]',
+        ),
+      ).toBe(true);
+
+      animate.mockClear();
+      await wrapper.get('[data-path="docs"]').trigger("click");
+      await flushPromises();
+      expect(wrapper.find('[data-path="docs/readme.md"]').exists()).toBe(false);
+      expect(
+        animate.mock.calls.some(([frames]) =>
+          JSON.stringify(frames).includes('"translate":"0 28px"'),
+        ),
+      ).toBe(true);
+      expect(
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames).includes('"height":"28px"') &&
+            JSON.stringify(frames).includes('"height":"0px"'),
+        ),
+      ).toBe(true);
+      expect(
+        animate.mock.calls.some(
+          ([frames]) =>
+            JSON.stringify(frames) === '[{"opacity":1},{"opacity":0}]',
+        ),
+      ).toBe(true);
+    } finally {
+      if (originalRect)
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "getBoundingClientRect",
+          originalRect,
+        );
+      else
+        delete (HTMLElement.prototype as Partial<HTMLElement>)
+          .getBoundingClientRect;
+      if (originalAnimate)
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "animate",
+          originalAnimate,
+        );
+      else delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+    }
+  });
+
+  it("waits for a first directory read before expanding", async () => {
+    let resolveDirectory:
+      ((result: ListProjectDirectoryResult) => void) | undefined;
+    const { wrapper } = mountTree(
+      "read-write",
+      () =>
+        new Promise((resolve) => {
+          resolveDirectory = resolve;
+        }),
+    );
+    await wrapper.get('[data-path=""]').trigger("click");
+    expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+      "false",
+    );
+    expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(false);
+    resolveDirectory?.({
+      entries: [{ name: "notes.md", relativePath: "notes.md", kind: "file" }],
+    });
+    await flushPromises();
+    expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+      "true",
+    );
+    expect(wrapper.find('[data-path="notes.md"]').exists()).toBe(true);
+    expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(false);
+  });
+
   it("omits dot directories at every level, including previously expanded ones, while keeping dotfiles", async () => {
     localStorage.setItem(
       PROJECT_SIDEBAR_STORAGE_PREFIX + "p1",
@@ -278,10 +412,17 @@ describe("ProjectFileTree", () => {
         entries: [{ name: "docs", relativePath: "docs", kind: "directory" }],
       });
       await flushPromises();
-      expect(
-        wrapper.get('[data-path="docs"]').attributes("aria-expanded"),
-      ).toBe("true");
-      expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      if (rootExpanded) {
+        expect(
+          wrapper.get('[data-path="docs"]').attributes("aria-expanded"),
+        ).toBe("true");
+        expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      } else {
+        expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+          "false",
+        );
+        expect(wrapper.find('[data-path="docs"]').exists()).toBe(false);
+      }
 
       pending.get("docs")!({
         entries: [
@@ -289,8 +430,14 @@ describe("ProjectFileTree", () => {
         ],
       });
       await flushPromises();
-      expect(wrapper.find('[data-path="docs/nested"]').exists()).toBe(true);
-      expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      if (rootExpanded) {
+        expect(wrapper.find('[data-path="docs/nested"]').exists()).toBe(true);
+        expect(wrapper.find('[data-slot="skeleton"]').exists()).toBe(true);
+      } else {
+        expect(wrapper.get('[data-path=""]').attributes("aria-expanded")).toBe(
+          "false",
+        );
+      }
 
       pending.get("docs/nested")!({
         entries: [
