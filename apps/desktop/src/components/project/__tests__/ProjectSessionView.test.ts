@@ -53,6 +53,9 @@ function mountView() {
   });
 
   const slotStub = { template: "<div><slot /></div>" };
+  const viewportStub = {
+    template: '<div data-slot="message-viewport-stub"><slot /></div>',
+  };
   const wrapper = mount(ProjectSessionView, {
     props: { tabId: "session-1" },
     global: {
@@ -60,7 +63,7 @@ function mountView() {
       stubs: {
         MessageScrollerProvider: slotStub,
         MessageScroller: slotStub,
-        MessageScrollerViewport: slotStub,
+        MessageScrollerViewport: viewportStub,
         MessageScrollerContent: slotStub,
         MessageScrollerItem: slotStub,
         PineCharacter: true,
@@ -78,15 +81,39 @@ function mountView() {
 }
 
 describe("ProjectSessionView file drop", () => {
-  it("renders the earlier-messages action as a tonal button with a history icon", async () => {
+  it("shows a loading indicator while earlier messages are fetched", async () => {
     const { wrapper } = mountView();
     const sessionStore = useSessionStore();
     sessionStore.hasEarlierMessages = true;
+    sessionStore.messages = [
+      {
+        id: "loaded-message",
+        createdAt: "2026-09-03T00:00:00Z",
+        role: "assistant",
+        status: "complete",
+        blocks: [],
+      },
+    ];
+    sessionStore.isLoadingMessages = true;
     await flushPromises();
 
-    const button = wrapper.get('button[data-variant="secondary"]');
-    expect(button.text()).toContain("加载更早的消息");
-    expect(button.find('svg[data-icon="inline-start"]').exists()).toBe(true);
+    expect(wrapper.get('[data-slot="history-loading"]')).toBeTruthy();
+    expect(wrapper.find('button[data-variant="secondary"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("loads earlier messages when the transcript reaches the top threshold", async () => {
+    const { wrapper } = mountView();
+    const sessionStore = useSessionStore();
+    sessionStore.hasEarlierMessages = true;
+    const loadEarlierMessages = vi
+      .spyOn(sessionStore, "loadEarlierMessages")
+      .mockResolvedValue();
+
+    await wrapper.get('[data-slot="message-viewport-stub"]').trigger("scroll");
+
+    expect(loadEarlierMessages).toHaveBeenCalledOnce();
   });
 
   it("steers a running session while its tab is still creating", async () => {

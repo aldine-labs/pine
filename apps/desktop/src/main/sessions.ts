@@ -292,6 +292,17 @@ function textMessages(entries: Entry[]): PineTextMessage[] {
   return indexedTextMessages(entries).map(({ message }) => message);
 }
 
+function outlineMessages(
+  messages: readonly IndexedTextMessage[],
+): PineTextMessage[] {
+  return messages
+    .filter(({ message }) => message.role === "user")
+    .map(({ message }) => ({
+      ...message,
+      blocks: message.blocks.filter((block) => block.type === "text"),
+    }));
+}
+
 function messageCursor(sequence: number): string {
   return `seq:${sequence}`;
 }
@@ -583,6 +594,7 @@ export class ProjectSessionService {
     sessionId: string,
     before?: string,
     limit = 50,
+    includeOutline = false,
   ): Promise<LoadSessionMessagesResult> {
     const metadata = (
       await this.repository.list(undefined, BACKGROUND_CONTEXT)
@@ -604,6 +616,7 @@ export class ProjectSessionService {
         ...(start > 0 && page[0]
           ? { nextBefore: messageCursor(page[0].cursor) }
           : {}),
+        ...(includeOutline ? { outline: outlineMessages(messages) } : {}),
       };
     });
   }

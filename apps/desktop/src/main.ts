@@ -543,6 +543,7 @@ const LoadSessionMessagesRequestSchema = z.object({
   // History cursors are opaque, versioned strings derived from stable entry
   // sequence numbers; entry-ID cursors remain accepted for compatibility.
   before: z.string().min(1).max(128).optional(),
+  includeOutline: z.boolean().optional(),
   limit: z.number().int().min(1).max(100).optional(),
   sessionId: z.uuid(),
 });
@@ -1710,13 +1711,14 @@ ipcMain.handle(
 ipcMain.handle(
   LOAD_SESSION_MESSAGES_CHANNEL,
   async (event, request: unknown): Promise<LoadSessionMessagesResult> => {
-    const { before, limit, sessionId } =
+    const { before, includeOutline, limit, sessionId } =
       LoadSessionMessagesRequestSchema.parse(request);
     return getProjectRuntimes().loadMessages(
       event.sender.id,
       sessionId,
       before,
       limit,
+      includeOutline,
     );
   },
 );

@@ -14,6 +14,10 @@ const props = withDefaults(
   },
 );
 
+const emit = defineEmits<{
+  scroll: [event: Event];
+}>();
+
 const {
   autoscrolling,
   handleResize,
@@ -43,6 +47,11 @@ function onScroll(): void {
   // into one commit per animation frame.
   window.cancelAnimationFrame(scrollFrame);
   scrollFrame = window.requestAnimationFrame(syncAfterScroll);
+}
+
+function onViewportScroll(event: Event): void {
+  onScroll();
+  emit("scroll", event);
 }
 
 onMounted(() => {
@@ -80,7 +89,7 @@ onBeforeUnmount(() => {
         props.class,
       )
     "
-    @scroll="onScroll"
+    @scroll="onViewportScroll"
     @wheel="userScrollIntent()"
     @touchmove="userScrollIntent()"
     @keydown="onKeyDown"

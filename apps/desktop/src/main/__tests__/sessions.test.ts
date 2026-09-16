@@ -285,8 +285,19 @@ describe("ProjectSessionService", () => {
     const service = await ProjectSessionService.create(options);
 
     try {
-      const newest = await service.loadMessages(metadata.id, undefined, 2);
+      const newest = await service.loadMessages(
+        metadata.id,
+        undefined,
+        2,
+        true,
+      );
       expect(newest.messages.map((message) => textOf(message))).toEqual([
+        "three",
+        "four",
+      ]);
+      expect(newest.outline?.map((message) => textOf(message))).toEqual([
+        "one",
+        "two",
         "three",
         "four",
       ]);

@@ -185,11 +185,13 @@ export class ProjectRuntimeRegistry {
     sessionId: string,
     before?: string,
     limit?: number,
+    includeOutline?: boolean,
   ): Promise<LoadSessionMessagesResult> {
     return this.get(webContentsId).sessions.loadMessages(
       sessionId,
       before,
       limit,
+      includeOutline,
     );
   }
 

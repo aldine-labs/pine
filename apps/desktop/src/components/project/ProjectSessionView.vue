@@ -5,7 +5,7 @@ import {
   readProjectEntryDrag,
 } from "@/lib/projectFileDrag";
 import { hasSessionDrag, readSessionDrag } from "@/lib/sessionDrag";
-import { FilesIcon, HistoryIcon } from "@lucide/vue";
+import { FilesIcon } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, ref, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -18,7 +18,6 @@ import {
   type PineAttachment,
 } from "@/shared/attachments";
 import { PineCharacter } from "@/components/pine";
-import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -52,6 +51,7 @@ const contentTabsStore = useContentTabsStore();
 const tabNavigation = useContentTabNavigation();
 const sessionStore = useSessionStore();
 const liveState = storeToRefs(sessionStore);
+const HISTORY_LOAD_THRESHOLD = 240;
 
 // Retaining a panel does not stop reactive updates. A hidden tab
 // must retain its own projection instead of rendering every newly active
@@ -68,8 +68,15 @@ const hasEarlierMessages = tabValue(liveState.hasEarlierMessages);
 const isLoadingMessages = tabValue(liveState.isLoadingMessages);
 const isRunning = tabValue(liveState.isRunning);
 const messages = tabValue(liveState.messages);
+const outlineMessages = tabValue(liveState.outlineMessages);
 const transcriptTurns = computed((previous?: PineTranscriptMessage[]) => {
-  const next = messages.value.filter((message) => message.role === "user");
+  const allMessages = new Map(
+    outlineMessages.value.map((message) => [message.id, message]),
+  );
+  for (const message of messages.value) allMessages.set(message.id, message);
+  const next = [...allMessages.values()].filter(
+    (message) => message.role === "user",
+  );
   return previous &&
     previous.length === next.length &&
     next.every((message, index) => previous[index] === message)
@@ -187,12 +194,33 @@ function abort(): void {
   });
 }
 
-function loadEarlierMessages(): void {
-  void sessionStore.loadEarlierMessages().catch(() => {
+async function loadEarlierMessages(): Promise<void> {
+  try {
+    await sessionStore.loadEarlierMessages();
+  } catch {
     toast.error(t("errors.sessionHistory.title"), {
       description: t("errors.sessionHistory.description"),
     });
-  });
+  }
+}
+
+function handleTranscriptScroll(event: Event): void {
+  const viewport = event.currentTarget;
+  if (!(viewport instanceof HTMLElement)) return;
+  if (viewport.scrollTop <= HISTORY_LOAD_THRESHOLD) {
+    void loadEarlierMessages();
+  }
+}
+
+async function ensureTranscriptMessageLoaded(messageId: string): Promise<void> {
+  while (
+    !messages.value.some((message) => message.id === messageId) &&
+    hasEarlierMessages.value
+  ) {
+    const previousCount = messages.value.length;
+    await loadEarlierMessages();
+    if (messages.value.length === previousCount) break;
+  }
 }
 
 function dragContainsAttachments(event: DragEvent): boolean {
@@ -274,32 +302,21 @@ async function handleDrop(event: DragEvent): Promise<void> {
       @drop="handleDrop"
     >
       <div class="relative min-h-0 w-full flex-1">
+        <div
+          v-if="isLoadingMessages && messages.length"
+          data-slot="history-loading"
+          class="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center"
+          aria-live="polite"
+        >
+          <Spinner :aria-label="t('project.transcript.loadingHistory')" />
+        </div>
+
         <MessageScroller>
-          <MessageScrollerViewport>
+          <MessageScrollerViewport @scroll="handleTranscriptScroll">
             <MessageScrollerContent
               class="session-transcript-content mx-auto py-8"
               spacer-class="h-16"
             >
-              <div
-                v-if="hasEarlierMessages || isLoadingMessages"
-                class="flex justify-center"
-              >
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  :disabled="isLoadingMessages"
-                  @click="loadEarlierMessages"
-                >
-                  <Spinner v-if="isLoadingMessages" data-icon="inline-start" />
-                  <HistoryIcon v-else data-icon="inline-start" />
-                  {{
-                    isLoadingMessages
-                      ? t("project.transcript.loadingHistory")
-                      : t("project.transcript.loadHistory")
-                  }}
-                </Button>
-              </div>
-
               <Empty v-if="!messages.length && !isLoadingMessages">
                 <EmptyHeader>
                   <PineCharacter decorative size="lg" />
@@ -340,7 +357,10 @@ async function handleDrop(event: DragEvent): Promise<void> {
           </MessageScrollerViewport>
         </MessageScroller>
 
-        <ProjectTranscriptOutline :turns="transcriptTurns" />
+        <ProjectTranscriptOutline
+          :turns="transcriptTurns"
+          :ensure-message-loaded="ensureTranscriptMessageLoaded"
+        />
       </div>
 
       <ProjectSessionComposer

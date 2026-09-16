@@ -69,6 +69,18 @@ function blocksHasThinking(blocks: readonly PineContentBlock[]): boolean {
   return blocks.some((block) => block.type === "thinking");
 }
 
+function toTranscriptMessages(
+  source: readonly PineTextMessage[],
+): PineTranscriptMessage[] {
+  return source.map((message) => ({
+    ...message,
+    status: "complete" as const,
+    ...(blocksHasThinking(message.blocks)
+      ? { thinkingStatus: "complete" as const }
+      : {}),
+  }));
+}
+
 function mergeToolCallBlocks(
   blocks: PineContentBlock[],
   toolCallId: string,
@@ -226,6 +238,7 @@ export const useSessionStore = defineStore("session", () => {
   const modelsStore = useModelsStore();
   const activeSession = shallowRef<PineSessionSummary | null>(null);
   const messages = ref<PineTranscriptMessage[]>([]);
+  const outlineMessages = ref<PineTranscriptMessage[]>([]);
   const recentSessions = shallowRef<SessionSearchResult[]>([]);
   const searchResults = shallowRef<SessionSearchResult[]>([]);
   const isLoadingRecent = ref(false);
@@ -302,6 +315,7 @@ export const useSessionStore = defineStore("session", () => {
   interface CachedSession {
     summary: PineSessionSummary | null;
     messages: PineTranscriptMessage[];
+    outlineMessages: PineTranscriptMessage[];
     contextUsage: PineContextUsage | null;
     steeringMessages: string[];
     hasEarlierMessages: boolean;
@@ -315,6 +329,7 @@ export const useSessionStore = defineStore("session", () => {
     sessionCache.set(sessionId, {
       summary: activeSession.value,
       messages: messages.value,
+      outlineMessages: outlineMessages.value,
       contextUsage: contextUsage.value,
       steeringMessages: steeringMessages.value,
       hasEarlierMessages: hasEarlierMessages.value,
@@ -424,6 +439,7 @@ export const useSessionStore = defineStore("session", () => {
     if (cached && cached.summary) {
       activeSession.value = cached.summary;
       messages.value = cached.messages;
+      outlineMessages.value = cached.outlineMessages;
       clearMessageIndexes();
       contextUsage.value = cached.contextUsage;
       steeringMessages.value = cached.steeringMessages;
@@ -436,6 +452,7 @@ export const useSessionStore = defineStore("session", () => {
 
     activeSession.value = null;
     messages.value = [];
+    outlineMessages.value = [];
     clearMessageIndexes();
     hasEarlierMessages.value = false;
     nextBefore.value = undefined;
@@ -467,17 +484,15 @@ export const useSessionStore = defineStore("session", () => {
     isLoadingMessages.value = true;
     try {
       const result = await window.pine.loadSessionMessages({
+        includeOutline: true,
         sessionId,
         limit: 50,
       });
       if (currentSessionId !== sessionId) return;
-      messages.value = result.messages.map((message) => ({
-        ...message,
-        status: "complete",
-        ...(blocksHasThinking(message.blocks)
-          ? { thinkingStatus: "complete" as const }
-          : {}),
-      }));
+      messages.value = toTranscriptMessages(result.messages);
+      outlineMessages.value = toTranscriptMessages(
+        result.outline ?? result.messages,
+      );
       clearMessageIndexes();
       hasEarlierMessages.value = result.hasMore;
       nextBefore.value = result.nextBefore;
@@ -506,15 +521,16 @@ export const useSessionStore = defineStore("session", () => {
         limit: 50,
       });
       if (currentSessionId !== sessionId) return;
-      messages.value = [
-        ...result.messages.map((message): PineTranscriptMessage => ({
-          ...message,
-          status: "complete",
-          ...(blocksHasThinking(message.blocks)
-            ? { thinkingStatus: "complete" as const }
-            : {}),
-        })),
-        ...messages.value,
+      const earlierMessages = toTranscriptMessages(result.messages);
+      messages.value = [...earlierMessages, ...messages.value];
+      const existingOutlineIds = new Set(
+        outlineMessages.value.map((message) => message.id),
+      );
+      outlineMessages.value = [
+        ...earlierMessages.filter(
+          (message) => !existingOutlineIds.has(message.id),
+        ),
+        ...outlineMessages.value,
       ];
       clearMessageIndexes();
       hasEarlierMessages.value = result.hasMore;
@@ -1053,6 +1069,7 @@ export const useSessionStore = defineStore("session", () => {
     activeSession.value = null;
     currentSessionId = null;
     messages.value = [];
+    outlineMessages.value = [];
     clearMessageIndexes();
     hasEarlierMessages.value = false;
     nextBefore.value = undefined;
@@ -1072,6 +1089,7 @@ export const useSessionStore = defineStore("session", () => {
     activeSession.value = null;
     currentSessionId = null;
     messages.value = [];
+    outlineMessages.value = [];
     clearMessageIndexes();
     recentSessions.value = [];
     searchResults.value = [];
@@ -1108,6 +1126,7 @@ export const useSessionStore = defineStore("session", () => {
     loadRecent,
     loadEarlierMessages,
     messages,
+    outlineMessages,
     pendingApprovals,
     pendingQuestionnaires,
     prompt,

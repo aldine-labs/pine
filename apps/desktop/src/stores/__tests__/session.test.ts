@@ -180,6 +180,50 @@ describe("session store", () => {
     expect(store.hasEarlierMessages).toBe(false);
   });
 
+  it("keeps the complete outline separate from the paginated transcript", async () => {
+    const newerMessage = {
+      id: "newer-message",
+      blocks: [],
+      createdAt: "2026-01-02T00:00:00.000Z",
+      role: "assistant" as const,
+    };
+    const earlierTurn = {
+      id: "earlier-turn",
+      blocks: [{ type: "text" as const, text: "Earlier" }],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      role: "user" as const,
+    };
+    const currentTurn = {
+      id: "current-turn",
+      blocks: [{ type: "text" as const, text: "Current" }],
+      createdAt: "2026-01-02T00:00:00.000Z",
+      role: "user" as const,
+    };
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        loadSessionMessages: vi.fn().mockResolvedValue({
+          hasMore: true,
+          messages: [newerMessage],
+          nextBefore: "newer-message",
+          outline: [earlierTurn, currentTurn],
+        }),
+        resumeSession: vi.fn().mockResolvedValue({ session }),
+      },
+    });
+    const store = useSessionStore();
+
+    await store.resume(session.id);
+
+    expect(store.messages.map((message) => message.id)).toEqual([
+      "newer-message",
+    ]);
+    expect(store.outlineMessages.map((message) => message.id)).toEqual([
+      "earlier-turn",
+      "current-turn",
+    ]);
+  });
+
   it("evicts a session from the cache when it is deleted", async () => {
     Object.defineProperty(window, "pine", {
       configurable: true,

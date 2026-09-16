@@ -480,6 +480,7 @@ describe("ProjectContentTabs", () => {
     await router.push({ query: { tab: reopened.id } });
     await flushPromises();
     expect(loadMessages).toHaveBeenCalledExactlyOnceWith({
+      includeOutline: true,
       sessionId: firstSession.id,
       limit: 50,
     });

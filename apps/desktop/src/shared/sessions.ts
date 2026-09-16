@@ -249,6 +249,7 @@ export interface RenameSessionResult {
 
 export interface LoadSessionMessagesRequest {
   before?: string;
+  includeOutline?: boolean;
   limit?: number;
   sessionId: string;
 }
@@ -257,6 +258,8 @@ export interface LoadSessionMessagesResult {
   hasMore: boolean;
   messages: PineTextMessage[];
   nextBefore?: string;
+  /** All user turns, kept separate from the paginated transcript body. */
+  outline?: PineTextMessage[];
 }
 
 export interface ExportSessionRequest {

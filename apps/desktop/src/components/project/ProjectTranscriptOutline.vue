@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,10 @@ import {
 import { cn } from "@/lib/utils";
 import type { PineTranscriptMessage } from "@/stores/session";
 
+type EnsureMessageLoaded = (messageId: string) => Promise<void> | void;
+
 const props = defineProps<{
+  ensureMessageLoaded?: EnsureMessageLoaded;
   turns: PineTranscriptMessage[];
 }>();
 
@@ -54,7 +57,9 @@ function messageExcerpt(message: PineTranscriptMessage): string {
   );
 }
 
-function scrollToTurn(messageId: string): void {
+async function scrollToTurn(messageId: string): Promise<void> {
+  await props.ensureMessageLoaded?.(messageId);
+  await nextTick();
   scrollToMessage(messageId, { align: "start", behavior: "smooth" });
 }
 </script>
