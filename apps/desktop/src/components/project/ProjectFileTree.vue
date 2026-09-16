@@ -9,7 +9,14 @@ import {
 } from "@lucide/vue";
 import { TreeItem, TreeRoot, TreeVirtualizer } from "reka-ui";
 import { storeToRefs } from "pinia";
-import { computed, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onUnmounted,
+  ref,
+  useTemplateRef,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { isValidProjectEntryName } from "@/shared/fileNames";
 import { handleError } from "@/app/errors/errorHandler";
@@ -95,6 +102,9 @@ const expanded = computed<string[]>({
       sidebarStore.setExpanded(activeProject.value.id, keys);
   },
 });
+const TREE_DISCLOSURE_DURATION_MS = 500;
+const treeRoot = useTemplateRef<{ $el: HTMLElement }>("treeRoot");
+const activeRowAnimations = new Set<Animation>();
 const dropTarget = ref<string>();
 const contextTarget = ref<string>();
 const busy = ref(false);
@@ -114,6 +124,147 @@ let generation = 0;
 
 function nodeKey(node: ProjectTreeNode): string {
   return `${node.folderId}:${node.relativePath}`;
+}
+
+interface RowPosition {
+  element: HTMLElement;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+function rowPositions(): Map<string, RowPosition> {
+  const positions = new Map<string, RowPosition>();
+  treeRoot.value?.$el
+    .querySelectorAll<HTMLElement>("[data-tree-key]")
+    .forEach((element) => {
+      const key = element.dataset.treeKey;
+      if (!key) return;
+      const rect = element.getBoundingClientRect();
+      positions.set(key, {
+        element,
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    });
+  return positions;
+}
+
+function animateRow(element: HTMLElement, frames: Keyframe[]): void {
+  if (!element.animate) return;
+  const animation = element.animate(frames, {
+    duration: TREE_DISCLOSURE_DURATION_MS,
+    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+  });
+  void animation.finished.catch(() => {});
+  activeRowAnimations.add(animation);
+  animation.addEventListener(
+    "finish",
+    () => activeRowAnimations.delete(animation),
+    {
+      once: true,
+    },
+  );
+  animation.addEventListener(
+    "cancel",
+    () => activeRowAnimations.delete(animation),
+    {
+      once: true,
+    },
+  );
+}
+
+function isDescendantKey(key: string, ancestorKey: string): boolean {
+  return key.startsWith(
+    ancestorKey.endsWith(":") ? ancestorKey : `${ancestorKey}/`,
+  );
+}
+
+async function animateExpansion(
+  previous: Map<string, RowPosition>,
+  toggledKey: string,
+): Promise<void> {
+  await nextTick();
+  const root = treeRoot.value?.$el;
+  if (!root || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
+    return;
+  const current = rowPositions();
+  const parent = current.get(toggledKey) ?? previous.get(toggledKey);
+  const parentBottom = parent ? parent.top + parent.height : undefined;
+
+  for (const [key, row] of current) {
+    const old = previous.get(key);
+    if (old) {
+      const offset = old.top - row.top;
+      if (Math.abs(offset) > 0.5)
+        animateRow(row.element, [
+          { translate: `0 ${offset}px` },
+          { translate: "0 0" },
+        ]);
+    } else if (parentBottom !== undefined && isDescendantKey(key, toggledKey)) {
+      animateRow(row.element, [
+        { translate: `0 ${parentBottom - row.top}px`, opacity: 0 },
+        { translate: "0 0", opacity: 1 },
+      ]);
+    }
+  }
+
+  if (parentBottom === undefined) return;
+  const rootRect = root.getBoundingClientRect();
+  for (const [key, row] of previous) {
+    if (current.has(key) || !isDescendantKey(key, toggledKey)) continue;
+    const ghost = row.element.cloneNode(true) as HTMLElement;
+    ghost.removeAttribute("id");
+    ghost.removeAttribute("data-tree-key");
+    ghost
+      .querySelectorAll("[id]")
+      .forEach((element) => element.removeAttribute("id"));
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.style.position = "absolute";
+    ghost.style.top = `${row.top - rootRect.top + root.scrollTop}px`;
+    ghost.style.left = `${row.left - rootRect.left}px`;
+    ghost.style.width = `${row.width}px`;
+    ghost.style.height = `${row.height}px`;
+    ghost.style.transform = "none";
+    ghost.style.pointerEvents = "none";
+    root.appendChild(ghost);
+    if (!ghost.animate) {
+      ghost.remove();
+      continue;
+    }
+    const animation = ghost.animate(
+      [
+        { translate: "0 0", opacity: 1 },
+        { translate: `0 ${parentBottom - row.top}px`, opacity: 0 },
+      ],
+      {
+        duration: TREE_DISCLOSURE_DURATION_MS,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+      },
+    );
+    void animation.finished.catch(() => {});
+    activeRowAnimations.add(animation);
+    const cleanup = () => {
+      ghost.remove();
+      activeRowAnimations.delete(animation);
+    };
+    animation.addEventListener("finish", cleanup, { once: true });
+    animation.addEventListener("cancel", cleanup, { once: true });
+  }
+}
+
+function handleExpandedChange(nextKeys: string[]): void {
+  const previous = rowPositions();
+  const before = new Set(expanded.value);
+  const next = [...new Set(nextKeys)];
+  const toggledKey =
+    next.find((key) => !before.has(key)) ??
+    [...before].find((key) => !next.includes(key));
+  expanded.value = next;
+  if (toggledKey) void animateExpansion(previous, toggledKey);
 }
 
 function loadingPlaceholder(
@@ -547,6 +698,7 @@ onUnmounted(() => {
   unsubscribeLocalProjectFilesChanged();
   unsubscribeWatcher();
   clearTimeout(syncWatchTimer);
+  activeRowAnimations.forEach((animation) => animation.cancel());
   pendingWatchedChanges.clear();
   void window.pine.setWatchedProjectDirectories({ folders: [] }).catch(() => {
     // The renderer may already be shutting down.
@@ -566,11 +718,12 @@ onUnmounted(() => {
 
   <TreeRoot
     v-else
-    v-model:expanded="expanded"
+    ref="treeRoot"
+    :expanded="expanded"
     :items="items"
     :get-key="nodeKey"
     :get-children="(item) => item.children"
-    class="scroll-fade no-scrollbar h-full overflow-y-auto p-2 outline-none"
+    class="scroll-fade no-scrollbar relative h-full overflow-y-auto p-2 outline-none"
     @dragover="
       (event: DragEvent) => {
         const root = items.find(
@@ -588,12 +741,14 @@ onUnmounted(() => {
       }
     "
     @dragleave="dropTarget = undefined"
+    @update:expanded="handleExpandedChange"
   >
     <TreeVirtualizer
       v-slot="{ item }"
       :estimate-size="28"
       :overscan="12"
       :text-content="(node) => node.name"
+      class="overflow-hidden transition-[height] duration-500 ease-out-expo motion-reduce:transition-none"
     >
       <TreeItem
         v-if="isProjectTreeNode(item.value)"
@@ -604,6 +759,7 @@ onUnmounted(() => {
           !item.value.isPlaceholder && !item.value.isUnavailable && !busy
         "
         :data-path="item.value.relativePath"
+        :data-tree-key="nodeKey(item.value)"
         :data-context-open="
           contextTarget === nodeKey(item.value) ? '' : undefined
         "
@@ -635,7 +791,10 @@ onUnmounted(() => {
             as-child
             :disabled="item.value.isPlaceholder || item.value.isUnavailable"
           >
-            <div class="flex h-full min-w-0 flex-1 items-center gap-1">
+            <div
+              data-tree-item-content
+              class="flex h-full min-w-0 flex-1 items-center gap-1"
+            >
               <template v-if="item.value.isPlaceholder">
                 <Skeleton class="h-4 w-24" />
               </template>
@@ -644,8 +803,10 @@ onUnmounted(() => {
                   v-if="
                     item.value.kind === 'directory' && !item.value.isUnavailable
                   "
-                  class="size-4 shrink-0 transition-transform"
-                  :class="{ 'rotate-90': isExpanded }"
+                  class="size-4 shrink-0 transition-transform duration-500 ease-out-expo motion-reduce:transition-none"
+                  :class="{
+                    'rotate-90': isExpanded,
+                  }"
                 />
                 <span v-else class="size-4 shrink-0" />
                 <FolderOpen
