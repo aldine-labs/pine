@@ -39,7 +39,6 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 let resizeObserver: ResizeObserver | null = null;
-let resizeFrame = 0;
 let scrollFrame = 0;
 
 function onScroll(): void {
@@ -59,14 +58,12 @@ onMounted(() => {
   setViewportElement(viewport);
   if (!viewport || typeof ResizeObserver === "undefined") return;
   resizeObserver = new ResizeObserver(() => {
-    window.cancelAnimationFrame(resizeFrame);
-    resizeFrame = window.requestAnimationFrame(handleResize);
+    handleResize();
   });
   resizeObserver.observe(viewport);
 });
 
 onBeforeUnmount(() => {
-  window.cancelAnimationFrame(resizeFrame);
   window.cancelAnimationFrame(scrollFrame);
   resizeObserver?.disconnect();
   resizeObserver = null;

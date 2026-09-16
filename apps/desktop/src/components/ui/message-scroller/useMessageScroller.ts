@@ -454,6 +454,7 @@ export interface MessageScrollerContext {
   releaseVisibility: () => void;
   handleContentChange: () => void;
   handleResize: () => void;
+  followStreamingContent: () => void;
   scrollToEnd: (options?: { behavior?: ScrollBehavior }) => boolean;
   scrollToMessage: (
     messageId: string,
@@ -643,17 +644,17 @@ function createEngine(props: MessageScrollerProviderProps) {
     } = {},
   ) {
     if (!viewport) return;
-    cancelScrollAnimation?.();
-    cancelScrollAnimation = null;
     const target = Math.max(0, top);
     if (Math.abs(viewport.scrollTop - target) <= SCROLL_EPSILON) {
+      cancelScrollAnimation?.();
+      cancelScrollAnimation = null;
       viewport.scrollTop = target;
       commitScrollState();
       return;
     }
     if (shouldAnimateFollow(animated, followAnimated())) {
-      // Shared expo-curve tween (see lib/animateScroll). Retarget-safe for
-      // streaming follow; wheel/touch input cancels it via the lib. Only a
+      // Keep the current animation clock while streaming changes its target.
+      // Wheel/touch input cancels it via the lib. Only a
       // live turn glides — hydrating or re-entering a finished conversation
       // snaps to the anchor so no animation plays on entry.
       if (isAutoscrolling) setAutoscrolling(true);
@@ -661,6 +662,8 @@ function createEngine(props: MessageScrollerProviderProps) {
       scheduleStateCommit();
       return;
     }
+    cancelScrollAnimation?.();
+    cancelScrollAnimation = null;
     if (isAutoscrolling) setAutoscrolling(true);
     viewport.scrollTo({ top: target, behavior });
     scheduleStateCommit();
@@ -693,6 +696,18 @@ function createEngine(props: MessageScrollerProviderProps) {
     });
     scheduleVisibilitySync();
     return true;
+  }
+
+  function followStreamingContent() {
+    if (
+      !autoScroll() ||
+      (mode !== "anchored-to-message" && mode !== "following-bottom")
+    )
+      return;
+    // A new turn initially holds the user's anchor in place. Once its
+    // thinking panel opens, follow the panel's expansion and subsequent
+    // streaming growth instead of continuing to hold that anchor.
+    scrollToEnd({ behavior: "auto", animated: true });
   }
 
   function scrollToElement(
@@ -1131,6 +1146,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     releaseVisibility,
     handleContentChange,
     handleResize,
+    followStreamingContent,
     scrollToEnd,
     scrollToMessage,
     scrollToStart,
@@ -1185,6 +1201,10 @@ export function useMessageScrollerContext(): MessageScrollerContext {
       "useMessageScroller must be used within a MessageScroller.",
     );
   return context;
+}
+
+export function useOptionalMessageScrollerContext(): MessageScrollerContext | null {
+  return inject(CONTEXT_KEY, null);
 }
 
 export function useMessageScrollerRegister(): RegisterMessage {

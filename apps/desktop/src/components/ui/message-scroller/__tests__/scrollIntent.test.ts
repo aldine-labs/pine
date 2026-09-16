@@ -59,6 +59,16 @@ function createScroller(followAnimated = false) {
       offsetTop += amount;
       context.handleResize();
     },
+    addTurnAnchor() {
+      const anchor = document.createElement("div");
+      anchor.dataset.messageId = "new-turn";
+      anchor.dataset.scrollAnchor = "true";
+      vi.spyOn(anchor, "getBoundingClientRect").mockImplementation(
+        () => new DOMRect(0, 1500 - viewport.scrollTop, 400, 50),
+      );
+      content.append(anchor);
+      context.handleContentChange();
+    },
     destroy() {
       wrapper.unmount();
       viewport.remove();
@@ -123,6 +133,30 @@ describe("message scroller user intent", () => {
     scroller.shiftBeforeMessage(120);
 
     expect(viewport.scrollTop).toBe(before + 120);
+    scroller.destroy();
+  });
+
+  it("follows a new turn once streaming thinking opens", () => {
+    const scroller = createScroller();
+    scroller.addTurnAnchor();
+    expect(scroller.viewport.scrollTop).toBe(1436);
+
+    scroller.context.followStreamingContent();
+
+    expect(scroller.viewport.scrollTop).toBe(1500);
+    scroller.destroy();
+  });
+
+  it("does not follow streaming thinking after the reader scrolls up", () => {
+    const scroller = createScroller();
+    scroller.addTurnAnchor();
+    scroller.context.userScrollIntent();
+    scroller.viewport.scrollTop = 1000;
+    scroller.context.syncAfterScroll();
+
+    scroller.context.followStreamingContent();
+
+    expect(scroller.viewport.scrollTop).toBe(1000);
     scroller.destroy();
   });
 
