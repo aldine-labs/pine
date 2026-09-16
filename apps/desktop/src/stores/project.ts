@@ -65,7 +65,6 @@ export const useProjectStore = defineStore("project", () => {
       sessionStore.reset();
       contentTabsStore.restore(project.id);
       activeProject.value = project;
-      upsertProject(project);
       return result;
     } finally {
       isOpeningProject.value = false;

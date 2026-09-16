@@ -115,6 +115,41 @@ describe("project store", () => {
     expect(store.isOpeningProject).toBe(false);
   });
 
+  it("does not reorder the loaded project library while opening a project", async () => {
+    const olderProject = {
+      ...project,
+      id: "1ab0b15f-331f-4aa6-8056-cd2be3bf7414",
+      name: "older",
+      lastOpenedAt: "2026-08-19T12:00:00.000Z",
+    } satisfies PineProject;
+    const openedProject = {
+      ...project,
+      lastOpenedAt: "2026-08-20T12:00:00.000Z",
+    } satisfies PineProject;
+    const openProject = vi
+      .fn()
+      .mockResolvedValue({ opened: true, project: openedProject });
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        listProjects: vi
+          .fn()
+          .mockResolvedValue({ projects: [olderProject, project] }),
+        openProject,
+      },
+    });
+    const store = useProjectStore();
+
+    await store.loadProjects();
+    await store.openProject(project.id);
+
+    expect(store.projects.map(({ id }) => id)).toEqual([
+      olderProject.id,
+      project.id,
+    ]);
+    expect(store.activeProject?.lastOpenedAt).toBe(openedProject.lastOpenedAt);
+  });
+
   it("clears its opening state when opening fails", async () => {
     Object.defineProperty(window, "pine", {
       configurable: true,
