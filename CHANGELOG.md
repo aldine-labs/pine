@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-16
+
+### Added
+
+- Added an expandable file tree accordion with parallax and flickering-grid visuals.
+
+### Changed
+
+- Refined project session presentation and thinking markers.
+
 ## [0.4.2] - 2026-09-16
 
 ### Fixed
