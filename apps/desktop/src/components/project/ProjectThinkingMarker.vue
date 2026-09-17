@@ -25,6 +25,7 @@ const thinkingContent = useTemplateRef<HTMLElement>("thinkingContent");
 const scroller = useOptionalMessageScrollerContext();
 const isExpanded = ref(false);
 const isFollowingThinking = ref(true);
+const hasThinkingUserScrollIntent = ref(false);
 const now = ref(Date.now());
 let elapsedTimer: number | undefined;
 let scrollAnimation: (() => void) | undefined;
@@ -114,8 +115,19 @@ async function toggleExpanded(): Promise<void> {
 
 function handleThinkingScroll(event: Event): void {
   const content = event.currentTarget as HTMLElement;
-  isFollowingThinking.value =
+  const nearBottom =
     content.scrollHeight - content.clientHeight - content.scrollTop <= 24;
+  if (nearBottom) {
+    isFollowingThinking.value = true;
+    hasThinkingUserScrollIntent.value = false;
+    return;
+  }
+  if (hasThinkingUserScrollIntent.value) isFollowingThinking.value = false;
+  hasThinkingUserScrollIntent.value = false;
+}
+
+function markThinkingUserScrollIntent(): void {
+  hasThinkingUserScrollIntent.value = true;
 }
 
 watch(
@@ -203,6 +215,9 @@ onBeforeUnmount(() => {
           data-thinking-content
           class="scroll-fade no-scrollbar mt-3 max-h-64 overflow-y-auto overscroll-contain pl-6 pr-3 text-sm text-muted-foreground"
           @scroll.passive="handleThinkingScroll"
+          @wheel.passive="markThinkingUserScrollIntent"
+          @touchstart.passive="markThinkingUserScrollIntent"
+          @pointerdown.passive="markThinkingUserScrollIntent"
         >
           <!-- Thinking renders through the same markdown pipeline as the
                message body (reasoning carries lists/code/math too); the
