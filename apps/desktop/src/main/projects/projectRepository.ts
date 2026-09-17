@@ -19,6 +19,7 @@ import {
   PROJECT_SKILLS_DIRECTORY,
   PROJECT_SKILLS_SETTINGS_FILE,
   type PineProject,
+  type PineSessionGroup,
   type ProjectFolderInput,
   type ProjectMutationInput,
 } from "../../shared/projects";
@@ -32,6 +33,12 @@ const ProjectFolderSchema = z.object({
   path: z.string().min(1).max(4_096),
 });
 
+const ProjectSessionGroupSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(100),
+  sessionIds: z.array(z.uuid()),
+});
+
 const StoredProjectSchema = z.object({
   createdAt: z.iso.datetime(),
   defaultFolderId: z.uuid(),
@@ -40,6 +47,7 @@ const StoredProjectSchema = z.object({
   lastOpenedAt: z.iso.datetime().optional(),
   name: z.string().trim().min(1).max(100),
   schemaVersion: z.literal(PROJECT_SCHEMA_VERSION),
+  sessionGroups: z.array(ProjectSessionGroupSchema).default([]),
   updatedAt: z.iso.datetime(),
 });
 
@@ -167,6 +175,7 @@ export class ProjectRepository {
       id: randomUUID(),
       name: input.name,
       schemaVersion: PROJECT_SCHEMA_VERSION,
+      sessionGroups: [],
       updatedAt: now,
     });
 
@@ -201,6 +210,21 @@ export class ProjectRepository {
       defaultFolderId: input.defaultFolderId,
       folders,
       name: input.name,
+      sessionGroups: current.sessionGroups,
+      updatedAt: new Date().toISOString(),
+    });
+    await this.write(project);
+    return this.toPublic(project);
+  }
+
+  async updateSessionGroups(
+    id: string,
+    sessionGroups: PineSessionGroup[],
+  ): Promise<PineProject> {
+    const current = await this.read(id);
+    const project = this.validateProject({
+      ...current,
+      sessionGroups,
       updatedAt: new Date().toISOString(),
     });
     await this.write(project);

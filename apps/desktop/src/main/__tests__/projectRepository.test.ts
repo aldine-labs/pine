@@ -110,4 +110,51 @@ describe("ProjectRepository", () => {
       "Pine project not found.",
     );
   });
+
+  it("persists session groups and keeps them across project metadata updates", async () => {
+    const userData = await createTemporaryDirectory("pine-user-data-");
+    const folderPath = await createTemporaryDirectory("pine-project-folder-");
+    const repository = new ProjectRepository(path.join(userData, "projects"));
+    const folderId = "cde9a86c-7632-43ac-96d6-c41ddeddce0e";
+    const project = await repository.create({
+      defaultFolderId: folderId,
+      folders: [
+        {
+          access: "read-write",
+          id: folderId,
+          name: "source",
+          path: folderPath,
+        },
+      ],
+      name: "Pine",
+    });
+    const sessionGroups = [
+      {
+        id: "4a1e4bf2-571b-4b48-9f7f-f7cf3dd6c01f",
+        name: "Planning",
+        sessionIds: ["019cfe51-7166-79b9-a5b9-c652fcca9eab"],
+      },
+    ];
+
+    await repository.updateSessionGroups(project.id, sessionGroups);
+    await repository.update(project.id, {
+      defaultFolderId: folderId,
+      folders: [
+        {
+          access: "read-write",
+          id: folderId,
+          name: "source",
+          path: folderPath,
+        },
+      ],
+      name: "Pine renamed",
+    });
+
+    await expect(repository.get(project.id)).resolves.toEqual(
+      expect.objectContaining({
+        name: "Pine renamed",
+        sessionGroups,
+      }),
+    );
+  });
 });

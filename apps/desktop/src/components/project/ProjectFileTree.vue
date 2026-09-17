@@ -103,6 +103,7 @@ const expanded = computed<string[]>({
   },
 });
 const TREE_DISCLOSURE_DURATION_MS = 500;
+const disclosureAnimationsEnabled = ref(false);
 const treeRoot = useTemplateRef<{ $el: HTMLElement }>("treeRoot");
 const activeRowAnimations = new Set<Animation>();
 const subtreeClipAnimations = new Map<string, Animation>();
@@ -306,7 +307,7 @@ function handleExpandedChange(nextKeys: string[]): void {
   }
   const previous = rowPositions();
   expanded.value = next;
-  if (toggledKey)
+  if (toggledKey && disclosureAnimationsEnabled.value)
     void animateExpansion(previous, toggledKey, next.includes(toggledKey));
 }
 
@@ -335,6 +336,8 @@ function toTreeNode(folderId: string, entry: ProjectEntry): ProjectTreeNode {
 
 function resetRoots(): void {
   generation += 1;
+  const currentGeneration = generation;
+  disclosureAnimationsEnabled.value = false;
   loadingDirectories.clear();
   pendingWatchedChanges.clear();
   dialog.value = undefined;
@@ -359,7 +362,11 @@ function resetRoots(): void {
         title: t("errors.projectFiles.title"),
       }),
     )
-    .finally(scheduleWatchSync);
+    .finally(() => {
+      if (currentGeneration !== generation) return;
+      disclosureAnimationsEnabled.value = true;
+      scheduleWatchSync();
+    });
 }
 
 async function readDirectory(
@@ -436,6 +443,7 @@ function handleTreeToggle(
   event: { detail: { isExpanded: boolean }; preventDefault(): void },
   node: ProjectTreeNode,
 ): void {
+  disclosureAnimationsEnabled.value = true;
   if (
     event.detail.isExpanded ||
     node.kind !== "directory" ||
@@ -821,7 +829,11 @@ onUnmounted(() => {
       :estimate-size="28"
       :overscan="12"
       :text-content="(node) => node.name"
-      class="overflow-hidden transition-[height] duration-500 ease-out-expo motion-reduce:transition-none"
+      class="overflow-hidden"
+      :class="{
+        'transition-[height] duration-500 ease-out-expo motion-reduce:transition-none':
+          disclosureAnimationsEnabled,
+      }"
     >
       <TreeItem
         v-if="isProjectTreeNode(item.value)"
@@ -876,8 +888,10 @@ onUnmounted(() => {
                   v-if="
                     item.value.kind === 'directory' && !item.value.isUnavailable
                   "
-                  class="size-4 shrink-0 transition-transform duration-500 ease-out-expo motion-reduce:transition-none"
+                  class="size-4 shrink-0"
                   :class="{
+                    'transition-transform duration-500 ease-out-expo motion-reduce:transition-none':
+                      disclosureAnimationsEnabled,
                     'rotate-90': isExpanded,
                   }"
                 />

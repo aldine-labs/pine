@@ -4,6 +4,7 @@ import type {
   CreateProjectRequest,
   OpenProjectResult,
   PineProject,
+  PineSessionGroup,
   UpdateProjectRequest,
 } from "@/shared/projects";
 import { useContentTabsStore } from "./contentTabs";
@@ -89,6 +90,30 @@ export const useProjectStore = defineStore("project", () => {
     }
   }
 
+  async function updateSessionGroups(
+    sessionGroups: PineSessionGroup[],
+  ): Promise<PineProject> {
+    const project = activeProject.value;
+    if (!project) throw new Error("No project is open.");
+
+    isSavingProject.value = true;
+    try {
+      const updated = (
+        await window.pine.updateProjectSessionGroups({
+          id: project.id,
+          sessionGroups,
+        })
+      ).project;
+      upsertProject(updated);
+      if (activeProject.value?.id === updated.id) {
+        activeProject.value = updated;
+      }
+      return updated;
+    } finally {
+      isSavingProject.value = false;
+    }
+  }
+
   async function deleteProject(id: string): Promise<void> {
     isSavingProject.value = true;
     try {
@@ -123,6 +148,7 @@ export const useProjectStore = defineStore("project", () => {
     openProject,
     projects,
     updateProject,
+    updateSessionGroups,
   };
 });
 

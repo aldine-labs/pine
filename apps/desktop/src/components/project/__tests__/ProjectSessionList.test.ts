@@ -188,6 +188,11 @@ describe("ProjectSessionList", () => {
       .findAll("button")
       .find((button) => button.text().includes("New session"));
     expect(newSessionButton).toBeDefined();
+    expect(
+      wrapper
+        .findAll("button")
+        .some((button) => button.text().includes("New group")),
+    ).toBe(true);
     await newSessionButton?.trigger("click");
     await flushPromises();
 

@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { Download, Pencil, Plus, Search, Trash2 } from "@lucide/vue";
+import {
+  ChevronRight,
+  FolderOpen,
+  FolderPlus,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "@lucide/vue";
 import { useEventListener } from "@vueuse/core";
 import { storeToRefs } from "pinia";
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { handleError } from "@/app/errors/errorHandler";
 import {
@@ -12,6 +20,13 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -28,10 +43,14 @@ import { useFileToSession } from "@/composables/useFileToSession";
 import { useSessionExport } from "@/composables/useSessionExport";
 import { FILE_TAB_DRAG_TYPE, hasFileTabDrag } from "@/lib/contentTabDrag";
 import { writeSessionDrag } from "@/lib/sessionDrag";
+import type { PineSessionGroup } from "@/shared/projects";
 import type { PineSessionSummary } from "@/shared/sessions";
 import { useContentTabsStore } from "@/stores/contentTabs";
 import { useProjectStore } from "@/stores/project";
 import { useSessionStore } from "@/stores/session";
+import SessionGroupDeleteDialog from "@/components/sessions/SessionGroupDeleteDialog.vue";
+import SessionGroupDialog from "@/components/sessions/SessionGroupDialog.vue";
+import SessionContextMenu from "@/components/sessions/SessionContextMenu.vue";
 import SessionDeleteDialog from "@/components/sessions/SessionDeleteDialog.vue";
 import SessionRenameDialog from "@/components/sessions/SessionRenameDialog.vue";
 
@@ -120,6 +139,15 @@ const sessionPendingDelete = ref<PineSessionSummary | null>(null);
 const isDeleteDialogOpen = ref(false);
 const sessionPendingRename = ref<PineSessionSummary | null>(null);
 const isRenameDialogOpen = ref(false);
+const groupDialogMode = ref<"create" | "rename">("create");
+const groupPendingRename = ref<PineSessionGroup | null>(null);
+const isGroupDialogOpen = ref(false);
+const isSavingGroup = ref(false);
+const groupPendingDelete = ref<PineSessionGroup | null>(null);
+const isGroupDeleteDialogOpen = ref(false);
+const isDeletingGroup = ref(false);
+const openGroupId = ref<string | null>(null);
+let groupCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
 watch(isDeleteDialogOpen, (open) => {
   if (!open) sessionPendingDelete.value = null;
@@ -127,6 +155,19 @@ watch(isDeleteDialogOpen, (open) => {
 watch(isRenameDialogOpen, (open) => {
   if (!open) sessionPendingRename.value = null;
 });
+watch(isGroupDialogOpen, (open) => {
+  if (!open) groupPendingRename.value = null;
+});
+watch(isGroupDeleteDialogOpen, (open) => {
+  if (!open) groupPendingDelete.value = null;
+});
+onUnmounted(() => {
+  if (groupCloseTimer) clearTimeout(groupCloseTimer);
+});
+
+const conversationGroups = computed(
+  () => activeProject.value?.sessionGroups ?? [],
+);
 
 // Sessions arrive sorted by `updatedAt` descending, so filtering keeps the
 // original order inside every group. Boundaries use rolling windows from the
@@ -141,7 +182,7 @@ function sessionGroupKeyFor(session: PineSessionSummary): SessionGroupKey {
   );
 }
 
-const sessionGroups = computed(() =>
+const dateSessionGroups = computed(() =>
   SESSION_GROUP_WINDOWS.map((window) => ({
     key: window.key,
     label: t(window.labelKey),
@@ -169,7 +210,128 @@ async function loadRecentSessions(): Promise<void> {
 }
 
 function openSession(session: PineSessionSummary): void {
+  openGroupId.value = null;
   tabNavigation.openSession(session);
+}
+
+function sessionsForGroup(group: PineSessionGroup): PineSessionSummary[] {
+  const sessionIds = new Set(group.sessionIds);
+  return recentSessions.value.filter((session) => sessionIds.has(session.id));
+}
+
+function clearGroupCloseTimer(): void {
+  if (groupCloseTimer) {
+    clearTimeout(groupCloseTimer);
+    groupCloseTimer = undefined;
+  }
+}
+
+function openGroupMenu(groupId: string): void {
+  clearGroupCloseTimer();
+  openGroupId.value = groupId;
+}
+
+function scheduleCloseGroupMenu(groupId: string): void {
+  clearGroupCloseTimer();
+  groupCloseTimer = setTimeout(() => {
+    if (openGroupId.value === groupId) openGroupId.value = null;
+    groupCloseTimer = undefined;
+  }, 120);
+}
+
+function updateGroupMenuOpen(groupId: string, open: boolean): void {
+  if (open) openGroupMenu(groupId);
+  else if (openGroupId.value === groupId) openGroupId.value = null;
+}
+
+function requestCreateGroup(): void {
+  groupDialogMode.value = "create";
+  groupPendingRename.value = null;
+  isGroupDialogOpen.value = true;
+}
+
+function requestGroupRename(group: PineSessionGroup): void {
+  groupDialogMode.value = "rename";
+  groupPendingRename.value = group;
+  isGroupDialogOpen.value = true;
+}
+
+function requestGroupDeletion(group: PineSessionGroup): void {
+  groupPendingDelete.value = group;
+  isGroupDeleteDialogOpen.value = true;
+}
+
+async function saveGroup(name: string): Promise<void> {
+  if (isSavingGroup.value) return;
+
+  const currentGroups = conversationGroups.value;
+  const groups =
+    groupDialogMode.value === "create"
+      ? [...currentGroups, { id: crypto.randomUUID(), name, sessionIds: [] }]
+      : currentGroups.map((group) =>
+          group.id === groupPendingRename.value?.id
+            ? { ...group, name }
+            : group,
+        );
+
+  isSavingGroup.value = true;
+  try {
+    await projectStore.updateSessionGroups(groups);
+    isGroupDialogOpen.value = false;
+  } catch (error) {
+    handleError(error, {
+      id: "sessions.group.save",
+      title: t("errors.sessionRename.title"),
+      description: t("errors.sessionRename.description"),
+    });
+  } finally {
+    isSavingGroup.value = false;
+  }
+}
+
+async function deleteGroup(): Promise<void> {
+  const group = groupPendingDelete.value;
+  if (!group || isDeletingGroup.value) return;
+
+  isDeletingGroup.value = true;
+  try {
+    await projectStore.updateSessionGroups(
+      conversationGroups.value.filter((candidate) => candidate.id !== group.id),
+    );
+    isGroupDeleteDialogOpen.value = false;
+  } catch (error) {
+    handleError(error, {
+      id: "sessions.group.delete",
+      title: t("errors.sessionDelete.title"),
+      description: t("errors.sessionDelete.description"),
+    });
+  } finally {
+    isDeletingGroup.value = false;
+  }
+}
+
+async function moveSessionToGroup(
+  session: PineSessionSummary,
+  groupId: string | null,
+): Promise<void> {
+  const groups = conversationGroups.value.map((group) => ({
+    ...group,
+    sessionIds: group.sessionIds.filter(
+      (sessionId) => sessionId !== session.id,
+    ),
+  }));
+  const target = groups.find((group) => group.id === groupId);
+  if (target) target.sessionIds = [...target.sessionIds, session.id];
+
+  try {
+    await projectStore.updateSessionGroups(groups);
+  } catch (error) {
+    handleError(error, {
+      id: "sessions.group.move",
+      title: t("errors.sessionRename.title"),
+      description: t("errors.sessionRename.description"),
+    });
+  }
 }
 
 function startSessionDrag(event: DragEvent, session: PineSessionSummary): void {
@@ -218,12 +380,110 @@ watch(
               <span>{{ t("sessions.newSession") }}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          <SidebarMenuItem v-if="conversationGroups.length === 0">
+            <SidebarMenuButton @click="requestCreateGroup">
+              <FolderPlus aria-hidden="true" />
+              <span>{{ t("sessions.createGroupAction") }}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
 
-    <Separator />
+    <Separator v-if="conversationGroups.length > 0" />
+    <Separator v-else />
 
+    <template v-if="conversationGroups.length > 0">
+      <SidebarGroup class="shrink-0">
+        <SidebarGroupLabel>{{ t("sessions.groupTitle") }}</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            <SidebarMenuItem
+              v-for="group in conversationGroups"
+              :key="group.id"
+              :data-session-group-id="group.id"
+              @mouseenter="openGroupMenu(group.id)"
+              @mouseleave="scheduleCloseGroupMenu(group.id)"
+            >
+              <ContextMenu>
+                <ContextMenuTrigger as-child>
+                  <div class="w-full">
+                    <DropdownMenu
+                      :open="openGroupId === group.id"
+                      @update:open="updateGroupMenuOpen(group.id, $event)"
+                    >
+                      <DropdownMenuTrigger as-child>
+                        <SidebarMenuButton class="min-w-0" variant="default">
+                          <FolderOpen aria-hidden="true" />
+                          <span class="min-w-0 flex-1 truncate text-left">
+                            {{ group.name }}
+                          </span>
+                          <ChevronRight aria-hidden="true" />
+                        </SidebarMenuButton>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        side="right"
+                        align="start"
+                        class="w-64"
+                        @mouseenter="clearGroupCloseTimer"
+                        @mouseleave="scheduleCloseGroupMenu(group.id)"
+                      >
+                        <DropdownMenuGroup>
+                          <SessionContextMenu
+                            v-for="session in sessionsForGroup(group)"
+                            :key="session.id"
+                            :groups="conversationGroups"
+                            :session="session"
+                            @rename="requestSessionRename(session)"
+                            @export="exportSession(session.id)"
+                            @move="moveSessionToGroup(session, $event)"
+                            @delete="requestSessionDeletion(session)"
+                          >
+                            <DropdownMenuItem @select="openSession(session)">
+                              <span class="min-w-0 truncate">
+                                {{ sessionTitle(session) }}
+                              </span>
+                            </DropdownMenuItem>
+                          </SessionContextMenu>
+                          <DropdownMenuItem
+                            v-if="sessionsForGroup(group).length === 0"
+                            disabled
+                          >
+                            {{ t("sessions.emptyGroup") }}
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuGroup>
+                    <ContextMenuItem @select="requestGroupRename(group)">
+                      <Pencil aria-hidden="true" />
+                      {{ t("sessions.renameGroupAction") }}
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      variant="destructive"
+                      @select="requestGroupDeletion(group)"
+                    >
+                      <Trash2 aria-hidden="true" />
+                      {{ t("sessions.deleteGroupAction") }}
+                    </ContextMenuItem>
+                  </ContextMenuGroup>
+                </ContextMenuContent>
+              </ContextMenu>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton @click="requestCreateGroup">
+                <FolderPlus aria-hidden="true" />
+                <span>{{ t("sessions.createGroupAction") }}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+      <Separator />
+    </template>
     <SidebarGroup v-if="isLoadingRecent" class="flex-1">
       <SidebarGroupContent>
         <SidebarMenu>
@@ -250,7 +510,7 @@ watch(
       <ScrollArea
         class="h-full [&_[data-slot=scroll-area-viewport]]:scroll-fade"
       >
-        <SidebarGroup v-for="group in sessionGroups" :key="group.key">
+        <SidebarGroup v-for="group in dateSessionGroups" :key="group.key">
           <SidebarGroupLabel>{{ group.label }}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -258,51 +518,37 @@ watch(
                 v-for="session in group.sessions"
                 :key="session.id"
               >
-                <ContextMenu>
-                  <ContextMenuTrigger as-child>
-                    <SidebarMenuButton
-                      class="min-w-0"
-                      :data-session-id="session.id"
-                      :draggable="true"
-                      :class="{
-                        'bg-sidebar-accent ring-1 ring-sidebar-ring':
-                          dropSessionId === session.id,
-                      }"
-                      @dragover="dragOverSession($event, session)"
-                      @dragleave="leaveSession"
-                      @drop="dropOnSession($event, session)"
-                      :is-active="
-                        activeSessionTab?.state === 'bound' &&
-                        session.id === activeSessionTab.sessionId
-                      "
-                      @click="openSession(session)"
-                      @dragstart="startSessionDrag($event, session)"
-                    >
-                      <span class="min-w-0 flex-1 truncate">
-                        {{ sessionTitle(session) }}
-                      </span>
-                    </SidebarMenuButton>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent>
-                    <ContextMenuGroup>
-                      <ContextMenuItem @select="requestSessionRename(session)">
-                        <Pencil aria-hidden="true" />
-                        {{ t("sessions.renameAction") }}
-                      </ContextMenuItem>
-                      <ContextMenuItem @select="exportSession(session.id)">
-                        <Download aria-hidden="true" />
-                        {{ t("sessions.exportAction") }}
-                      </ContextMenuItem>
-                      <ContextMenuItem
-                        variant="destructive"
-                        @select="requestSessionDeletion(session)"
-                      >
-                        <Trash2 aria-hidden="true" />
-                        {{ t("sessions.deleteAction") }}
-                      </ContextMenuItem>
-                    </ContextMenuGroup>
-                  </ContextMenuContent>
-                </ContextMenu>
+                <SessionContextMenu
+                  :groups="conversationGroups"
+                  :session="session"
+                  @rename="requestSessionRename(session)"
+                  @export="exportSession(session.id)"
+                  @move="moveSessionToGroup(session, $event)"
+                  @delete="requestSessionDeletion(session)"
+                >
+                  <SidebarMenuButton
+                    class="min-w-0"
+                    :data-session-id="session.id"
+                    :draggable="true"
+                    :class="{
+                      'bg-sidebar-accent ring-1 ring-sidebar-ring':
+                        dropSessionId === session.id,
+                    }"
+                    @dragover="dragOverSession($event, session)"
+                    @dragleave="leaveSession"
+                    @drop="dropOnSession($event, session)"
+                    :is-active="
+                      activeSessionTab?.state === 'bound' &&
+                      session.id === activeSessionTab.sessionId
+                    "
+                    @click="openSession(session)"
+                    @dragstart="startSessionDrag($event, session)"
+                  >
+                    <span class="min-w-0 flex-1 truncate">
+                      {{ sessionTitle(session) }}
+                    </span>
+                  </SidebarMenuButton>
+                </SessionContextMenu>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
@@ -318,6 +564,21 @@ watch(
     <SessionRenameDialog
       v-model:open="isRenameDialogOpen"
       :session="sessionPendingRename"
+    />
+
+    <SessionGroupDialog
+      v-model:open="isGroupDialogOpen"
+      :group="groupPendingRename"
+      :mode="groupDialogMode"
+      :is-saving="isSavingGroup"
+      @submit="saveGroup"
+    />
+
+    <SessionGroupDeleteDialog
+      v-model:open="isGroupDeleteDialogOpen"
+      :group="groupPendingDelete"
+      :is-deleting="isDeletingGroup"
+      @confirm="deleteGroup"
     />
   </div>
 </template>

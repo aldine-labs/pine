@@ -117,6 +117,7 @@ import {
   PROJECTS_DIRECTORY,
   PROJECT_ATTACHMENTS_DIRECTORY,
   UPDATE_PROJECT_CHANNEL,
+  UPDATE_PROJECT_SESSION_GROUPS_CHANNEL,
   type DeleteProjectResult,
   type ListProjectsResult,
   type OpenProjectResult,
@@ -411,6 +412,16 @@ const PickProjectFoldersRequestSchema = z.object({
   mode: z.enum(["context", "default"]),
 });
 const ProjectIdRequestSchema = z.object({ id: z.uuid() });
+const UpdateProjectSessionGroupsRequestSchema = z.object({
+  id: z.uuid(),
+  sessionGroups: z.array(
+    z.object({
+      id: z.uuid(),
+      name: z.string().trim().min(1).max(100),
+      sessionIds: z.array(z.uuid()),
+    }),
+  ),
+});
 const SkillScopeRequestSchema = z
   .object({
     projectId: z.uuid().optional(),
@@ -1526,6 +1537,20 @@ ipcMain.handle(
       );
     }
     return { project };
+  },
+);
+
+ipcMain.handle(
+  UPDATE_PROJECT_SESSION_GROUPS_CHANNEL,
+  async (_event, request: unknown): Promise<ProjectResult> => {
+    const { id, sessionGroups } =
+      UpdateProjectSessionGroupsRequestSchema.parse(request);
+    return {
+      project: await getProjectRepository().updateSessionGroups(
+        id,
+        sessionGroups,
+      ),
+    };
   },
 );
 

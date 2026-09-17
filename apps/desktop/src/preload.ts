@@ -84,6 +84,7 @@ import {
   OPEN_PROJECT_CHANNEL,
   PICK_PROJECT_FOLDERS_CHANNEL,
   UPDATE_PROJECT_CHANNEL,
+  UPDATE_PROJECT_SESSION_GROUPS_CHANNEL,
   type CreateProjectRequest,
   type DeleteProjectResult,
   type ListProjectsResult,
@@ -94,6 +95,7 @@ import {
   type ProjectIdRequest,
   type ProjectResult,
   type UpdateProjectRequest,
+  type UpdateProjectSessionGroupsRequest,
 } from "./shared/projects";
 import {
   ATTACH_SESSION_CHANNEL,
@@ -388,6 +390,10 @@ const pineApi: PineDesktopApi = {
     ipcRenderer.invoke(SET_APPROVAL_MODE_CHANNEL, request),
   updateProject: (request: UpdateProjectRequest): Promise<ProjectResult> =>
     ipcRenderer.invoke(UPDATE_PROJECT_CHANNEL, request),
+  updateProjectSessionGroups: (
+    request: UpdateProjectSessionGroupsRequest,
+  ): Promise<ProjectResult> =>
+    ipcRenderer.invoke(UPDATE_PROJECT_SESSION_GROUPS_CHANNEL, request),
 };
 
 contextBridge.exposeInMainWorld("pine", pineApi);

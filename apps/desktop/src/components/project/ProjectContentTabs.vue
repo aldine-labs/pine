@@ -96,6 +96,8 @@ const tabItems = useTemplateRef<HTMLDivElement>("tabItems");
 const tabListHasOverflow = ref<boolean | null>(null);
 let tabListResizeObserver: ResizeObserver | null = null;
 let closingTab = false;
+let tabShiftAnimationScheduled = false;
+let pendingTabPositions: Map<string, number> | null = null;
 const tabShiftAnimations = new WeakMap<HTMLElement, Animation>();
 const draggingTabId = ref<string | null>(null);
 const dropPosition = ref<{ tabId: string; side: "before" | "after" } | null>(
@@ -108,31 +110,30 @@ function updateTabListOverflow(): void {
   tabListHasOverflow.value = viewport.scrollWidth > viewport.clientWidth;
 }
 
-async function closeTab(tabId: string): Promise<void> {
-  closingTab = true;
-  const items = tabItems.value;
+function tabElementKey(element: HTMLElement): string {
+  return element.dataset.tabId ?? `separator:${element.dataset.tabSeparatorId}`;
+}
+
+function captureTabPositions(): Map<string, number> {
   const positions = new Map<string, number>();
-  for (const element of items?.querySelectorAll<HTMLElement>(
+  for (const element of tabItems.value?.querySelectorAll<HTMLElement>(
     "[data-tab-id], [data-tab-separator-id]",
   ) ?? []) {
-    const key =
-      element.dataset.tabId ?? `separator:${element.dataset.tabSeparatorId}`;
-    positions.set(key, element.getBoundingClientRect().left);
+    positions.set(tabElementKey(element), element.getBoundingClientRect().left);
   }
-  tabNavigation.close(tabId);
-  await nextTick();
-  closingTab = false;
+  return positions;
+}
+
+function animateTabShifts(positions: Map<string, number>): void {
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
 
   // Browser scroll clamping may shift the entire strip in the same frame as
   // removal. Animate each surviving item from its former screen position so
   // both that shift and ordinary gap filling keep their momentum.
-  for (const element of items?.querySelectorAll<HTMLElement>(
+  for (const element of tabItems.value?.querySelectorAll<HTMLElement>(
     "[data-tab-id], [data-tab-separator-id]",
   ) ?? []) {
-    const key =
-      element.dataset.tabId ?? `separator:${element.dataset.tabSeparatorId}`;
-    const before = positions.get(key);
+    const before = positions.get(tabElementKey(element));
     if (before === undefined) continue;
     tabShiftAnimations.get(element)?.cancel();
     const delta = before - element.getBoundingClientRect().left;
@@ -143,6 +144,10 @@ async function closeTab(tabId: string): Promise<void> {
     );
     if (animation) tabShiftAnimations.set(element, animation);
   }
+}
+
+function closeTab(tabId: string): void {
+  tabNavigation.close(tabId);
 }
 
 function closeTabFromWindowShortcut(tabId: string): void {
@@ -255,6 +260,29 @@ function revealTab(tabId: string): void {
       : "smooth",
   });
 }
+
+watch(
+  () => tabs.value.map((tab) => tab.id),
+  (tabIds, previousTabIds) => {
+    if (!previousTabIds.some((tabId) => !tabIds.includes(tabId))) return;
+
+    // Sample before Vue patches the list so every tab-removal path gets the
+    // same FLIP animation, including native window shortcuts such as Cmd+W.
+    pendingTabPositions = captureTabPositions();
+    closingTab = true;
+    if (tabShiftAnimationScheduled) return;
+
+    tabShiftAnimationScheduled = true;
+    void nextTick(() => {
+      tabShiftAnimationScheduled = false;
+      const positions = pendingTabPositions;
+      pendingTabPositions = null;
+      if (positions) animateTabShifts(positions);
+      closingTab = false;
+    });
+  },
+  { flush: "sync" },
+);
 
 watch(
   [activeTabId, tabList, tabs],

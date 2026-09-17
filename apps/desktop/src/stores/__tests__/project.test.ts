@@ -180,4 +180,44 @@ describe("project store", () => {
     expect(store.projects).toEqual([]);
     expect(store.isSavingProject).toBe(false);
   });
+
+  it("updates session groups without restoring the project tabs", async () => {
+    const updatedProject = {
+      ...project,
+      sessionGroups: [
+        {
+          id: "4a1e4bf2-571b-4b48-9f7f-f7cf3dd6c01f",
+          name: "Planning",
+          sessionIds: ["019cfe51-7166-79b9-a5b9-c652fcca9eab"],
+        },
+      ],
+    };
+    const updateProjectSessionGroups = vi
+      .fn()
+      .mockResolvedValue({ project: updatedProject });
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: { updateProjectSessionGroups },
+    });
+    const store = useProjectStore();
+    store.activeProject = project;
+    const tabs = useContentTabsStore();
+    const file = tabs.openFile({
+      projectId: project.id,
+      folderId: project.defaultFolderId,
+      relativePath: "README.md",
+    });
+    tabs.setActiveTab(file.id);
+
+    await store.updateSessionGroups(updatedProject.sessionGroups ?? []);
+
+    expect(updateProjectSessionGroups).toHaveBeenCalledWith({
+      id: project.id,
+      sessionGroups: updatedProject.sessionGroups,
+    });
+    expect(store.activeProject?.sessionGroups).toEqual(
+      updatedProject.sessionGroups,
+    );
+    expect(tabs.tabs).toContainEqual(file);
+  });
 });

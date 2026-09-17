@@ -97,6 +97,8 @@ export const CREATE_PROJECT_CHANNEL = "project:create" as const;
 export const CLOSE_PROJECT_CHANNEL = "project:close" as const;
 export const OPEN_PROJECT_CHANNEL = "project:open" as const;
 export const UPDATE_PROJECT_CHANNEL = "project:update" as const;
+export const UPDATE_PROJECT_SESSION_GROUPS_CHANNEL =
+  "project:update-session-groups" as const;
 export const DELETE_PROJECT_CHANNEL = "project:delete" as const;
 export const PICK_PROJECT_FOLDERS_CHANNEL = "project:pick-folders" as const;
 
@@ -113,6 +115,12 @@ export interface PineProjectFolder extends ProjectFolderInput {
   isAvailable: boolean;
 }
 
+export interface PineSessionGroup {
+  id: string;
+  name: string;
+  sessionIds: string[];
+}
+
 export interface PineProject {
   createdAt: string;
   defaultFolderId: string;
@@ -121,6 +129,7 @@ export interface PineProject {
   lastOpenedAt?: string;
   name: string;
   schemaVersion: 1;
+  sessionGroups?: PineSessionGroup[];
   updatedAt: string;
 }
 
@@ -134,6 +143,11 @@ export type CreateProjectRequest = ProjectMutationInput;
 
 export interface UpdateProjectRequest extends ProjectMutationInput {
   id: string;
+}
+
+export interface UpdateProjectSessionGroupsRequest {
+  id: string;
+  sessionGroups: PineSessionGroup[];
 }
 
 export interface ProjectIdRequest {
@@ -287,4 +301,7 @@ export interface PineDesktopApi extends PineWindowApi {
     request: SetApprovalModeRequest,
   ) => Promise<SetApprovalModeResult>;
   updateProject: (request: UpdateProjectRequest) => Promise<ProjectResult>;
+  updateProjectSessionGroups: (
+    request: UpdateProjectSessionGroupsRequest,
+  ) => Promise<ProjectResult>;
 }

@@ -362,6 +362,55 @@ describe("ProjectFileTree", () => {
     expect(useContentTabsStore().tabs).toHaveLength(2);
     expect(operateProjectFile).not.toHaveBeenCalled();
   });
+  it("restores expanded folders without playing disclosure animations", async () => {
+    localStorage.setItem(
+      PROJECT_SIDEBAR_STORAGE_PREFIX + "p1",
+      JSON.stringify({
+        tab: "files",
+        expanded: [`${folderId}:`],
+      }),
+    );
+    const originalAnimate = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "animate",
+    );
+    const animate = vi.fn(() => ({
+      addEventListener: vi.fn(),
+      cancel: vi.fn(),
+      finished: Promise.resolve(),
+    }));
+    Object.defineProperty(HTMLElement.prototype, "animate", {
+      configurable: true,
+      value: animate,
+    });
+    try {
+      const { wrapper } = mountTree();
+      expect(wrapper.find(".overflow-hidden").classes()).not.toContain(
+        "transition-[height]",
+      );
+      expect(wrapper.get('[data-path=""] svg').classes()).not.toContain(
+        "transition-transform",
+      );
+
+      await flushPromises();
+
+      expect(animate).not.toHaveBeenCalled();
+      expect(wrapper.find(".overflow-hidden").classes()).toContain(
+        "transition-[height]",
+      );
+      expect(wrapper.get('[data-path=""] svg').classes()).toContain(
+        "transition-transform",
+      );
+    } finally {
+      if (originalAnimate)
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "animate",
+          originalAnimate,
+        );
+      else delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+    }
+  });
   it("restores expanded folders after remounting with a fresh store", async () => {
     const first = mountTree();
     await expandRoot(first.wrapper);

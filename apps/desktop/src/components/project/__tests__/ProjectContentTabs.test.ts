@@ -507,6 +507,49 @@ describe("ProjectContentTabs", () => {
     wrapper.unmount();
   });
 
+  it("animates tabs closed when navigation mutates the tab store outside clicks", async () => {
+    const { wrapper } = await mountTabs();
+    const tabsStore = useContentTabsStore();
+    const viewport = wrapper.get<HTMLDivElement>('[role="tablist"]').element;
+    let scrollOffset = 20;
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: {
+        configurable: true,
+        get: () =>
+          wrapper.findAll('[data-slot="project-content-tab"]').length * 160,
+      },
+      scrollLeft: {
+        configurable: true,
+        get: () =>
+          Math.min(scrollOffset, Math.max(0, viewport.scrollWidth - 300)),
+        set: (value: number) => {
+          scrollOffset = value;
+        },
+      },
+    });
+
+    const secondTab = tabsStore.createSessionTab({ reuseDraft: false });
+    await flushPromises();
+    const firstTab = wrapper.get<HTMLElement>(
+      '[data-tab-id="session-1"]',
+    ).element;
+    vi.spyOn(firstTab, "getBoundingClientRect").mockImplementation(
+      () => new DOMRect(100 - viewport.scrollLeft, 0, 160, 32),
+    );
+    const animate = vi.fn();
+    firstTab.animate = animate;
+
+    tabsStore.close(secondTab.id, "session-1");
+    await flushPromises();
+
+    expect(animate).toHaveBeenCalledWith(
+      [{ transform: "translateX(-20px)" }, { transform: "translateX(0)" }],
+      expect.objectContaining({ duration: 320 }),
+    );
+    wrapper.unmount();
+  });
+
   it("binds each session tab to its own session and reuses its view", async () => {
     const { router, wrapper } = await mountTabs();
     const tabsStore = useContentTabsStore();
