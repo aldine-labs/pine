@@ -448,6 +448,7 @@ function findFirstVisibleMessage({
 export interface MessageScrollerContext {
   autoscrolling: Readonly<ShallowRef<boolean>>;
   isProgrammaticScroll: Readonly<ShallowRef<boolean>>;
+  userScrollRevision: Readonly<ShallowRef<number>>;
   scrollable: Readonly<ShallowRef<MessageScrollerScrollable>>;
   scrollableAttr: ComputedRef<string | undefined>;
   visibility: Readonly<ShallowRef<MessageScrollerVisibilityState>>;
@@ -521,6 +522,7 @@ function createEngine(props: MessageScrollerProviderProps) {
 
   const autoscrolling = shallowRef(false);
   const isProgrammaticScroll = shallowRef(false);
+  const userScrollRevision = shallowRef(0);
   const scrollable = shallowRef<MessageScrollerScrollable>(EMPTY_SCROLLABLE);
   const visibility =
     shallowRef<MessageScrollerVisibilityState>(EMPTY_VISIBILITY);
@@ -1079,6 +1081,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   function userScrollIntent() {
+    userScrollRevision.value += 1;
     setProgrammaticScroll(false);
     cancelScrollAnimation?.();
     cancelScrollAnimation = null;
@@ -1156,6 +1159,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   const context: MessageScrollerContext = {
     autoscrolling,
     isProgrammaticScroll,
+    userScrollRevision,
     scrollable,
     scrollableAttr,
     visibility,
@@ -1239,12 +1243,7 @@ export function useMessageScrollerRegister(): RegisterMessage {
 // -----------------------------------------------------------------------------
 
 export function useMessageScroller() {
-  const {
-    scrollToEnd,
-    scrollToMessage,
-    scrollToStart,
-    setProgrammaticScroll,
-  } =
+  const { scrollToEnd, scrollToMessage, scrollToStart, setProgrammaticScroll } =
     useMessageScrollerContext();
   return {
     scrollToEnd,

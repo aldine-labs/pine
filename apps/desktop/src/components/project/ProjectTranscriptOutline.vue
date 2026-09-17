@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  ref,
+  useTemplateRef,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,8 +36,10 @@ const minimumTurnCount = 3;
 const maximumMarkerCount = 9;
 const { t } = useI18n();
 const { scrollToMessage, setProgrammaticScroll } = useMessageScroller();
-const { isProgrammaticScroll } = useMessageScrollerContext();
+const { userScrollRevision } = useMessageScrollerContext();
 const visibility = useMessageScrollerVisibility();
+const isOutlineOpen = ref(false);
+const outlineMenu = useTemplateRef<HTMLElement>("outlineMenu");
 let navigationRequest = 0;
 onBeforeUnmount(() => {
   navigationRequest += 1;
@@ -54,6 +63,19 @@ const activeMarkerIndex = computed(() => {
   );
 });
 
+watch(isOutlineOpen, async (open) => {
+  if (!open) return;
+  await nextTick();
+  const menu = outlineMenu.value;
+  const activeIndex = activeTurnIndex.value;
+  const activeItem = menu?.children.item(activeIndex);
+  if (!menu || !(activeItem instanceof HTMLElement)) return;
+  const menuRect = menu.getBoundingClientRect();
+  const itemRect = activeItem.getBoundingClientRect();
+  menu.scrollTop +=
+    itemRect.top - menuRect.top - (menu.clientHeight - itemRect.height) / 2;
+});
+
 function excerpt(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
@@ -68,12 +90,17 @@ function messageExcerpt(message: PineTranscriptMessage): string {
 
 async function scrollToTurn(messageId: string): Promise<void> {
   const request = ++navigationRequest;
+  const userRevision = userScrollRevision.value;
   emit("navigationStateChange", true);
   setProgrammaticScroll(true);
   try {
     await props.ensureMessageLoaded?.(messageId);
     await nextTick();
-    if (request !== navigationRequest || !isProgrammaticScroll.value) return;
+    if (
+      request !== navigationRequest ||
+      userRevision !== userScrollRevision.value
+    )
+      return;
     if (!scrollToMessage(messageId, { align: "start", behavior: "smooth" })) {
       setProgrammaticScroll(false);
       emit("navigationStateChange", false);
@@ -91,7 +118,11 @@ async function scrollToTurn(messageId: string): Promise<void> {
     v-if="props.turns.length >= minimumTurnCount"
     class="absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 sm:block"
   >
-    <HoverCard :open-delay="120" :close-delay="120">
+    <HoverCard
+      v-model:open="isOutlineOpen"
+      :open-delay="120"
+      :close-delay="120"
+    >
       <HoverCardTrigger as-child>
         <Button
           variant="ghost"
@@ -119,8 +150,9 @@ async function scrollToTurn(messageId: string): Promise<void> {
         class="p-1.5"
       >
         <nav
+          ref="outlineMenu"
           data-slot="project-transcript-outline-menu"
-          class="scroll-fade no-scrollbar flex max-h-80 flex-col gap-0.5 overflow-y-auto"
+          class="scroll-fade no-scrollbar flex max-h-80 flex-col gap-0.5 overflow-y-auto [overflow-anchor:none]"
           :aria-label="t('project.transcript.outline')"
         >
           <Button
