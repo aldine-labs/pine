@@ -11,6 +11,7 @@ import {
   WandSparklesIcon,
 } from "@lucide/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import { createAppI18n } from "@/app/i18n";
 import * as animateScroll from "@/lib/animateScroll";
 import { createPinia } from "pinia";
@@ -212,7 +213,9 @@ describe("project transcript markers", () => {
       },
     });
 
-    const content = wrapper.get("[data-thinking-content]").element as HTMLElement;
+    const content = wrapper.get("[data-thinking-content]")
+      .element as HTMLElement;
+    await nextTick();
     let thinkingScrollHeight = 600;
     Object.defineProperty(content, "clientHeight", {
       configurable: true,
@@ -237,6 +240,7 @@ describe("project transcript markers", () => {
         ],
       },
     });
+    await nextTick();
 
     thinkingScrollHeight = 800;
     await wrapper.setProps({
@@ -251,6 +255,7 @@ describe("project transcript markers", () => {
         ],
       },
     });
+    await nextTick();
 
     expect(animateSpy).toHaveBeenCalledTimes(2);
     wrapper.unmount();
@@ -281,7 +286,9 @@ describe("project transcript markers", () => {
       },
     });
 
-    const content = wrapper.get("[data-thinking-content]").element as HTMLElement;
+    const content = wrapper.get("[data-thinking-content]")
+      .element as HTMLElement;
+    await nextTick();
     let thinkingScrollHeight = 600;
     Object.defineProperty(content, "clientHeight", {
       configurable: true,
@@ -309,6 +316,7 @@ describe("project transcript markers", () => {
         ],
       },
     });
+    await nextTick();
 
     expect(animateSpy).not.toHaveBeenCalled();
     wrapper.unmount();
