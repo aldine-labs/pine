@@ -28,6 +28,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 *.tsbuildinfo
 .pi/
 
+# local agent handoffs
+HANDOFF*
+
 # IntelliJ based IDEs
 .idea
 
