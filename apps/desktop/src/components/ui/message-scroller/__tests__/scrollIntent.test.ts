@@ -76,6 +76,88 @@ function createScroller(followAnimated = false) {
   };
 }
 
+function createAnchoredScroller() {
+  let engine!: ReturnType<typeof provideMessageScroller>;
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        engine = provideMessageScroller({ autoScroll: true });
+        return () => null;
+      },
+    }),
+  );
+  const viewport = document.createElement("div");
+  const content = document.createElement("div");
+  const message = document.createElement("div");
+  const spacer = document.createElement("div");
+  message.dataset.messageId = "message";
+  content.append(message, spacer);
+  viewport.append(content);
+  document.body.append(viewport);
+
+  let contentHeight = 2000;
+  let responseHeight = 0;
+  const spacerHeight = () => Number.parseFloat(spacer.style.height) || 0;
+  const anchor = document.createElement("div");
+  anchor.dataset.messageId = "new-turn";
+  anchor.dataset.scrollAnchor = "true";
+  const response = document.createElement("div");
+  response.dataset.messageId = "response";
+
+  Object.defineProperties(viewport, {
+    clientHeight: { get: () => 500 },
+    scrollHeight: { get: () => contentHeight + spacerHeight() },
+  });
+  vi.spyOn(viewport, "getBoundingClientRect").mockImplementation(
+    () => new DOMRect(0, 0, 400, 500),
+  );
+  vi.spyOn(content, "getBoundingClientRect").mockImplementation(
+    () => new DOMRect(0, -viewport.scrollTop, 400, contentHeight),
+  );
+  vi.spyOn(message, "getBoundingClientRect").mockImplementation(
+    () => new DOMRect(0, -viewport.scrollTop, 400, 2000),
+  );
+  vi.spyOn(anchor, "getBoundingClientRect").mockImplementation(
+    () => new DOMRect(0, 2000 - viewport.scrollTop, 400, 50),
+  );
+  vi.spyOn(response, "getBoundingClientRect").mockImplementation(
+    () => new DOMRect(0, 2050 - viewport.scrollTop, 400, responseHeight),
+  );
+  vi.spyOn(viewport, "scrollTo").mockImplementation(
+    (options: number | ScrollToOptions) => {
+      if (typeof options === "object") viewport.scrollTop = options.top ?? 0;
+    },
+  );
+
+  const context = engine.context;
+  context.setViewportElement(viewport);
+  context.setContentElement(content);
+  context.setSpacerElement(spacer);
+  context.handleContentChange();
+  context.syncAfterScroll();
+
+  return {
+    context,
+    viewport,
+    spacer,
+    startTurn() {
+      contentHeight = 2050;
+      content.insertBefore(anchor, spacer);
+      content.insertBefore(response, spacer);
+      context.handleContentChange();
+    },
+    grow(amount: number) {
+      responseHeight += amount;
+      contentHeight = 2050 + responseHeight;
+      context.handleResize();
+    },
+    destroy() {
+      wrapper.unmount();
+      viewport.remove();
+    },
+  };
+}
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -136,14 +218,36 @@ describe("message scroller user intent", () => {
     scroller.destroy();
   });
 
-  it("follows a new turn once streaming thinking opens", () => {
+  it("keeps a new turn anchor in place while streaming thinking opens", () => {
     const scroller = createScroller();
     scroller.addTurnAnchor();
     expect(scroller.viewport.scrollTop).toBe(1436);
 
     scroller.context.followStreamingContent();
 
-    expect(scroller.viewport.scrollTop).toBe(1500);
+    expect(scroller.viewport.scrollTop).toBe(1436);
+    scroller.destroy();
+  });
+
+  it("shrinks the anchor spacer as the response fills the viewport", () => {
+    const scroller = createAnchoredScroller();
+    scroller.startTurn();
+
+    expect(scroller.viewport.scrollTop).toBe(1936);
+    expect(scroller.spacer.style.height).toBe("386px");
+
+    scroller.context.followStreamingContent();
+
+    expect(scroller.viewport.scrollTop).toBe(1936);
+    expect(scroller.spacer.style.height).toBe("386px");
+
+    scroller.grow(100);
+    expect(scroller.viewport.scrollTop).toBe(1936);
+    expect(scroller.spacer.style.height).toBe("286px");
+
+    scroller.grow(286);
+    expect(scroller.viewport.scrollTop).toBe(1936);
+    expect(scroller.spacer.hidden).toBe(true);
     scroller.destroy();
   });
 

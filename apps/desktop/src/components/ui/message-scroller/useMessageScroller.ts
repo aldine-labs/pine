@@ -697,14 +697,11 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   function followStreamingContent() {
-    if (
-      !autoScroll() ||
-      (mode !== "anchored-to-message" && mode !== "following-bottom")
-    )
-      return;
-    // A new turn initially holds the user's anchor in place. Once its
-    // thinking panel opens, follow the panel's expansion and subsequent
-    // streaming growth instead of continuing to hold that anchor.
+    if (!autoScroll() || mode !== "following-bottom") return;
+    // An anchored turn keeps the user's message in place while the response
+    // grows. Its ResizeObserver callback recomputes the tail spacer, so
+    // clearing that spacer here would make the viewport jump before the
+    // response has filled the available space.
     scrollToEnd({ behavior: "auto", animated: true });
   }
 
