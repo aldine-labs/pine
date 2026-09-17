@@ -9,6 +9,12 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-09-17
+
+### 修复 / Fixed
+
+- 保留向下滚动意图下的跟随模式。Preserved follow mode on downward scroll intent.
+
 ## [0.4.6] - 2026-09-17
 
 ### 变更 / Changed
@@ -191,7 +197,8 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.6...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.7...HEAD
+[0.4.7]: https://github.com/phosphoros-works/pine/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/phosphoros-works/pine/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/phosphoros-works/pine/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/phosphoros-works/pine/compare/v0.4.3...v0.4.4
