@@ -11,7 +11,9 @@ import {
   WandSparklesIcon,
 } from "@lucide/vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import { createAppI18n } from "@/app/i18n";
+import * as animateScroll from "@/lib/animateScroll";
 import { createPinia } from "pinia";
 import ProjectCompactionMarker from "../ProjectCompactionMarker.vue";
 import ProjectThinkingMarker from "../ProjectThinkingMarker.vue";
@@ -184,6 +186,141 @@ describe("project transcript markers", () => {
     expect(wrapper.get("[data-thinking-content]").text()).toContain(
       "Inspect the request.",
     );
+  });
+
+  it("keeps following thinking during programmatic internal scroll animation", async () => {
+    const animateSpy = vi
+      .spyOn(animateScroll, "animateScrollTop")
+      .mockImplementation((element, top) => {
+        element.scrollTop = Math.max(0, top - 40);
+        element.dispatchEvent(new Event("scroll"));
+        return () => undefined;
+      });
+    const wrapper = mount(ProjectThinkingMarker, {
+      props: {
+        message: {
+          createdAt: "2026-08-26T00:00:00.000Z",
+          id: "assistant-1",
+          role: "assistant",
+          status: "streaming",
+          blocks: [{ type: "thinking", thinking: "Inspect the request." }],
+          thinkingStartedAt: Date.now(),
+          thinkingStatus: "streaming",
+        },
+      },
+      global: {
+        plugins: [createPinia(), createAppI18n("en-US")],
+      },
+    });
+
+    const content = wrapper.get("[data-thinking-content]")
+      .element as HTMLElement;
+    await nextTick();
+    let thinkingScrollHeight = 600;
+    Object.defineProperty(content, "clientHeight", {
+      configurable: true,
+      get: () => 100,
+    });
+    Object.defineProperty(content, "scrollHeight", {
+      configurable: true,
+      get: () => thinkingScrollHeight,
+    });
+    content.scrollTop = 500;
+    animateSpy.mockClear();
+
+    thinkingScrollHeight = 700;
+    await wrapper.setProps({
+      message: {
+        ...wrapper.props("message"),
+        blocks: [
+          {
+            type: "thinking",
+            thinking: "Inspect the request.\nCheck one more state.",
+          },
+        ],
+      },
+    });
+    await nextTick();
+
+    thinkingScrollHeight = 800;
+    await wrapper.setProps({
+      message: {
+        ...wrapper.props("message"),
+        blocks: [
+          {
+            type: "thinking",
+            thinking:
+              "Inspect the request.\nCheck one more state.\nThen continue streaming.",
+          },
+        ],
+      },
+    });
+    await nextTick();
+
+    expect(animateSpy).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+    animateSpy.mockRestore();
+  });
+
+  it("stops following thinking only after explicit user scroll intent", async () => {
+    const animateSpy = vi
+      .spyOn(animateScroll, "animateScrollTop")
+      .mockImplementation((element, top) => {
+        element.scrollTop = top;
+        return () => undefined;
+      });
+    const wrapper = mount(ProjectThinkingMarker, {
+      props: {
+        message: {
+          createdAt: "2026-08-26T00:00:00.000Z",
+          id: "assistant-1",
+          role: "assistant",
+          status: "streaming",
+          blocks: [{ type: "thinking", thinking: "Inspect the request." }],
+          thinkingStartedAt: Date.now(),
+          thinkingStatus: "streaming",
+        },
+      },
+      global: {
+        plugins: [createPinia(), createAppI18n("en-US")],
+      },
+    });
+
+    const content = wrapper.get("[data-thinking-content]")
+      .element as HTMLElement;
+    await nextTick();
+    let thinkingScrollHeight = 600;
+    Object.defineProperty(content, "clientHeight", {
+      configurable: true,
+      get: () => 100,
+    });
+    Object.defineProperty(content, "scrollHeight", {
+      configurable: true,
+      get: () => thinkingScrollHeight,
+    });
+    content.scrollTop = 500;
+    animateSpy.mockClear();
+
+    content.dispatchEvent(new Event("wheel"));
+    content.scrollTop = 300;
+    content.dispatchEvent(new Event("scroll"));
+    thinkingScrollHeight = 700;
+    await wrapper.setProps({
+      message: {
+        ...wrapper.props("message"),
+        blocks: [
+          {
+            type: "thinking",
+            thinking: "Inspect the request.\nThe user is reading above.",
+          },
+        ],
+      },
+    });
+    await nextTick();
+
+    expect(animateSpy).not.toHaveBeenCalled();
+    wrapper.unmount();
+    animateSpy.mockRestore();
   });
 
   it("uses semantic labels for primary tools and truncates commands", () => {
