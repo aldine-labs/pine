@@ -33,7 +33,7 @@ Pine 是这些人的桌面 harness：
 
 | 项目     | 当前情况                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------- |
-| 版本     | `0.2.2`，开发者预览版                                                                         |
+| 版本     | `0.4.6`，开发者预览版                                                                         |
 | 核心闭环 | Project Library → 文件夹授权 → 持久化会话 → Agent 工具调用 → 结果回显                         |
 | 已验证   | `bun run check` 与平台构建 CI 覆盖格式、Lint、类型、单测及安装包启动冒烟检查                  |
 | 打包     | Electron Forge 构建 macOS Apple Silicon / Intel DMG 与 Windows x64 Squirrel 安装包            |
@@ -50,10 +50,12 @@ Pine 是这些人的桌面 harness：
 ## 现在能做什么
 
 - **项目管理**：创建、搜索、打开、删除 Project；一个 Project 可关联多个文件夹，逐个设置只读 / 读写权限和默认工作目录。
-- **Agent 会话**：流式回复、工具调用事件、持久化会话；继续 / 中止 / 重命名 / 删除、全文搜索、steering 消息、上下文用量展示。
-- **文件工作区**：文件树（新建、重命名、移动、删除）、路径复制、多标签浏览。
+- **Agent 会话**：流式回复、工具调用事件、持久化会话；继续 / 中止 / 重命名 / 删除、会话分组、全文搜索、steering 消息、上下文用量展示；Agent 可以在会话中给出结构化的选择题卡片，直接点选作答。
+- **文件工作区**：文件树（新建、重命名、移动、删除）、路径复制、多标签浏览；支持把项目文件原生拖入 Pine，图片 / HTML 预览支持触控板缩放。
 - **审批与权限**：Agent 的本地工具严格限制在授权范围内；macOS 使用 `bash`，Windows 使用 `powershell`，越界操作必须通过对应的 privileged 工具单独审批。
 - **模型与认证**：Provider / model catalog、API key / OAuth 登录、模型切换、thinking level；配置搜索 API key 后还可使用 `web_search` / `web_fetch`（带 URL、域名和大小校验）。
+- **Skills**：全局与项目级 Skill 管理；Agent 检测到可复用的工作流时可将其沉淀为 Skill，并在 transcript 中以本地化条目呈现 Skill 活动。
+- **Computer Use**：原生 computer-use 控制，操作过程带可见的 review 流程；macOS 与 Windows 内置对应平台的运行时。
 - **桌面体验**：中英文界面、浅色 / 深色 / 跟随系统主题、多标签、窗口快捷键、macOS 侧栏模糊。
 
 ### 权限模式
@@ -122,9 +124,11 @@ Actions 的 `release` workflow。预检会拒绝已被任一 GitHub Release 使�
 
 ```text
 apps/
-  desktop/       Electron 桌面端
-packages/        预留的共享包目录
-docs/            产品、架构与执行环境文档
+  desktop/                        Electron 桌面端
+packages/
+  computer-use-runtime/           Computer Use 的平台运行时与工具规格
+  rpiv-ask-user-question/         Agent 结构化提问（选项卡片）运行时
+docs/                            产品、架构与执行环境文档
 ```
 
 技术栈：Electron Forge · Vue 3 · TypeScript · Vue Router · Pinia · shadcn-vue · Reka UI · Tailwind CSS v4 · Vitest · Bun workspace · Pi Agent Core。
