@@ -9,6 +9,12 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-09-17
+
+### 修复 / Fixed
+
+- 修复从 transcript outline 首次点击较早消息时无法完成跳转的问题，并让弹出的消息列表自动定位到当前用户消息。Fixed transcript outline navigation so the first click reaches earlier messages, and keep the popup list aligned with the current user message.
+
 ## [0.4.4] - 2026-09-16
 
 ### 新增 / Added
@@ -174,7 +180,8 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.4...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/phosphoros-works/pine/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/phosphoros-works/pine/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/phosphoros-works/pine/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/phosphoros-works/pine/compare/v0.4.1...v0.4.2
