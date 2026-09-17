@@ -4,6 +4,7 @@ import { storeToRefs } from "pinia";
 import type { ComponentPublicInstance } from "vue";
 import {
   computed,
+  inject,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -19,6 +20,7 @@ import GitHubLogo from "@/components/window/GitHubLogo.vue";
 import { PINE_RELEASES_URL, PINE_REPOSITORY_URL } from "@/shared/window";
 import { Separator } from "@/components/ui/separator";
 import { useSidebar } from "@/components/ui/sidebar";
+import { WINDOW_TAB_CLOSE_HANDLER_KEY } from "@/composables/useWindowTabShortcuts";
 import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
 import { usePresentedFiles } from "@/composables/usePresentedFiles";
 import { cn } from "@/lib/utils";
@@ -46,6 +48,7 @@ const tabNavigation = useContentTabNavigation();
 const sessionStore = useSessionStore();
 const { activeTab: activeContentTab, activeTabId, tabs } = tabNavigation;
 const { activeSession } = storeToRefs(sessionStore);
+const windowCloseTabHandler = inject(WINDOW_TAB_CLOSE_HANDLER_KEY, null);
 
 // App version is only surfaced as passive text in the empty state; a failure
 // to fetch it simply leaves the badge blank.
@@ -142,7 +145,14 @@ async function closeTab(tabId: string): Promise<void> {
   }
 }
 
+function closeTabFromWindowShortcut(tabId: string): void {
+  void closeTab(tabId);
+}
+
 onMounted(() => {
+  if (windowCloseTabHandler) {
+    windowCloseTabHandler.value = closeTabFromWindowShortcut;
+  }
   updateTabListOverflow();
   if (!tabList.value || typeof ResizeObserver === "undefined") return;
 
@@ -151,6 +161,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  if (windowCloseTabHandler?.value === closeTabFromWindowShortcut) {
+    windowCloseTabHandler.value = null;
+  }
   tabListResizeObserver?.disconnect();
   tabListResizeObserver = null;
 });

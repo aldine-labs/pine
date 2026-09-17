@@ -1,10 +1,14 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { defineComponent } from "vue";
+import { defineComponent, shallowRef } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
 import { useContentTabsStore } from "@/stores/contentTabs";
-import { useWindowTabShortcuts } from "../useWindowTabShortcuts";
+import {
+  useWindowTabShortcuts,
+  WINDOW_TAB_CLOSE_HANDLER_KEY,
+  type WindowTabCloseHandler,
+} from "../useWindowTabShortcuts";
 
 describe("window close navigation", () => {
   it("closes tabs, clears the route, then closes the window only on the next request", async () => {
@@ -82,5 +86,54 @@ describe("window close navigation", () => {
     wrapper.unmount();
     expect(unsubscribe).toHaveBeenCalledOnce();
     expect(unsubscribeNewTab).toHaveBeenCalledOnce();
+  });
+
+  it("delegates project close shortcuts to the registered tab close handler", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/project", component: {}, meta: { requiresProject: true } },
+      ],
+    });
+    await router.push({ path: "/project", query: { tab: "session-1" } });
+
+    let requestClose!: () => void;
+    const closeTab = vi.fn<WindowTabCloseHandler>();
+    const closeTabHandler = shallowRef<WindowTabCloseHandler | null>(closeTab);
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        onNewTabRequested: () => () => undefined,
+        onCloseTabRequested: (listener: () => void) => {
+          requestClose = listener;
+          return () => undefined;
+        },
+        closeWindow: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useWindowTabShortcuts();
+          return () => null;
+        },
+      }),
+      {
+        global: {
+          plugins: [pinia, router],
+          provide: {
+            [WINDOW_TAB_CLOSE_HANDLER_KEY as symbol]: closeTabHandler,
+          },
+        },
+      },
+    );
+
+    requestClose();
+    expect(closeTab).toHaveBeenCalledExactlyOnceWith("session-1");
+    expect(useContentTabsStore().tabs).toHaveLength(1);
+    wrapper.unmount();
   });
 });

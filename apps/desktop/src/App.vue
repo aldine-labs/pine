@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { watchEffect } from "vue";
+import { provide, shallowRef, watchEffect } from "vue";
 import { RouterView } from "vue-router";
 import { formatWindowTitle } from "@/app/windowTitle";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  WINDOW_TAB_CLOSE_HANDLER_KEY,
+  type WindowTabCloseHandler,
+  useWindowTabShortcuts,
+} from "@/composables/useWindowTabShortcuts";
 import { useAppearanceStore } from "@/stores/appearance";
 import { useSessionStore } from "@/stores/session";
 import { useProjectStore } from "@/stores/project";
-import { useWindowTabShortcuts } from "@/composables/useWindowTabShortcuts";
 
+const closeTabHandler = shallowRef<WindowTabCloseHandler | null>(null);
+provide(WINDOW_TAB_CLOSE_HANDLER_KEY, closeTabHandler);
 useWindowTabShortcuts();
 
 const appearanceStore = useAppearanceStore();

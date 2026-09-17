@@ -5,10 +5,14 @@ import {
   mount,
 } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { computed, nextTick, onUnmounted } from "vue";
+import { computed, nextTick, onUnmounted, shallowRef } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAppI18n } from "@/app/i18n";
+import {
+  WINDOW_TAB_CLOSE_HANDLER_KEY,
+  type WindowTabCloseHandler,
+} from "@/composables/useWindowTabShortcuts";
 import { PINE_RELEASES_URL, PINE_REPOSITORY_URL } from "@/shared/window";
 import type { PineSessionSummary } from "@/shared/sessions";
 import { useSessionStore } from "@/stores/session";
@@ -63,6 +67,7 @@ async function mountTabs(withFile = false) {
   sessionView.mounts = 0;
   sessionView.unmounts = 0;
   sessionEventListeners = [];
+  const closeTabHandler = shallowRef<WindowTabCloseHandler | null>(null);
   Object.defineProperty(window, "pine", {
     configurable: true,
     value: {
@@ -105,9 +110,12 @@ async function mountTabs(withFile = false) {
     attachTo: document.body,
     global: {
       plugins: [pinia, router, createAppI18n("en-US")],
+      provide: {
+        [WINDOW_TAB_CLOSE_HANDLER_KEY as symbol]: closeTabHandler,
+      },
     },
   });
-  return { router, wrapper, file };
+  return { router, wrapper, file, closeTabHandler };
 }
 
 const firstSession: PineSessionSummary = {
@@ -451,6 +459,49 @@ describe("ProjectContentTabs", () => {
     expect(viewport.scrollWidth).toBe(320);
     expect(animate).toHaveBeenCalledWith(
       [{ transform: "translateX(-120px)" }, { transform: "translateX(0)" }],
+      expect.objectContaining({ duration: 320 }),
+    );
+    wrapper.unmount();
+  });
+
+  it("animates tabs closed through the window shortcut handler", async () => {
+    const { wrapper, closeTabHandler } = await mountTabs();
+    const tabsStore = useContentTabsStore();
+    const viewport = wrapper.get<HTMLDivElement>('[role="tablist"]').element;
+    let scrollOffset = 20;
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: {
+        configurable: true,
+        get: () =>
+          wrapper.findAll('[data-slot="project-content-tab"]').length * 160,
+      },
+      scrollLeft: {
+        configurable: true,
+        get: () =>
+          Math.min(scrollOffset, Math.max(0, viewport.scrollWidth - 300)),
+        set: (value: number) => {
+          scrollOffset = value;
+        },
+      },
+    });
+
+    const secondTab = tabsStore.createSessionTab({ reuseDraft: false });
+    await flushPromises();
+    const firstTab = wrapper.get<HTMLElement>(
+      '[data-tab-id="session-1"]',
+    ).element;
+    vi.spyOn(firstTab, "getBoundingClientRect").mockImplementation(
+      () => new DOMRect(100 - viewport.scrollLeft, 0, 160, 32),
+    );
+    const animate = vi.fn();
+    firstTab.animate = animate;
+
+    closeTabHandler.value?.(secondTab.id);
+    await flushPromises();
+
+    expect(animate).toHaveBeenCalledWith(
+      [{ transform: "translateX(-20px)" }, { transform: "translateX(0)" }],
       expect.objectContaining({ duration: 320 }),
     );
     wrapper.unmount();
