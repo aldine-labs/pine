@@ -10,6 +10,7 @@ export type {
   MessageScrollerDefaultScrollPosition,
   MessageScrollerProviderProps,
   MessageScrollerScrollable,
+  MessageScrollerScrollDirection,
   MessageScrollerScrollAlign,
   MessageScrollerScrollOptions,
   MessageScrollerVisibilityState,

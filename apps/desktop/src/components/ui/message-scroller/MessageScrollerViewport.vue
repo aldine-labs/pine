@@ -2,7 +2,11 @@
 import type { HTMLAttributes } from "vue";
 import { onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue";
 import { cn } from "@/lib/utils";
-import { SCROLL_KEYS, useMessageScrollerContext } from "./useMessageScroller";
+import {
+  SCROLL_KEYS,
+  type MessageScrollerScrollDirection,
+  useMessageScrollerContext,
+} from "./useMessageScroller";
 
 const props = withDefaults(
   defineProps<{
@@ -37,12 +41,53 @@ watch(() => props.preserveScrollOnPrepend, setPreserveScrollOnPrepend, {
 });
 
 function onKeyDown(event: KeyboardEvent) {
-  if (SCROLL_KEYS.has(event.key)) onUserScrollIntent();
+  if (!SCROLL_KEYS.has(event.key)) return;
+  const direction: MessageScrollerScrollDirection = [
+    "ArrowDown",
+    "End",
+    "PageDown",
+    " ",
+  ].includes(event.key)
+    ? "end"
+    : "start";
+  onUserScrollIntent(direction);
 }
 
-function onUserScrollIntent(): void {
-  userScrollIntent();
+function onUserScrollIntent(
+  direction?: MessageScrollerScrollDirection,
+): void {
+  userScrollIntent(direction);
   emit("userScrollIntent");
+}
+
+function onWheel(event: WheelEvent): void {
+  onUserScrollIntent(
+    event.deltaY > 0 ? "end" : event.deltaY < 0 ? "start" : undefined,
+  );
+}
+
+let lastTouchY: number | null = null;
+
+function onTouchStart(event: TouchEvent): void {
+  lastTouchY = event.touches[0]?.clientY ?? null;
+}
+
+function onTouchMove(event: TouchEvent): void {
+  const touchY = event.touches[0]?.clientY ?? null;
+  const direction =
+    touchY !== null && lastTouchY !== null
+      ? touchY < lastTouchY
+        ? "end"
+        : touchY > lastTouchY
+          ? "start"
+          : undefined
+      : undefined;
+  lastTouchY = touchY;
+  onUserScrollIntent(direction);
+}
+
+function onTouchEnd(): void {
+  lastTouchY = null;
 }
 
 let resizeObserver: ResizeObserver | null = null;
@@ -94,8 +139,11 @@ onBeforeUnmount(() => {
       )
     "
     @scroll="onViewportScroll"
-    @wheel="onUserScrollIntent"
-    @touchmove="onUserScrollIntent"
+    @wheel="onWheel"
+    @touchstart="onTouchStart"
+    @touchmove="onTouchMove"
+    @touchend="onTouchEnd"
+    @touchcancel="onTouchEnd"
     @keydown="onKeyDown"
   >
     <slot />

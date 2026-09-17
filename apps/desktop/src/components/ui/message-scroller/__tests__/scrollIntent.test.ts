@@ -279,6 +279,24 @@ describe("message scroller user intent", () => {
     scroller.destroy();
   });
 
+  it("keeps following after another downward intent at the live edge", () => {
+    const scroller = createScroller();
+    const { context, viewport } = scroller;
+    context.userScrollIntent();
+    viewport.scrollTop = 1200;
+    context.syncAfterScroll();
+    viewport.scrollTop = 1500;
+    context.syncAfterScroll();
+
+    // A wheel event at the edge does not produce another scroll event. It
+    // must not turn an already-restored follow mode back into free scrolling.
+    context.userScrollIntent("end");
+    scroller.grow();
+
+    expect(viewport.scrollTop).toBe(1600);
+    scroller.destroy();
+  });
+
   it("cancels a follow animation on user intent and ignores pending resize callbacks", () => {
     const cancel = vi.fn();
     vi.mocked(animateScrollTop).mockReturnValue(cancel);

@@ -19,6 +19,7 @@ export type MessageScrollerDefaultScrollPosition =
   "start" | "end" | "last-anchor";
 export type MessageScrollerButtonDirection = "start" | "end";
 export type MessageScrollerScrollAlign = "start" | "center" | "end" | "nearest";
+export type MessageScrollerScrollDirection = "start" | "end";
 
 export interface MessageScrollerScrollOptions {
   align?: MessageScrollerScrollAlign;
@@ -213,6 +214,10 @@ export function measureContentHeight({
 
 function maxScrollTop(element: HTMLElement): number {
   return Math.max(0, element.scrollHeight - element.clientHeight);
+}
+
+function isAtScrollEnd(element: HTMLElement): boolean {
+  return maxScrollTop(element) - element.scrollTop <= SCROLL_EPSILON;
 }
 
 function computeSpacerHeight({
@@ -469,7 +474,7 @@ export interface MessageScrollerContext {
   setViewportElement: (element: HTMLElement | null) => void;
   setPreserveScrollOnPrepend: (value: boolean) => void;
   syncAfterScroll: () => void;
-  userScrollIntent: () => void;
+  userScrollIntent: (direction?: MessageScrollerScrollDirection) => void;
 }
 
 export type RegisterMessage = (
@@ -1080,11 +1085,23 @@ function createEngine(props: MessageScrollerProviderProps) {
     isProgrammaticScroll.value = active;
   }
 
-  function userScrollIntent() {
+  function userScrollIntent(direction?: MessageScrollerScrollDirection) {
     userScrollRevision.value += 1;
     setProgrammaticScroll(false);
     cancelScrollAnimation?.();
     cancelScrollAnimation = null;
+    if (
+      autoScroll() &&
+      direction === "end" &&
+      viewport &&
+      isAtScrollEnd(viewport)
+    ) {
+      streamingTurn = null;
+      mode = "following-bottom";
+      lastScrollTop = viewport.scrollTop;
+      setAutoscrolling(false);
+      return;
+    }
     if (
       mode === "following-bottom" ||
       mode === "anchored-to-message" ||
