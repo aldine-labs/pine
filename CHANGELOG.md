@@ -9,6 +9,17 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-09-17
+
+### 变更 / Changed
+
+- 新增会话分组管理能力。Added session group management.
+
+### 修复 / Fixed
+
+- 解码 Markdown 图片路径中的百分号编码。Decode percent-encoded Markdown image paths.
+- 要求明确意图后才能停止思考跟随。Require explicit intent before stopping thinking follow.
+
 ## [0.4.5] - 2026-09-17
 
 ### 修复 / Fixed
@@ -180,7 +191,8 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/phosphoros-works/pine/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/phosphoros-works/pine/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/phosphoros-works/pine/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/phosphoros-works/pine/compare/v0.4.2...v0.4.3
