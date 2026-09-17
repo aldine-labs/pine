@@ -13,6 +13,7 @@ import {
   protocol,
   shell,
   webContents,
+  type IpcMainEvent,
   type OpenDialogOptions,
 } from "electron";
 import started from "electron-squirrel-startup";
@@ -179,6 +180,7 @@ import {
   type ListProjectDirectoryResult,
 } from "./shared/projectFiles";
 import { ProjectFileWatcherRegistry } from "./main/projectFileWatcher";
+import { startProjectFileDrag } from "./main/projectFileDrag";
 import {
   OPAQUE_WINDOW_BACKGROUND,
   SET_SIDEBAR_VIBRANCY_CHANNEL,
@@ -1555,18 +1557,26 @@ ipcMain.handle(PROJECT_FILE_OPERATION_CHANNEL, (event, request: unknown) => {
   return pending;
 });
 
-ipcMain.on(START_PROJECT_FILE_DRAG_CHANNEL, (event, request: unknown): void => {
+async function handleProjectFileDrag(
+  event: IpcMainEvent,
+  request: unknown,
+): Promise<void> {
   try {
     const entry = ProjectEntryReferenceSchema.parse(request);
     const filePath = getProjectRuntimes().projectEntryPathForNativeDrag(
       event.sender.id,
       entry,
     );
-    if (!event.sender.isDestroyed())
-      event.sender.startDrag({ file: filePath, icon: appIconPath });
+    await startProjectFileDrag(event.sender, filePath, (file, options) =>
+      app.getFileIcon(file, options),
+    );
   } catch (error) {
     console.error("Failed to start project file drag.", error);
   }
+}
+
+ipcMain.on(START_PROJECT_FILE_DRAG_CHANNEL, (event, request: unknown): void => {
+  void handleProjectFileDrag(event, request);
 });
 
 ipcMain.handle(
