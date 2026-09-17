@@ -447,6 +447,7 @@ function findFirstVisibleMessage({
 
 export interface MessageScrollerContext {
   autoscrolling: Readonly<ShallowRef<boolean>>;
+  isProgrammaticScroll: Readonly<ShallowRef<boolean>>;
   scrollable: Readonly<ShallowRef<MessageScrollerScrollable>>;
   scrollableAttr: ComputedRef<string | undefined>;
   visibility: Readonly<ShallowRef<MessageScrollerVisibilityState>>;
@@ -462,6 +463,7 @@ export interface MessageScrollerContext {
   ) => boolean;
   scrollToStart: (options?: { behavior?: ScrollBehavior }) => boolean;
   setContentElement: (element: HTMLElement | null) => void;
+  setProgrammaticScroll: (active: boolean) => void;
   setSpacerElement: (element: HTMLElement | null) => void;
   setViewportElement: (element: HTMLElement | null) => void;
   setPreserveScrollOnPrepend: (value: boolean) => void;
@@ -518,6 +520,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   const handledScrollAnchors = new WeakSet<HTMLElement>();
 
   const autoscrolling = shallowRef(false);
+  const isProgrammaticScroll = shallowRef(false);
   const scrollable = shallowRef<MessageScrollerScrollable>(EMPTY_SCROLLABLE);
   const visibility =
     shallowRef<MessageScrollerVisibilityState>(EMPTY_VISIBILITY);
@@ -671,6 +674,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     behavior = "auto",
   }: { behavior?: ScrollBehavior } = {}): boolean {
     if (!viewport) return false;
+    setProgrammaticScroll(false);
     setSpacerHeight(0);
     streamingTurn = null;
     mode = "free-scrolling";
@@ -684,6 +688,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     animated = false,
   }: { behavior?: ScrollBehavior; animated?: boolean } = {}): boolean {
     if (!viewport) return false;
+    setProgrammaticScroll(false);
     setSpacerHeight(0);
     streamingTurn = null;
     mode = autoScroll() ? "following-bottom" : "free-scrolling";
@@ -761,6 +766,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     messageId: string,
     options?: MessageScrollerScrollOptions,
   ): boolean {
+    setProgrammaticScroll(true);
     const element = messageElements.get(messageId);
     if (element) {
       defaultScrollPositionApplied = true;
@@ -890,6 +896,11 @@ function createEngine(props: MessageScrollerProviderProps) {
     previousFirst: HTMLElement | null,
   ) {
     if (flushPendingScrollToMessage()) return;
+    if (mode === "settling-jump" && isProgrammaticScroll.value) {
+      scheduleStateCommit();
+      scheduleVisibilitySync();
+      return;
+    }
     if (previousCount === 0) {
       if (
         applyDefaultScrollPosition() ||
@@ -952,10 +963,15 @@ function createEngine(props: MessageScrollerProviderProps) {
     firstItem = children[0] ?? null;
 
     applyContentChange(children, previousCount, previousFirst);
-    captureViewportAnchor();
+    if (!isProgrammaticScroll.value) captureViewportAnchor();
   }
 
   function handleResize() {
+    if (mode === "settling-jump" && isProgrammaticScroll.value) {
+      scheduleStateCommit();
+      scheduleVisibilitySync();
+      return;
+    }
     if (mode === "following-bottom" && autoScroll()) {
       // Streaming growth lands here; glide instead of snapping.
       scrollToEnd({ behavior: "auto", animated: true });
@@ -1058,7 +1074,12 @@ function createEngine(props: MessageScrollerProviderProps) {
 
   // --- user intent + element setters -----------------------------------------
 
+  function setProgrammaticScroll(active: boolean): void {
+    isProgrammaticScroll.value = active;
+  }
+
   function userScrollIntent() {
+    setProgrammaticScroll(false);
     cancelScrollAnimation?.();
     cancelScrollAnimation = null;
     if (
@@ -1134,6 +1155,7 @@ function createEngine(props: MessageScrollerProviderProps) {
 
   const context: MessageScrollerContext = {
     autoscrolling,
+    isProgrammaticScroll,
     scrollable,
     scrollableAttr,
     visibility,
@@ -1146,6 +1168,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     scrollToMessage,
     scrollToStart,
     setContentElement,
+    setProgrammaticScroll,
     setSpacerElement,
     setViewportElement,
     setPreserveScrollOnPrepend,
@@ -1216,9 +1239,19 @@ export function useMessageScrollerRegister(): RegisterMessage {
 // -----------------------------------------------------------------------------
 
 export function useMessageScroller() {
-  const { scrollToEnd, scrollToMessage, scrollToStart } =
+  const {
+    scrollToEnd,
+    scrollToMessage,
+    scrollToStart,
+    setProgrammaticScroll,
+  } =
     useMessageScrollerContext();
-  return { scrollToEnd, scrollToMessage, scrollToStart };
+  return {
+    scrollToEnd,
+    scrollToMessage,
+    scrollToStart,
+    setProgrammaticScroll,
+  };
 }
 
 export function useMessageScrollerScrollable(): Ref<MessageScrollerScrollable> {

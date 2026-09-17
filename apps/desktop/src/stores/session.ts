@@ -360,6 +360,7 @@ export const useSessionStore = defineStore("session", () => {
     };
   }
   let currentSessionId: string | null = null;
+  let historyLoad: { sessionId: string; promise: Promise<void> } | null = null;
   let stopAgentEvents: (() => void) | null = null;
   let searchSequence = 0;
   let recentSequence = 0;
@@ -491,7 +492,7 @@ export const useSessionStore = defineStore("session", () => {
 
   async function loadInitialMessages(sessionId: string): Promise<void> {
     isLoadingMessages.value = true;
-    try {
+    const request = (async () => {
       const result = await window.pine.loadSessionMessages({
         includeOutline: true,
         sessionId,
@@ -506,26 +507,30 @@ export const useSessionStore = defineStore("session", () => {
       hasEarlierMessages.value = result.hasMore;
       nextBefore.value = result.nextBefore;
       syncSessionCache(sessionId);
+    })();
+    historyLoad = { sessionId, promise: request };
+    try {
+      await request;
     } finally {
+      if (historyLoad?.promise === request) historyLoad = null;
       if (currentSessionId === sessionId) isLoadingMessages.value = false;
     }
   }
 
-  async function loadEarlierMessages(): Promise<void> {
+  function loadEarlierMessages(): Promise<void> {
     const sessionId = currentSessionId;
-    if (
-      !sessionId ||
-      !hasEarlierMessages.value ||
-      !nextBefore.value ||
-      isLoadingMessages.value
-    ) {
-      return;
+    if (sessionId && historyLoad?.sessionId === sessionId) {
+      return historyLoad.promise;
+    }
+    if (!sessionId || !hasEarlierMessages.value || !nextBefore.value) {
+      return Promise.resolve();
     }
 
     isLoadingMessages.value = true;
-    try {
+    const before = nextBefore.value;
+    const request = (async () => {
       const result = await window.pine.loadSessionMessages({
-        before: nextBefore.value,
+        before,
         sessionId,
         limit: 50,
       });
@@ -545,9 +550,14 @@ export const useSessionStore = defineStore("session", () => {
       hasEarlierMessages.value = result.hasMore;
       nextBefore.value = result.nextBefore;
       syncSessionCache(sessionId);
-    } finally {
-      if (currentSessionId === sessionId) isLoadingMessages.value = false;
-    }
+    })();
+    historyLoad = { sessionId, promise: request };
+    return request.finally(() => {
+      if (historyLoad?.promise === request) {
+        historyLoad = null;
+        if (currentSessionId === sessionId) isLoadingMessages.value = false;
+      }
+    });
   }
 
   async function prompt(

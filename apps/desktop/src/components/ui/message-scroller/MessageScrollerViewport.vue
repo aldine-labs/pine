@@ -15,12 +15,14 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  scroll: [event: Event];
+  scroll: [event: Event, isProgrammatic: boolean];
+  userScrollIntent: [];
 }>();
 
 const {
   autoscrolling,
   handleResize,
+  isProgrammaticScroll,
   scrollableAttr,
   setPreserveScrollOnPrepend,
   setViewportElement,
@@ -35,7 +37,12 @@ watch(() => props.preserveScrollOnPrepend, setPreserveScrollOnPrepend, {
 });
 
 function onKeyDown(event: KeyboardEvent) {
-  if (SCROLL_KEYS.has(event.key)) userScrollIntent();
+  if (SCROLL_KEYS.has(event.key)) onUserScrollIntent();
+}
+
+function onUserScrollIntent(): void {
+  userScrollIntent();
+  emit("userScrollIntent");
 }
 
 let resizeObserver: ResizeObserver | null = null;
@@ -50,7 +57,7 @@ function onScroll(): void {
 
 function onViewportScroll(event: Event): void {
   onScroll();
-  emit("scroll", event);
+  emit("scroll", event, isProgrammaticScroll.value);
 }
 
 onMounted(() => {
@@ -87,8 +94,8 @@ onBeforeUnmount(() => {
       )
     "
     @scroll="onViewportScroll"
-    @wheel="userScrollIntent()"
-    @touchmove="userScrollIntent()"
+    @wheel="onUserScrollIntent"
+    @touchmove="onUserScrollIntent"
     @keydown="onKeyDown"
   >
     <slot />

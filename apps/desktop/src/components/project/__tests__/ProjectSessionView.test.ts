@@ -54,7 +54,20 @@ function mountView() {
 
   const slotStub = { template: "<div><slot /></div>" };
   const viewportStub = {
-    template: '<div data-slot="message-viewport-stub"><slot /></div>',
+    methods: {
+      emitProgrammaticScroll(this: {
+        $emit: (
+          event: "scroll",
+          payload: { currentTarget: HTMLElement },
+          isProgrammatic: boolean,
+        ) => void;
+        $el: HTMLElement;
+      }) {
+        this.$emit("scroll", { currentTarget: this.$el }, true);
+      },
+    },
+    template:
+      '<div data-slot="message-viewport-stub"><button data-slot="programmatic-scroll-stub" @click="emitProgrammaticScroll" /><slot /></div>',
   };
   const wrapper = mount(ProjectSessionView, {
     props: { tabId: "session-1" },
@@ -73,7 +86,12 @@ function mountView() {
             '<div data-slot="composer-stub" :data-attachment-count="attachments?.length ?? 0" :data-draft="modelValue"><button data-slot="submit-new-stub" @click="$emit(\'submit\', \'Start\')" /><button data-slot="submit-steering-stub" @click="$emit(\'submit\', \'Change direction\')" /><button v-if="steeringMessages?.length" data-slot="withdraw-steering-stub" @click="$emit(\'withdrawSteering\', steeringMessages[0])" /></div>',
         },
         ProjectTranscriptMessage: true,
-        ProjectTranscriptOutline: true,
+        ProjectTranscriptOutline: {
+          name: "ProjectTranscriptOutline",
+          props: ["ensureMessageLoaded", "turns"],
+          template:
+            '<div><button v-if="turns?.length" data-slot="ensure-message-stub" @click="$emit(\'navigationStateChange\', true); ensureMessageLoaded(turns[0].id)" /></div>',
+        },
       },
     },
   });
@@ -150,6 +168,69 @@ describe("ProjectSessionView file drop", () => {
 
     await wrapper.get('[data-slot="message-viewport-stub"]').trigger("scroll");
 
+    expect(loadEarlierMessages).toHaveBeenCalledOnce();
+  });
+
+  it("does not load earlier messages during a programmatic transcript jump", async () => {
+    const { wrapper } = mountView();
+    const sessionStore = useSessionStore();
+    sessionStore.hasEarlierMessages = true;
+    const loadEarlierMessages = vi
+      .spyOn(sessionStore, "loadEarlierMessages")
+      .mockResolvedValue();
+    await wrapper
+      .get('[data-slot="programmatic-scroll-stub"]')
+      .trigger("click");
+
+    await flushPromises();
+    expect(loadEarlierMessages).not.toHaveBeenCalled();
+  });
+
+  it("waits for the target page and hides the history spinner during navigation", async () => {
+    const { wrapper } = mountView();
+    const sessionStore = useSessionStore();
+    const target = {
+      id: "target-message",
+      createdAt: "2026-09-03T00:00:00Z",
+      role: "user" as const,
+      status: "complete" as const,
+      blocks: [{ type: "text" as const, text: "Target" }],
+    };
+    sessionStore.outlineMessages = [target];
+    sessionStore.messages = [
+      {
+        id: "newer-message",
+        createdAt: "2026-09-04T00:00:00Z",
+        role: "assistant",
+        status: "complete",
+        blocks: [],
+      },
+    ];
+    sessionStore.hasEarlierMessages = true;
+    let resolvePage: (() => void) | undefined;
+    const loadEarlierMessages = vi
+      .spyOn(sessionStore, "loadEarlierMessages")
+      .mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            sessionStore.isLoadingMessages = true;
+            resolvePage = () => {
+              sessionStore.messages = [target, ...sessionStore.messages];
+              sessionStore.hasEarlierMessages = false;
+              sessionStore.isLoadingMessages = false;
+              resolve();
+            };
+          }),
+      );
+    await flushPromises();
+
+    await wrapper.get('[data-slot="ensure-message-stub"]').trigger("click");
+    expect(wrapper.find('[data-slot="history-loading"]').exists()).toBe(false);
+    expect(loadEarlierMessages).toHaveBeenCalledOnce();
+    resolvePage?.();
+    await flushPromises();
+
+    expect(sessionStore.messages[0]?.id).toBe(target.id);
     expect(loadEarlierMessages).toHaveBeenCalledOnce();
   });
 

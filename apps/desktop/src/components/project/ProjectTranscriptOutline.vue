@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick } from "vue";
+import { computed, nextTick, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,7 @@ import {
   useMessageScroller,
   useMessageScrollerVisibility,
 } from "@/components/ui/message-scroller";
+import { useMessageScrollerContext } from "@/components/ui/message-scroller/useMessageScroller";
 import { cn } from "@/lib/utils";
 import type { PineTranscriptMessage } from "@/stores/session";
 
@@ -20,12 +21,20 @@ const props = defineProps<{
   ensureMessageLoaded?: EnsureMessageLoaded;
   turns: PineTranscriptMessage[];
 }>();
+const emit = defineEmits<{
+  navigationStateChange: [active: boolean];
+}>();
 
 const minimumTurnCount = 3;
 const maximumMarkerCount = 9;
 const { t } = useI18n();
-const { scrollToMessage } = useMessageScroller();
+const { scrollToMessage, setProgrammaticScroll } = useMessageScroller();
+const { isProgrammaticScroll } = useMessageScrollerContext();
 const visibility = useMessageScrollerVisibility();
+let navigationRequest = 0;
+onBeforeUnmount(() => {
+  navigationRequest += 1;
+});
 const markerCount = computed(() =>
   Math.min(props.turns.length, maximumMarkerCount),
 );
@@ -58,9 +67,22 @@ function messageExcerpt(message: PineTranscriptMessage): string {
 }
 
 async function scrollToTurn(messageId: string): Promise<void> {
-  await props.ensureMessageLoaded?.(messageId);
-  await nextTick();
-  scrollToMessage(messageId, { align: "start", behavior: "smooth" });
+  const request = ++navigationRequest;
+  emit("navigationStateChange", true);
+  setProgrammaticScroll(true);
+  try {
+    await props.ensureMessageLoaded?.(messageId);
+    await nextTick();
+    if (request !== navigationRequest || !isProgrammaticScroll.value) return;
+    if (!scrollToMessage(messageId, { align: "start", behavior: "smooth" })) {
+      setProgrammaticScroll(false);
+      emit("navigationStateChange", false);
+    }
+  } catch {
+    if (request !== navigationRequest) return;
+    setProgrammaticScroll(false);
+    emit("navigationStateChange", false);
+  }
 }
 </script>
 

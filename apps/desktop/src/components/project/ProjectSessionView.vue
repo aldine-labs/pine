@@ -104,6 +104,7 @@ const attachments = computed<PineAttachment[]>({
 });
 const approvalMode = ref<PineApprovalMode>("auto-approve");
 const isDraggingFiles = ref(false);
+const isTranscriptNavigationActive = ref(false);
 let fileDragDepth = 0;
 /** The oldest pending approval renders above the composer. */
 const pendingApproval = computed(() => pendingApprovals.value[0]);
@@ -207,18 +208,23 @@ function abort(): void {
 async function loadEarlierMessages(): Promise<void> {
   try {
     await sessionStore.loadEarlierMessages();
-  } catch {
+  } catch (error) {
     toast.error(t("errors.sessionHistory.title"), {
       description: t("errors.sessionHistory.description"),
     });
+    throw error;
   }
 }
 
-function handleTranscriptScroll(event: Event): void {
+function handleTranscriptScroll(
+  event: Event,
+  isProgrammaticScroll = false,
+): void {
   const viewport = event.currentTarget;
   if (!(viewport instanceof HTMLElement)) return;
+  if (isProgrammaticScroll || isTranscriptNavigationActive.value) return;
   if (viewport.scrollTop <= HISTORY_LOAD_THRESHOLD) {
-    void loadEarlierMessages();
+    void loadEarlierMessages().catch(() => undefined);
   }
 }
 
@@ -229,7 +235,12 @@ async function ensureTranscriptMessageLoaded(messageId: string): Promise<void> {
   ) {
     const previousCount = messages.value.length;
     await loadEarlierMessages();
-    if (messages.value.length === previousCount) break;
+    if (messages.value.length === previousCount && hasEarlierMessages.value) {
+      throw new Error(`Transcript message ${messageId} was not loaded`);
+    }
+  }
+  if (!messages.value.some((message) => message.id === messageId)) {
+    throw new Error(`Transcript message ${messageId} was not found`);
   }
 }
 
@@ -321,7 +332,11 @@ async function handleDrop(event: DragEvent): Promise<void> {
         />
 
         <div
-          v-if="isLoadingMessages && messages.length"
+          v-if="
+            isLoadingMessages &&
+            messages.length &&
+            !isTranscriptNavigationActive
+          "
           data-slot="history-loading"
           class="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center"
           aria-live="polite"
@@ -330,7 +345,10 @@ async function handleDrop(event: DragEvent): Promise<void> {
         </div>
 
         <MessageScroller>
-          <MessageScrollerViewport @scroll="handleTranscriptScroll">
+          <MessageScrollerViewport
+            @scroll="handleTranscriptScroll"
+            @user-scroll-intent="isTranscriptNavigationActive = false"
+          >
             <MessageScrollerContent
               class="session-transcript-content mx-auto py-8"
               spacer-class="h-16"
@@ -378,6 +396,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
         <ProjectTranscriptOutline
           :turns="transcriptTurns"
           :ensure-message-loaded="ensureTranscriptMessageLoaded"
+          @navigation-state-change="isTranscriptNavigationActive = $event"
         />
       </div>
 

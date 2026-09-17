@@ -216,6 +216,60 @@ describe("session store", () => {
     expect(store.hasEarlierMessages).toBe(false);
   });
 
+  it("lets a navigation wait for an in-flight history page", async () => {
+    const newer = {
+      id: "newer",
+      blocks: [],
+      createdAt: "2026-01-02T00:00:00.000Z",
+      role: "assistant" as const,
+    };
+    const older = { ...newer, id: "older" };
+    let resolvePage:
+      | ((value: { hasMore: false; messages: (typeof older)[] }) => void)
+      | undefined;
+    const pendingPage = new Promise<{
+      hasMore: false;
+      messages: (typeof older)[];
+    }>((resolve) => {
+      resolvePage = resolve;
+    });
+    const loadSessionMessages = vi
+      .fn()
+      .mockResolvedValueOnce({
+        hasMore: true,
+        messages: [newer],
+        nextBefore: "newer",
+      })
+      .mockReturnValueOnce(pendingPage);
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        loadSessionMessages,
+        resumeSession: vi.fn().mockResolvedValue({ session }),
+      },
+    });
+    const store = useSessionStore();
+    await store.resume(session.id);
+
+    const first = store.loadEarlierMessages();
+    const second = store.loadEarlierMessages();
+    let secondFinished = false;
+    void second.then(() => {
+      secondFinished = true;
+    });
+    await Promise.resolve();
+    expect(loadSessionMessages).toHaveBeenCalledTimes(2);
+    expect(secondFinished).toBe(false);
+
+    resolvePage?.({ hasMore: false, messages: [older] });
+    await Promise.all([first, second]);
+    expect(secondFinished).toBe(true);
+    expect(store.messages.map((message) => message.id)).toEqual([
+      "older",
+      "newer",
+    ]);
+  });
+
   it("keeps the complete outline separate from the paginated transcript", async () => {
     const newerMessage = {
       id: "newer-message",
