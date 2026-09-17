@@ -17,6 +17,14 @@ import { attachmentImageUrl } from "@/shared/attachments";
 const SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]+:/;
 const WINDOWS_ABSOLUTE_PATTERN = /^[a-zA-Z]:[\\/]/;
 
+function decodeMaybeEncodedPath(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
 function fileUrlToPath(src: string): string | undefined {
   try {
     const url = new URL(src);
@@ -48,6 +56,8 @@ export function resolveMarkdownImageSrc(src: string): string {
     }
     return trimmed;
   }
-  if (isAbsoluteLocalPath(trimmed)) return attachmentImageUrl(trimmed);
+  if (isAbsoluteLocalPath(trimmed)) {
+    return attachmentImageUrl(decodeMaybeEncodedPath(trimmed));
+  }
   return trimmed;
 }

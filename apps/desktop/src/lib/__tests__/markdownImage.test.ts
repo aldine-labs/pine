@@ -22,6 +22,9 @@ describe("resolveMarkdownImageSrc", () => {
     expect(resolveMarkdownImageSrc("/Users/kw/docs/diagram.png")).toBe(
       "pine-attachment://local/?p=%2FUsers%2Fkw%2Fdocs%2Fdiagram.png",
     );
+    expect(resolveMarkdownImageSrc("/Users/kw/docs/a%20b.png")).toBe(
+      "pine-attachment://local/?p=%2FUsers%2Fkw%2Fdocs%2Fa%20b.png",
+    );
   });
 
   it("rewrites Windows absolute paths to the attachment protocol", () => {
@@ -30,6 +33,15 @@ describe("resolveMarkdownImageSrc", () => {
     );
     expect(resolveMarkdownImageSrc("C:/Users/kw/a.png")).toBe(
       "pine-attachment://local/?p=C%3A%2FUsers%2Fkw%2Fa.png",
+    );
+    expect(resolveMarkdownImageSrc("C:/Users/kw/a%20b.png")).toBe(
+      "pine-attachment://local/?p=C%3A%2FUsers%2Fkw%2Fa%20b.png",
+    );
+  });
+
+  it("keeps invalid percent-escapes for absolute local paths", () => {
+    expect(resolveMarkdownImageSrc("/Users/kw/100% done.png")).toBe(
+      "pine-attachment://local/?p=%2FUsers%2Fkw%2F100%25%20done.png",
     );
   });
 
