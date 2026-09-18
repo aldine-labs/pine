@@ -3,7 +3,9 @@ import {
   ArrowLeftIcon,
   CheckIcon,
   HeartIcon,
+  PencilIcon,
   PlusIcon,
+  Trash2Icon,
   UnplugIcon,
   WrenchIcon,
 } from "@lucide/vue";
@@ -41,6 +43,7 @@ import type {
 import { pineModelKey, useModelsStore } from "@/stores/models";
 import ModelCapabilities from "./ModelCapabilities.vue";
 import CustomModelDialog from "./CustomModelDialog.vue";
+import CustomProviderDialog from "./CustomProviderDialog.vue";
 import ProviderAuthDialog from "./ProviderAuthDialog.vue";
 import ProviderIcon from "./ProviderIcon.vue";
 
@@ -70,6 +73,16 @@ const disconnectingProvider = ref<PineProviderDescriptor | null>(null);
 const isDisconnectDialogOpen = ref(false);
 const isDisconnecting = ref(false);
 const isCustomModelOpen = ref(false);
+const isCustomProviderOpen = ref(false);
+const editingCustomModel = ref<PineModelDescriptor | null>(null);
+const editingCustomProvider = ref<PineProviderDescriptor | null>(null);
+const customDeleteTarget = ref<
+  | { kind: "model"; model: PineModelDescriptor }
+  | { kind: "provider"; provider: PineProviderDescriptor }
+  | null
+>(null);
+const isCustomDeleteDialogOpen = ref(false);
+const isDeletingCustom = ref(false);
 const favoriteModelKeysAtOpen = ref<readonly string[]>([]);
 const providerModelGroups = computed(() =>
   providers.value
@@ -143,6 +156,12 @@ function canConfigure(provider: PineProviderDescriptor): boolean {
   return provider.authMethods.length > 0;
 }
 
+function selectProvider(provider: PineProviderDescriptor): void {
+  if (provider.isCustom) return;
+  if (!canConfigure(provider)) return;
+  void openAuth(provider);
+}
+
 async function openAuth(provider: PineProviderDescriptor): Promise<void> {
   selectedProvider.value = provider;
   emit("update:open", false);
@@ -151,21 +170,58 @@ async function openAuth(provider: PineProviderDescriptor): Promise<void> {
 }
 
 async function openCustomModel(): Promise<void> {
+  editingCustomModel.value = null;
   emit("update:open", false);
   await nextTick();
   isCustomModelOpen.value = true;
 }
 
+async function openCustomModelEditor(
+  model: PineModelDescriptor,
+): Promise<void> {
+  editingCustomModel.value = model;
+  emit("update:open", false);
+  await nextTick();
+  isCustomModelOpen.value = true;
+}
+
+async function openCustomProviderEditor(
+  provider: PineProviderDescriptor,
+): Promise<void> {
+  editingCustomProvider.value = provider;
+  emit("update:open", false);
+  await nextTick();
+  isCustomProviderOpen.value = true;
+}
+
 async function customModelOpenChanged(open: boolean): Promise<void> {
   isCustomModelOpen.value = open;
   if (open) return;
+  editingCustomModel.value = null;
   await nextTick();
   emit("update:open", true);
 }
 
 async function handleCustomModelSaved(): Promise<void> {
   view.value = "models";
+  editingCustomModel.value = null;
   isCustomModelOpen.value = false;
+  await nextTick();
+  emit("update:open", true);
+}
+
+async function customProviderOpenChanged(open: boolean): Promise<void> {
+  isCustomProviderOpen.value = open;
+  if (open) return;
+  editingCustomProvider.value = null;
+  await nextTick();
+  emit("update:open", true);
+}
+
+async function handleCustomProviderSaved(): Promise<void> {
+  view.value = "providers";
+  editingCustomProvider.value = null;
+  isCustomProviderOpen.value = false;
   await nextTick();
   emit("update:open", true);
 }
@@ -188,14 +244,57 @@ async function selectModel(model: PineModelDescriptor): Promise<void> {
   }
 }
 
-function selectProvider(provider: PineProviderDescriptor): void {
-  if (!canConfigure(provider)) return;
-  void openAuth(provider);
-}
-
 function requestDisconnect(provider: PineProviderDescriptor): void {
   disconnectingProvider.value = provider;
   isDisconnectDialogOpen.value = true;
+}
+
+function requestCustomDelete(
+  target:
+    | { kind: "model"; model: PineModelDescriptor }
+    | { kind: "provider"; provider: PineProviderDescriptor },
+): void {
+  customDeleteTarget.value = target;
+  isCustomDeleteDialogOpen.value = true;
+}
+
+function customDeleteDialogOpenChanged(open: boolean): void {
+  isCustomDeleteDialogOpen.value = open;
+  if (open) return;
+  queueMicrotask(() => {
+    if (!isCustomDeleteDialogOpen.value && !isDeletingCustom.value) {
+      customDeleteTarget.value = null;
+    }
+  });
+}
+
+async function deleteCustomTarget(): Promise<void> {
+  const target = customDeleteTarget.value;
+  if (!target || isDeletingCustom.value) return;
+  isDeletingCustom.value = true;
+  try {
+    if (target.kind === "model") {
+      await modelsStore.deleteCustomModel({
+        modelId: target.model.id,
+        providerId: target.model.providerId,
+      });
+    } else {
+      await modelsStore.deleteCustomProvider({
+        providerId: target.provider.id,
+      });
+    }
+    isCustomDeleteDialogOpen.value = false;
+    customDeleteTarget.value = null;
+  } catch (error) {
+    handleError(error, {
+      id: `models.delete-custom.${target.kind}`,
+      title: t("errors.customDelete.title"),
+      description: t("errors.customDelete.description"),
+    });
+  } finally {
+    isDeletingCustom.value = false;
+    if (!isCustomDeleteDialogOpen.value) customDeleteTarget.value = null;
+  }
 }
 
 function disconnectDialogOpenChanged(open: boolean): void {
@@ -329,6 +428,34 @@ async function handleConnected(): Promise<void> {
                   "
                 />
               </Button>
+              <template
+                v-if="model.isCustom && group.id.startsWith('provider:')"
+              >
+                <Button
+                  type="button"
+                  data-testid="custom-model-edit"
+                  variant="ghost"
+                  size="icon-xs"
+                  :aria-label="t('models.picker.editCustomModel')"
+                  :title="t('models.picker.editCustomModel')"
+                  @pointerdown.stop
+                  @click.stop="openCustomModelEditor(model)"
+                >
+                  <PencilIcon aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  data-testid="custom-model-delete"
+                  variant="ghost"
+                  size="icon-xs"
+                  :aria-label="t('models.picker.deleteCustomModel')"
+                  :title="t('models.picker.deleteCustomModel')"
+                  @pointerdown.stop
+                  @click.stop="requestCustomDelete({ kind: 'model', model })"
+                >
+                  <Trash2Icon aria-hidden="true" />
+                </Button>
+              </template>
             </span>
           </CommandItem>
         </CommandGroup>
@@ -355,7 +482,11 @@ async function handleConnected(): Promise<void> {
             v-for="provider in providers"
             :key="provider.id"
             :value="`${provider.name} ${provider.id}`"
-            :disabled="!provider.configured && !canConfigure(provider)"
+            :disabled="
+              !provider.isCustom &&
+              !provider.configured &&
+              !canConfigure(provider)
+            "
             class="[&>svg:last-child]:hidden"
             @select="selectProvider(provider)"
           >
@@ -377,8 +508,39 @@ async function handleConnected(): Promise<void> {
               <Badge v-if="provider.configured" variant="secondary">
                 {{ t("providers.connected") }}
               </Badge>
+              <template v-if="provider.isCustom">
+                <Badge variant="outline">
+                  {{ t("providers.custom.label") }}
+                </Badge>
+                <Button
+                  type="button"
+                  data-testid="custom-provider-edit"
+                  variant="ghost"
+                  size="icon-sm"
+                  :aria-label="t('providers.custom.edit')"
+                  :title="t('providers.custom.edit')"
+                  @pointerdown.stop
+                  @click.stop="openCustomProviderEditor(provider)"
+                >
+                  <PencilIcon aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  data-testid="custom-provider-delete"
+                  variant="ghost"
+                  size="icon-sm"
+                  :aria-label="t('providers.custom.delete')"
+                  :title="t('providers.custom.delete')"
+                  @pointerdown.stop
+                  @click.stop="
+                    requestCustomDelete({ kind: 'provider', provider })
+                  "
+                >
+                  <Trash2Icon aria-hidden="true" />
+                </Button>
+              </template>
               <Button
-                v-if="provider.configured"
+                v-if="provider.configured && !provider.isCustom"
                 type="button"
                 data-testid="provider-disconnect"
                 variant="ghost"
@@ -407,8 +569,16 @@ async function handleConnected(): Promise<void> {
 
   <CustomModelDialog
     :open="isCustomModelOpen"
+    :model="editingCustomModel"
     @update:open="customModelOpenChanged"
     @saved="handleCustomModelSaved"
+  />
+
+  <CustomProviderDialog
+    :open="isCustomProviderOpen"
+    :provider="editingCustomProvider"
+    @update:open="customProviderOpenChanged"
+    @saved="handleCustomProviderSaved"
   />
 
   <AlertDialog
@@ -444,6 +614,52 @@ async function handleConnected(): Promise<void> {
         >
           <Spinner v-if="isDisconnecting" data-icon="inline-start" />
           {{ t("providers.disconnectConfirm") }}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+
+  <AlertDialog
+    :open="isCustomDeleteDialogOpen"
+    @update:open="customDeleteDialogOpenChanged"
+  >
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>
+          {{
+            customDeleteTarget?.kind === "provider"
+              ? t("providers.custom.deleteTitle", {
+                  provider: customDeleteTarget.provider.name,
+                })
+              : t("models.picker.deleteCustomModelTitle", {
+                  model: customDeleteTarget?.model.name ?? "",
+                })
+          }}
+        </AlertDialogTitle>
+        <AlertDialogDescription>
+          {{
+            customDeleteTarget?.kind === "provider"
+              ? t("providers.custom.deleteDescription", {
+                  provider: customDeleteTarget.provider.name,
+                })
+              : t("models.picker.deleteCustomModelDescription", {
+                  model: customDeleteTarget?.model.name ?? "",
+                })
+          }}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel :disabled="isDeletingCustom">
+          {{ t("common.cancel") }}
+        </AlertDialogCancel>
+        <AlertDialogAction
+          data-testid="confirm-custom-delete"
+          variant="destructive"
+          :disabled="isDeletingCustom"
+          @click.prevent="deleteCustomTarget"
+        >
+          <Spinner v-if="isDeletingCustom" data-icon="inline-start" />
+          {{ t("common.delete") }}
         </AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>

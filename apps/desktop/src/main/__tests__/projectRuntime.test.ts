@@ -35,6 +35,14 @@ function createAgentHost(): AgentHost {
     createSession: vi.fn().mockResolvedValue({ session: sessionSummary }),
     disposeSession: vi.fn().mockResolvedValue({ disposed: true }),
     addCustomModel: vi.fn().mockResolvedValue({ models: [], providers: [] }),
+    updateCustomModel: vi.fn().mockResolvedValue({ models: [], providers: [] }),
+    deleteCustomModel: vi.fn().mockResolvedValue({ models: [], providers: [] }),
+    updateCustomProvider: vi
+      .fn()
+      .mockResolvedValue({ models: [], providers: [] }),
+    deleteCustomProvider: vi
+      .fn()
+      .mockResolvedValue({ models: [], providers: [] }),
     getModelCatalog: vi.fn().mockResolvedValue({ models: [], providers: [] }),
     loginProvider: vi.fn().mockResolvedValue({ credentialType: "api_key" }),
     respondToProviderAuth: vi.fn().mockResolvedValue({ accepted: true }),

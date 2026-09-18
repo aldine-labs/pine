@@ -15,11 +15,15 @@ import type {
 } from "../shared/agent";
 import type {
   AddCustomModelRequest,
+  DeleteCustomModelRequest,
+  DeleteCustomProviderRequest,
   LoginProviderRequest,
   PineModelCatalog,
   ProviderLoginResult,
   SelectModelRequest,
   SelectUtilityModelRequest,
+  UpdateCustomModelRequest,
+  UpdateCustomProviderRequest,
 } from "../shared/models";
 import type {
   LoadSessionMessagesResult,
@@ -461,6 +465,30 @@ export class ProjectRuntimeRegistry {
 
   addCustomModel(request: AddCustomModelRequest): Promise<PineModelCatalog> {
     return this.agentHost.addCustomModel(this.agentDir, request);
+  }
+
+  updateCustomModel(
+    request: UpdateCustomModelRequest,
+  ): Promise<PineModelCatalog> {
+    return this.agentHost.updateCustomModel(this.agentDir, request);
+  }
+
+  deleteCustomModel(
+    request: DeleteCustomModelRequest,
+  ): Promise<PineModelCatalog> {
+    return this.agentHost.deleteCustomModel(this.agentDir, request);
+  }
+
+  updateCustomProvider(
+    request: UpdateCustomProviderRequest,
+  ): Promise<PineModelCatalog> {
+    return this.agentHost.updateCustomProvider(this.agentDir, request);
+  }
+
+  deleteCustomProvider(
+    request: DeleteCustomProviderRequest,
+  ): Promise<PineModelCatalog> {
+    return this.agentHost.deleteCustomProvider(this.agentDir, request);
   }
 
   loginProvider(request: LoginProviderRequest): Promise<ProviderLoginResult> {

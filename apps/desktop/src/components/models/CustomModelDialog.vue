@@ -41,10 +41,17 @@ import {
 import type {
   AddCustomModelRequest,
   PineCustomModelApi,
+  PineModelDescriptor,
   PineThinkingLevel,
 } from "@/shared/models";
 import { useModelsStore } from "@/stores/models";
 
+const props = withDefaults(
+  defineProps<{
+    model?: PineModelDescriptor | null;
+  }>(),
+  { model: null },
+);
 const open = defineModel<boolean>("open", { default: false });
 const emit = defineEmits<{ saved: [] }>();
 const { t } = useI18n();
@@ -98,6 +105,7 @@ const selectedProviderId = computed(() =>
     ? existingProviderId.value
     : draft.providerId,
 );
+const isEditing = computed(() => props.model !== null);
 
 const providerIdInvalid = computed(
   () =>
@@ -130,21 +138,28 @@ const isValid = computed(() => {
 
 watch(open, (isOpen) => {
   if (!isOpen) return;
+  const model = props.model;
   Object.assign(draft, {
     api: "openai-completions",
     apiKey: "",
     baseUrl: "",
     contextWindow: 128_000,
     maxTokens: 16_384,
-    modelId: "",
-    modelName: "",
+    modelId: model?.id ?? "",
+    modelName: model?.name ?? "",
     providerId: "",
     providerName: "",
-    thinkingLevels: ["off", "low", "high", "max"],
-    vision: false,
+    thinkingLevels: model
+      ? [...model.supportedThinkingLevels]
+      : ["off", "low", "high", "max"],
+    vision: model?.input.includes("image") ?? false,
   });
-  providerMode.value = "new";
-  existingProviderId.value = "";
+  providerMode.value = model ? "existing" : "new";
+  existingProviderId.value = model?.providerId ?? "";
+  if (model) {
+    draft.contextWindow = model.contextWindow;
+    draft.maxTokens = model.maxTokens;
+  }
   hasAttemptedSave.value = false;
 });
 
@@ -224,23 +239,31 @@ async function save(): Promise<void> {
       thinkingLevels: [...draft.thinkingLevels],
       vision: draft.vision,
     };
-    const request: AddCustomModelRequest =
-      providerMode.value === "existing"
-        ? {
-            ...model,
-            providerId: existingProviderId.value,
-            providerMode: "existing",
-          }
-        : {
-            ...model,
-            api: draft.api,
-            apiKey: draft.apiKey.trim(),
-            baseUrl: draft.baseUrl.trim(),
-            providerId: draft.providerId.trim(),
-            providerMode: "new",
-            providerName: draft.providerName.trim(),
-          };
-    await modelsStore.addCustomModel(request);
+    if (isEditing.value && props.model) {
+      await modelsStore.updateCustomModel({
+        ...model,
+        originalModelId: props.model.id,
+        providerId: props.model.providerId,
+      });
+    } else {
+      const request: AddCustomModelRequest =
+        providerMode.value === "existing"
+          ? {
+              ...model,
+              providerId: existingProviderId.value,
+              providerMode: "existing",
+            }
+          : {
+              ...model,
+              api: draft.api,
+              apiKey: draft.apiKey.trim(),
+              baseUrl: draft.baseUrl.trim(),
+              providerId: draft.providerId.trim(),
+              providerMode: "new",
+              providerName: draft.providerName.trim(),
+            };
+      await modelsStore.addCustomModel(request);
+    }
     emit("saved");
   } catch (error) {
     handleError(error, {
@@ -262,15 +285,25 @@ async function save(): Promise<void> {
     >
       <form class="flex h-full min-h-0 flex-col gap-6" @submit.prevent="save">
         <DialogHeader class="px-6 pt-6 pr-16">
-          <DialogTitle>{{ t("models.custom.title") }}</DialogTitle>
+          <DialogTitle>
+            {{
+              t(isEditing ? "models.custom.editTitle" : "models.custom.title")
+            }}
+          </DialogTitle>
           <DialogDescription>
-            {{ t("models.custom.description") }}
+            {{
+              t(
+                isEditing
+                  ? "models.custom.editDescription"
+                  : "models.custom.description",
+              )
+            }}
           </DialogDescription>
         </DialogHeader>
 
         <div class="scroll-fade min-h-0 flex-1 overflow-y-auto px-6">
           <FieldGroup class="gap-5 pb-1">
-            <Field>
+            <Field v-if="!isEditing">
               <FieldLabel id="custom-provider-mode-label">
                 {{ t("models.custom.providerMode") }}
               </FieldLabel>
@@ -290,7 +323,22 @@ async function save(): Promise<void> {
               </Tabs>
             </Field>
 
-            <Field v-if="providerMode === 'existing'">
+            <Field v-if="isEditing">
+              <FieldLabel>{{ t("models.custom.provider") }}</FieldLabel>
+              <Input
+                :model-value="
+                  providers.find(
+                    (provider) => provider.id === existingProviderId,
+                  )?.name ?? existingProviderId
+                "
+                disabled
+              />
+              <FieldDescription>
+                {{ t("models.custom.editProviderDescription") }}
+              </FieldDescription>
+            </Field>
+
+            <Field v-else-if="providerMode === 'existing'">
               <FieldLabel>{{ t("models.custom.provider") }}</FieldLabel>
               <Select
                 :model-value="existingProviderId"
@@ -538,7 +586,15 @@ async function save(): Promise<void> {
             </Button>
             <Button type="submit" :disabled="isSaving">
               <Spinner v-if="isSaving" data-icon="inline-start" />
-              {{ isSaving ? t("common.saving") : t("models.custom.save") }}
+              {{
+                isSaving
+                  ? t("common.saving")
+                  : t(
+                      isEditing
+                        ? "models.custom.editSave"
+                        : "models.custom.save",
+                    )
+              }}
             </Button>
           </div>
         </DialogFooter>

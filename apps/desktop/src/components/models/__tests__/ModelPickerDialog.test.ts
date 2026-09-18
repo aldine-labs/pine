@@ -28,9 +28,15 @@ const alertDialogStub = {
 };
 const customModelDialogStub = {
   name: "CustomModelDialogStub",
-  props: ["open"],
+  props: ["open", "model"],
   emits: ["saved", "update:open"],
   template: '<div data-custom-model-dialog :data-open="open" />',
+};
+const customProviderDialogStub = {
+  name: "CustomProviderDialogStub",
+  props: ["open", "provider"],
+  emits: ["saved", "update:open"],
+  template: '<div data-custom-provider-dialog :data-open="open" />',
 };
 const buttonStub = {
   props: ["disabled"],
@@ -73,17 +79,38 @@ const connectedCatalog: PineModelCatalog = {
   recommendedModelIds: [utilityModel.id],
 };
 
-function mountPicker(purpose: "session" | "utility" = "session") {
+const customCatalog: PineModelCatalog = {
+  models: [
+    {
+      ...utilityModel,
+      isCustom: true,
+      providerId: "custom-provider",
+      providerName: "Custom provider",
+    },
+  ],
+  providers: [
+    {
+      authMethods: [],
+      configured: true,
+      id: "custom-provider",
+      isCustom: true,
+      modelCount: 1,
+      name: "Custom provider",
+      api: "openai-completions",
+      baseUrl: "http://localhost:11434/v1",
+      hasApiKey: true,
+    },
+  ],
+};
+
+function mountPicker(
+  purpose: "session" | "utility" = "session",
+  catalog: PineModelCatalog = connectedCatalog,
+) {
   const logoutProvider = vi.fn().mockResolvedValue({ disposed: true });
   const selectModel = vi.fn().mockResolvedValue(undefined);
   const selectUtilityModel = vi.fn().mockResolvedValue(undefined);
-  const getModelCatalog = vi.fn().mockResolvedValue({
-    ...connectedCatalog,
-    providers: connectedCatalog.providers.map((provider) => ({
-      ...provider,
-      configured: false,
-    })),
-  });
+  const getModelCatalog = vi.fn().mockResolvedValue(catalog);
   Object.defineProperty(window, "pine", {
     configurable: true,
     value: {
@@ -97,7 +124,7 @@ function mountPicker(purpose: "session" | "utility" = "session") {
 
   const pinia = createPinia();
   setActivePinia(pinia);
-  useModelsStore().catalog = connectedCatalog;
+  useModelsStore().catalog = catalog;
 
   const wrapper = mount(ModelPickerDialog, {
     props: { open: false, purpose },
@@ -120,6 +147,7 @@ function mountPicker(purpose: "session" | "utility" = "session") {
         CommandList: passthroughStub,
         CommandSeparator: passthroughStub,
         CustomModelDialog: customModelDialogStub,
+        CustomProviderDialog: customProviderDialogStub,
         ProviderAuthDialog: passthroughStub,
         ProviderIcon: passthroughStub,
       },
@@ -195,6 +223,40 @@ describe("ModelPickerDialog provider management", () => {
     expect(wrapper.get("[data-alert-dialog]").attributes("data-open")).toBe(
       "false",
     );
+  });
+
+  it("offers edit actions for custom models and providers", async () => {
+    const { wrapper } = mountPicker("session", customCatalog);
+
+    await wrapper.get('[data-testid="custom-model-edit"]').trigger("click");
+    await flushPromises();
+    expect(
+      wrapper.get("[data-custom-model-dialog]").attributes("data-open"),
+    ).toBe("true");
+    expect(
+      wrapper.findComponent({ name: "CustomModelDialogStub" }).props("model"),
+    ).toMatchObject({ id: utilityModel.id });
+
+    wrapper
+      .findComponent({ name: "CustomModelDialogStub" })
+      .vm.$emit("update:open", false);
+    await flushPromises();
+    await wrapper
+      .get(
+        '[data-command-item][data-value="manage configure provider service model"]',
+      )
+      .trigger("click");
+    await wrapper.get('[data-testid="custom-provider-edit"]').trigger("click");
+    await flushPromises();
+
+    expect(
+      wrapper.get("[data-custom-provider-dialog]").attributes("data-open"),
+    ).toBe("true");
+    expect(
+      wrapper
+        .findComponent({ name: "CustomProviderDialogStub" })
+        .props("provider"),
+    ).toMatchObject({ id: "custom-provider" });
   });
 });
 

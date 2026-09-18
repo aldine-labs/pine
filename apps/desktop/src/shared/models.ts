@@ -1,5 +1,11 @@
 export const GET_MODEL_CATALOG_CHANNEL = "models:catalog" as const;
 export const ADD_CUSTOM_MODEL_CHANNEL = "models:add-custom" as const;
+export const UPDATE_CUSTOM_MODEL_CHANNEL = "models:update-custom" as const;
+export const DELETE_CUSTOM_MODEL_CHANNEL = "models:delete-custom" as const;
+export const UPDATE_CUSTOM_PROVIDER_CHANNEL =
+  "providers:update-custom" as const;
+export const DELETE_CUSTOM_PROVIDER_CHANNEL =
+  "providers:delete-custom" as const;
 export const LOOKUP_MODEL_METADATA_CHANNEL = "models:lookup-metadata" as const;
 export const SELECT_MODEL_CHANNEL = "models:select" as const;
 export const SELECT_UTILITY_MODEL_CHANNEL = "models:select-utility" as const;
@@ -36,6 +42,7 @@ export interface PineModelDescriptor {
   providerName: string;
   reasoning: boolean;
   supportedThinkingLevels: readonly PineThinkingLevel[];
+  isCustom?: boolean;
 }
 
 export interface PineProviderDescriptor {
@@ -43,8 +50,12 @@ export interface PineProviderDescriptor {
   authSource?: string;
   configured: boolean;
   id: string;
+  isCustom?: boolean;
   modelCount: number;
   name: string;
+  api?: PineCustomModelApi;
+  baseUrl?: string;
+  hasApiKey?: boolean;
 }
 
 export interface PineModelSelection {
@@ -66,7 +77,7 @@ export interface PineModelCatalog {
   utilitySelection?: PineUtilityModelSelection;
 }
 
-interface CustomModelDefinition {
+export interface CustomModelDefinition {
   contextWindow: number;
   maxTokens: number;
   modelId: string;
@@ -90,6 +101,28 @@ export type AddCustomModelRequest = CustomModelDefinition &
         providerMode: "existing";
       }
   );
+
+export type UpdateCustomModelRequest = CustomModelDefinition & {
+  originalModelId: string;
+  providerId: string;
+};
+
+export interface UpdateCustomProviderRequest {
+  api: PineCustomModelApi;
+  apiKey?: string;
+  baseUrl: string;
+  providerId: string;
+  providerName: string;
+}
+
+export interface DeleteCustomModelRequest {
+  modelId: string;
+  providerId: string;
+}
+
+export interface DeleteCustomProviderRequest {
+  providerId: string;
+}
 
 export interface LookupModelMetadataRequest {
   modelId: string;

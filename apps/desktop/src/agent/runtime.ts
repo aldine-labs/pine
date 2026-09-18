@@ -30,14 +30,27 @@ import {
 } from "../shared/agent";
 import type {
   AddCustomModelRequest,
+  DeleteCustomModelRequest,
+  DeleteCustomProviderRequest,
   PineAuthType,
+  PineCustomModelApi,
   PineModelCatalog,
   PineProviderAuthEvent,
   PineThinkingLevel,
   PineUtilityModelSelection,
   ProviderLoginResult,
+  UpdateCustomModelRequest,
+  UpdateCustomProviderRequest,
 } from "../shared/models";
-import { addCustomModel as writeCustomModel } from "./customModels";
+import {
+  addCustomModel as writeCustomModel,
+  deleteCustomModel as removeCustomModel,
+  deleteCustomProvider as removeCustomProvider,
+  isCustomProviderId,
+  readCustomModelsFile,
+  updateCustomModel as writeUpdatedCustomModel,
+  updateCustomProvider as writeUpdatedCustomProvider,
+} from "./customModels";
 import {
   PINE_AUTHORIZATION_GRANT_ENTRY,
   PINE_APPROVAL_DECISION_ENTRY,
@@ -1028,6 +1041,7 @@ export class PineAgentRuntime {
 
   async getModelCatalog(agentDir: string): Promise<PineModelCatalog> {
     const runtime = await this.getModelRuntime(agentDir);
+    const customModelsFile = await readCustomModelsFile(agentDir);
     const settings = SettingsManager.create(process.cwd(), agentDir, {
       projectTrusted: false,
     });
@@ -1035,6 +1049,8 @@ export class PineAgentRuntime {
     const models = runtime.getModels();
     const providers = runtime.getProviders().map((provider) => {
       const status = runtime.getProviderAuthStatus(provider.id);
+      const config = customModelsFile.providers[provider.id];
+      const isCustom = isCustomProviderId(provider.id) && config !== undefined;
       const authMethods = [];
       if (provider.auth.apiKey?.login) {
         authMethods.push({
@@ -1058,6 +1074,19 @@ export class PineAgentRuntime {
             ? { authSource: status.source }
             : {}),
         authMethods,
+        ...(isCustom ? { isCustom: true } : { isCustom: false }),
+        ...(isCustom && typeof config.api === "string"
+          ? { api: config.api as PineCustomModelApi }
+          : {}),
+        ...(isCustom && typeof config.baseUrl === "string"
+          ? { baseUrl: config.baseUrl }
+          : {}),
+        ...(isCustom
+          ? {
+              hasApiKey:
+                typeof config.apiKey === "string" && config.apiKey.length > 0,
+            }
+          : {}),
         modelCount: models.filter((model) => model.provider === provider.id)
           .length,
       };
@@ -1088,7 +1117,9 @@ export class PineAgentRuntime {
 
     return {
       providers,
-      models: models.map((model) => this.describeModel(model, providers)),
+      models: models.map((model) =>
+        this.describeModel(model, providers, customModelsFile),
+      ),
       ...(validUtilitySelection
         ? { utilitySelection: validUtilitySelection }
         : {}),
@@ -1127,6 +1158,59 @@ export class PineAgentRuntime {
       );
     }
     await writeCustomModel(agentDir, input);
+    await runtime.refresh({ allowNetwork: false });
+    const configError = runtime.getError();
+    if (configError) throw new Error(configError);
+    return this.getModelCatalog(agentDir);
+  }
+
+  async updateCustomModel(
+    agentDir: string,
+    input: UpdateCustomModelRequest,
+  ): Promise<PineModelCatalog> {
+    const runtime = await this.getModelRuntime(agentDir);
+    if (!runtime.getModel(input.providerId, input.originalModelId)) {
+      throw new Error(
+        `Model "${input.originalModelId}" was not found on provider "${input.providerId}".`,
+      );
+    }
+    await writeUpdatedCustomModel(agentDir, input);
+    await runtime.refresh({ allowNetwork: false });
+    const configError = runtime.getError();
+    if (configError) throw new Error(configError);
+    return this.getModelCatalog(agentDir);
+  }
+
+  async deleteCustomModel(
+    agentDir: string,
+    input: DeleteCustomModelRequest,
+  ): Promise<PineModelCatalog> {
+    const runtime = await this.getModelRuntime(agentDir);
+    await removeCustomModel(agentDir, input);
+    await runtime.refresh({ allowNetwork: false });
+    const configError = runtime.getError();
+    if (configError) throw new Error(configError);
+    return this.getModelCatalog(agentDir);
+  }
+
+  async updateCustomProvider(
+    agentDir: string,
+    input: UpdateCustomProviderRequest,
+  ): Promise<PineModelCatalog> {
+    const runtime = await this.getModelRuntime(agentDir);
+    await writeUpdatedCustomProvider(agentDir, input);
+    await runtime.refresh({ allowNetwork: false });
+    const configError = runtime.getError();
+    if (configError) throw new Error(configError);
+    return this.getModelCatalog(agentDir);
+  }
+
+  async deleteCustomProvider(
+    agentDir: string,
+    input: DeleteCustomProviderRequest,
+  ): Promise<PineModelCatalog> {
+    const runtime = await this.getModelRuntime(agentDir);
+    await removeCustomProvider(agentDir, input);
     await runtime.refresh({ allowNetwork: false });
     const configError = runtime.getError();
     if (configError) throw new Error(configError);
@@ -1963,7 +2047,19 @@ export class PineAgentRuntime {
   private describeModel(
     model: Model<Api>,
     providers: PineModelCatalog["providers"],
+    customModelsFile: Awaited<ReturnType<typeof readCustomModelsFile>>,
   ): PineModelCatalog["models"][number] {
+    const providerConfig = customModelsFile.providers[model.provider];
+    const customModels = providerConfig?.models;
+    const isCustom =
+      Array.isArray(customModels) &&
+      customModels.some(
+        (candidate) =>
+          typeof candidate === "object" &&
+          candidate !== null &&
+          !Array.isArray(candidate) &&
+          (candidate as { id?: unknown }).id === model.id,
+      );
     return {
       api: model.api,
       contextWindow: model.contextWindow,
@@ -1977,6 +2073,7 @@ export class PineAgentRuntime {
         model.provider,
       reasoning: model.reasoning,
       supportedThinkingLevels: getSupportedThinkingLevels(model),
+      isCustom,
     };
   }
 

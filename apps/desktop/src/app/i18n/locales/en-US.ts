@@ -118,6 +118,11 @@ export default {
       recommended: "Recommended",
       removeFavorite: "Remove {model} from favorites",
       vision: "Vision",
+      editCustomModel: "Edit custom model",
+      deleteCustomModel: "Delete custom model",
+      deleteCustomModelTitle: "Delete {model}?",
+      deleteCustomModelDescription:
+        "This removes the custom model from the local models.json file.",
     },
     custom: {
       title: "Add model",
@@ -154,6 +159,12 @@ export default {
       autoFillDescription:
         "Looks up the entered model ID in models.dev and fills its display name, context and output limits, image support, and known reasoning capability. Review the values before saving.",
       save: "Add model",
+      editTitle: "Edit custom model",
+      editDescription:
+        "Update this model's settings without changing its provider.",
+      editProviderDescription:
+        "The provider cannot be changed after a model is created.",
+      editSave: "Save model",
     },
     thinkingLevels: {
       off: "Off",
@@ -171,6 +182,25 @@ export default {
   },
   providers: {
     connected: "Connected",
+    custom: {
+      label: "Custom",
+      edit: "Edit custom provider",
+      delete: "Delete custom provider",
+      editTitle: "Edit custom provider",
+      editDescription:
+        "Update the endpoint and credentials used by this provider.",
+      idDescription:
+        "The provider ID is used by saved model selections and cannot be changed.",
+      apiKeyPlaceholder: "Leave blank to keep the current value",
+      apiKeyDescription:
+        "Leave this blank to keep the current key or value reference.",
+      save: "Save provider",
+      deleteTitle: "Delete {provider}?",
+      deleteDescription:
+        "This removes the provider and all of its custom models from the local models.json file.",
+      invalidDescription:
+        "Enter a provider name and a valid HTTP or HTTPS URL.",
+    },
     disconnect: "Disconnect {provider}",
     disconnectConfirm: "Delete credentials and disconnect",
     disconnectDescription:
@@ -913,6 +943,14 @@ export default {
     customModel: {
       title: "Unable to add custom model",
       description: "Check the endpoint and model settings, then try again",
+    },
+    customProvider: {
+      title: "Unable to update custom provider",
+      description: "Check the provider endpoint and try again",
+    },
+    customDelete: {
+      title: "Unable to delete custom configuration",
+      description: "The custom provider or model was not deleted. Try again",
     },
     modelMetadata: {
       title: "Unable to autofill model metadata",

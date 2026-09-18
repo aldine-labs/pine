@@ -91,6 +91,8 @@ import {
 import {
   ADD_CUSTOM_MODEL_CHANNEL,
   CANCEL_PROVIDER_AUTH_CHANNEL,
+  DELETE_CUSTOM_MODEL_CHANNEL,
+  DELETE_CUSTOM_PROVIDER_CHANNEL,
   GET_MODEL_CATALOG_CHANNEL,
   LOGIN_PROVIDER_CHANNEL,
   LOOKUP_MODEL_METADATA_CHANNEL,
@@ -100,12 +102,18 @@ import {
   RESPOND_PROVIDER_AUTH_CHANNEL,
   SELECT_MODEL_CHANNEL,
   SELECT_UTILITY_MODEL_CHANNEL,
+  UPDATE_CUSTOM_MODEL_CHANNEL,
+  UPDATE_CUSTOM_PROVIDER_CHANNEL,
   isProviderAuthEvent,
   type AddCustomModelRequest,
+  type DeleteCustomModelRequest,
+  type DeleteCustomProviderRequest,
   type LookupModelMetadataRequest,
   type PineModelCatalog,
   type PineModelMetadata,
   type ProviderLoginResult,
+  type UpdateCustomModelRequest,
+  type UpdateCustomProviderRequest,
 } from "./shared/models";
 import {
   CREATE_PROJECT_CHANNEL,
@@ -651,6 +659,38 @@ const AddCustomModelRequestSchema = z.intersection(
     }),
   ]),
 );
+const UpdateCustomModelRequestSchema = z.intersection(
+  CustomModelDefinitionSchema,
+  z.object({
+    originalModelId: z.string().trim().min(1).max(500),
+    providerId: z.string().trim().min(1).max(200),
+  }),
+);
+const UpdateCustomProviderRequestSchema = z.object({
+  api: z.enum([
+    "anthropic-messages",
+    "google-generative-ai",
+    "openai-completions",
+    "openai-responses",
+  ]),
+  apiKey: z.string().trim().max(100_000).optional(),
+  baseUrl: z.url().refine((url) => {
+    try {
+      return ["http:", "https:"].includes(new URL(url).protocol);
+    } catch {
+      return false;
+    }
+  }),
+  providerId: z.string().trim().min(1).max(200),
+  providerName: z.string().trim().min(1).max(200),
+});
+const DeleteCustomModelRequestSchema = z.object({
+  modelId: z.string().trim().min(1).max(500),
+  providerId: z.string().trim().min(1).max(200),
+});
+const DeleteCustomProviderRequestSchema = z.object({
+  providerId: z.string().trim().min(1).max(200),
+});
 const LookupModelMetadataRequestSchema = z.object({
   modelId: z.string().trim().min(1).max(500),
   providerId: z.string().trim().min(1).max(200).optional(),
@@ -1169,6 +1209,46 @@ ipcMain.handle(
       AddCustomModelRequestSchema.parse(
         request,
       ) satisfies AddCustomModelRequest,
+    ),
+);
+
+ipcMain.handle(
+  UPDATE_CUSTOM_MODEL_CHANNEL,
+  async (_event, request: unknown): Promise<PineModelCatalog> =>
+    getProjectRuntimes().updateCustomModel(
+      UpdateCustomModelRequestSchema.parse(
+        request,
+      ) satisfies UpdateCustomModelRequest,
+    ),
+);
+
+ipcMain.handle(
+  DELETE_CUSTOM_MODEL_CHANNEL,
+  async (_event, request: unknown): Promise<PineModelCatalog> =>
+    getProjectRuntimes().deleteCustomModel(
+      DeleteCustomModelRequestSchema.parse(
+        request,
+      ) satisfies DeleteCustomModelRequest,
+    ),
+);
+
+ipcMain.handle(
+  UPDATE_CUSTOM_PROVIDER_CHANNEL,
+  async (_event, request: unknown): Promise<PineModelCatalog> =>
+    getProjectRuntimes().updateCustomProvider(
+      UpdateCustomProviderRequestSchema.parse(
+        request,
+      ) satisfies UpdateCustomProviderRequest,
+    ),
+);
+
+ipcMain.handle(
+  DELETE_CUSTOM_PROVIDER_CHANNEL,
+  async (_event, request: unknown): Promise<PineModelCatalog> =>
+    getProjectRuntimes().deleteCustomProvider(
+      DeleteCustomProviderRequestSchema.parse(
+        request,
+      ) satisfies DeleteCustomProviderRequest,
     ),
 );
 

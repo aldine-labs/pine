@@ -108,6 +108,11 @@ export default {
       recommended: "推荐",
       removeFavorite: "取消收藏 {model}",
       vision: "视觉",
+      editCustomModel: "编辑自定义模型",
+      deleteCustomModel: "删除自定义模型",
+      deleteCustomModelTitle: "删除 {model}？",
+      deleteCustomModelDescription:
+        "这会从本地 models.json 文件中移除该自定义模型。",
     },
     custom: {
       title: "添加模型",
@@ -143,6 +148,10 @@ export default {
       autoFillDescription:
         "使用已输入的模型 ID 从 models.dev 查找元数据，并填充显示名称、上下文与输出上限、图像支持和已知的推理能力。保存前请确认填充结果。",
       save: "添加模型",
+      editTitle: "编辑自定义模型",
+      editDescription: "更新模型设置，但不会更改其所属服务。",
+      editProviderDescription: "模型创建后不能更换所属服务。",
+      editSave: "保存模型",
     },
     thinkingLevels: {
       off: "关闭",
@@ -160,6 +169,21 @@ export default {
   },
   providers: {
     connected: "已连接",
+    custom: {
+      label: "自定义",
+      edit: "编辑自定义服务",
+      delete: "删除自定义服务",
+      editTitle: "编辑自定义服务",
+      editDescription: "更新此服务使用的端点和凭据。",
+      idDescription: "服务 ID 用于保存的模型选择，创建后不能更改。",
+      apiKeyPlaceholder: "留空以保留当前值",
+      apiKeyDescription: "留空即可保留当前密钥或值引用。",
+      save: "保存服务",
+      deleteTitle: "删除 {provider}？",
+      deleteDescription:
+        "这会从本地 models.json 文件中移除该服务及其所有自定义模型。",
+      invalidDescription: "请输入服务名称和有效的 HTTP 或 HTTPS URL。",
+    },
     disconnect: "解绑 {provider}",
     disconnectConfirm: "删除凭据并解绑",
     disconnectDescription:
@@ -887,6 +911,14 @@ export default {
     customModel: {
       title: "无法添加自定义模型",
       description: "请检查端点和模型设置后重试",
+    },
+    customProvider: {
+      title: "无法更新自定义服务",
+      description: "请检查服务端点后重试",
+    },
+    customDelete: {
+      title: "无法删除自定义配置",
+      description: "自定义服务或模型未被删除，请重试",
     },
     modelMetadata: {
       title: "无法自动填充模型元数据",

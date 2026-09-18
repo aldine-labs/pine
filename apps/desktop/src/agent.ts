@@ -64,6 +64,18 @@ async function handleRequest(request: AgentWorkerRequest): Promise<void> {
     case "models:add-custom":
       result = await runtime.addCustomModel(request.agentDir, request);
       break;
+    case "models:update-custom":
+      result = await runtime.updateCustomModel(request.agentDir, request);
+      break;
+    case "models:delete-custom":
+      result = await runtime.deleteCustomModel(request.agentDir, request);
+      break;
+    case "providers:update-custom":
+      result = await runtime.updateCustomProvider(request.agentDir, request);
+      break;
+    case "providers:delete-custom":
+      result = await runtime.deleteCustomProvider(request.agentDir, request);
+      break;
     case "provider:login":
       result = await runtime.loginProvider(
         request.agentDir,

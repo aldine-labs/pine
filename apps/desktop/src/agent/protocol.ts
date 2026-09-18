@@ -6,12 +6,16 @@ import type {
 } from "../shared/agent";
 import type {
   AddCustomModelRequest,
+  DeleteCustomModelRequest,
+  DeleteCustomProviderRequest,
   LoginProviderRequest,
   PineModelCatalog,
   PineProviderAuthEvent,
   PineThinkingLevel,
   PineUtilityModelSelection,
   ProviderLoginResult,
+  UpdateCustomModelRequest,
+  UpdateCustomProviderRequest,
 } from "../shared/models";
 import type { PineContextUsage, PineSessionSummary } from "../shared/sessions";
 import type { PineContextCompactionStrategy } from "../shared/preferences";
@@ -120,6 +124,26 @@ export type AgentWorkerRequest =
       type: "models:add-custom";
       agentDir: string;
     } & AddCustomModelRequest)
+  | ({
+      id: string;
+      type: "models:update-custom";
+      agentDir: string;
+    } & UpdateCustomModelRequest)
+  | ({
+      id: string;
+      type: "models:delete-custom";
+      agentDir: string;
+    } & DeleteCustomModelRequest)
+  | ({
+      id: string;
+      type: "providers:update-custom";
+      agentDir: string;
+    } & UpdateCustomProviderRequest)
+  | ({
+      id: string;
+      type: "providers:delete-custom";
+      agentDir: string;
+    } & DeleteCustomProviderRequest)
   | ({
       id: string;
       type: "provider:login";

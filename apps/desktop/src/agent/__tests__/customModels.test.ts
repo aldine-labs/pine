@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AddCustomModelRequest } from "../../shared/models";
-import { addCustomModel } from "../customModels";
+import {
+  addCustomModel,
+  deleteCustomModel,
+  deleteCustomProvider,
+  updateCustomModel,
+  updateCustomProvider,
+} from "../customModels";
 
 const temporaryDirectories: string[] = [];
 
@@ -130,5 +136,90 @@ describe("custom models configuration", () => {
         xhigh: null,
       },
     });
+  });
+
+  it("updates a custom model and preserves provider settings", async () => {
+    const agentDir = await createAgentDirectory();
+    await addCustomModel(agentDir, model);
+
+    await updateCustomModel(agentDir, {
+      contextWindow: 256_000,
+      maxTokens: 32_768,
+      modelId: "qwen2.5-coder:14b",
+      modelName: "Qwen 2.5 Coder 14B",
+      originalModelId: model.modelId,
+      providerId: model.providerId,
+      thinkingLevels: ["medium", "high"],
+      vision: false,
+    });
+
+    const parsed = JSON.parse(
+      await readFile(path.join(agentDir, "models.json"), "utf8"),
+    );
+    expect(parsed.providers.ollama).toMatchObject({
+      api: "openai-completions",
+      apiKey: "$LOCAL_MODEL_KEY",
+      baseUrl: "http://localhost:11434/v1",
+    });
+    expect(parsed.providers.ollama.models).toEqual([
+      expect.objectContaining({
+        contextWindow: 256_000,
+        id: "qwen2.5-coder:14b",
+        input: ["text"],
+        maxTokens: 32_768,
+        name: "Qwen 2.5 Coder 14B",
+        reasoning: true,
+      }),
+    ]);
+  });
+
+  it("updates a custom provider without replacing its models", async () => {
+    const agentDir = await createAgentDirectory();
+    await addCustomModel(agentDir, model);
+
+    await updateCustomProvider(agentDir, {
+      api: "openai-responses",
+      baseUrl: "https://localhost:11434/v1",
+      providerId: model.providerId,
+      providerName: "Updated Ollama",
+    });
+
+    const parsed = JSON.parse(
+      await readFile(path.join(agentDir, "models.json"), "utf8"),
+    );
+    expect(parsed.providers.ollama).toMatchObject({
+      api: "openai-responses",
+      apiKey: "$LOCAL_MODEL_KEY",
+      baseUrl: "https://localhost:11434/v1",
+      name: "Updated Ollama",
+    });
+    expect(parsed.providers.ollama.models).toHaveLength(1);
+  });
+
+  it("deletes a custom model and provider", async () => {
+    const agentDir = await createAgentDirectory();
+    await addCustomModel(agentDir, model);
+    await addCustomModel(agentDir, {
+      ...model,
+      modelId: "second-model",
+      providerMode: "existing",
+    });
+
+    await deleteCustomModel(agentDir, {
+      modelId: model.modelId,
+      providerId: model.providerId,
+    });
+    let parsed = JSON.parse(
+      await readFile(path.join(agentDir, "models.json"), "utf8"),
+    );
+    expect(parsed.providers.ollama.models).toEqual([
+      expect.objectContaining({ id: "second-model" }),
+    ]);
+
+    await deleteCustomProvider(agentDir, { providerId: model.providerId });
+    parsed = JSON.parse(
+      await readFile(path.join(agentDir, "models.json"), "utf8"),
+    );
+    expect(parsed.providers.ollama).toBeUndefined();
   });
 });

@@ -46,6 +46,8 @@ import {
 import {
   ADD_CUSTOM_MODEL_CHANNEL,
   CANCEL_PROVIDER_AUTH_CHANNEL,
+  DELETE_CUSTOM_MODEL_CHANNEL,
+  DELETE_CUSTOM_PROVIDER_CHANNEL,
   GET_MODEL_CATALOG_CHANNEL,
   LOGIN_PROVIDER_CHANNEL,
   LOOKUP_MODEL_METADATA_CHANNEL,
@@ -55,6 +57,10 @@ import {
   RESPOND_PROVIDER_AUTH_CHANNEL,
   SELECT_MODEL_CHANNEL,
   SELECT_UTILITY_MODEL_CHANNEL,
+  UPDATE_CUSTOM_MODEL_CHANNEL,
+  UPDATE_CUSTOM_PROVIDER_CHANNEL,
+  type DeleteCustomModelRequest,
+  type DeleteCustomProviderRequest,
   type AddCustomModelRequest,
   type LoginProviderRequest,
   type LogoutProviderRequest,
@@ -65,6 +71,8 @@ import {
   type ProviderAuthEventListener,
   type ProviderAuthResponseRequest,
   type ProviderLoginResult,
+  type UpdateCustomModelRequest,
+  type UpdateCustomProviderRequest,
   type SelectModelRequest,
   type SelectUtilityModelRequest,
 } from "./shared/models";
@@ -274,6 +282,22 @@ const pineApi: PineDesktopApi = {
     ipcRenderer.invoke(LOOKUP_MODEL_METADATA_CHANNEL, request),
   addCustomModel: (request: AddCustomModelRequest): Promise<PineModelCatalog> =>
     ipcRenderer.invoke(ADD_CUSTOM_MODEL_CHANNEL, request),
+  updateCustomModel: (
+    request: UpdateCustomModelRequest,
+  ): Promise<PineModelCatalog> =>
+    ipcRenderer.invoke(UPDATE_CUSTOM_MODEL_CHANNEL, request),
+  deleteCustomModel: (
+    request: DeleteCustomModelRequest,
+  ): Promise<PineModelCatalog> =>
+    ipcRenderer.invoke(DELETE_CUSTOM_MODEL_CHANNEL, request),
+  updateCustomProvider: (
+    request: UpdateCustomProviderRequest,
+  ): Promise<PineModelCatalog> =>
+    ipcRenderer.invoke(UPDATE_CUSTOM_PROVIDER_CHANNEL, request),
+  deleteCustomProvider: (
+    request: DeleteCustomProviderRequest,
+  ): Promise<PineModelCatalog> =>
+    ipcRenderer.invoke(DELETE_CUSTOM_PROVIDER_CHANNEL, request),
   getContextCompactionStrategy: (): Promise<PineContextCompactionStrategy> =>
     ipcRenderer.invoke(GET_CONTEXT_COMPACTION_STRATEGY_CHANNEL),
   getUserProfile: (): Promise<PineUserProfile> =>

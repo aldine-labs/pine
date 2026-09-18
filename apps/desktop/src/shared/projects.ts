@@ -26,6 +26,8 @@ import type {
 } from "./attachments";
 import type {
   AddCustomModelRequest,
+  DeleteCustomModelRequest,
+  DeleteCustomProviderRequest,
   LoginProviderRequest,
   LogoutProviderRequest,
   LookupModelMetadataRequest,
@@ -36,6 +38,8 @@ import type {
   ProviderLoginResult,
   SelectModelRequest,
   SelectUtilityModelRequest,
+  UpdateCustomModelRequest,
+  UpdateCustomProviderRequest,
 } from "./models";
 import type {
   ProjectEntryReference,
@@ -231,6 +235,18 @@ export interface PineDesktopApi extends PineWindowApi {
     request: LookupModelMetadataRequest,
   ) => Promise<PineModelMetadata>;
   addCustomModel: (request: AddCustomModelRequest) => Promise<PineModelCatalog>;
+  updateCustomModel: (
+    request: UpdateCustomModelRequest,
+  ) => Promise<PineModelCatalog>;
+  deleteCustomModel: (
+    request: DeleteCustomModelRequest,
+  ) => Promise<PineModelCatalog>;
+  updateCustomProvider: (
+    request: UpdateCustomProviderRequest,
+  ) => Promise<PineModelCatalog>;
+  deleteCustomProvider: (
+    request: DeleteCustomProviderRequest,
+  ) => Promise<PineModelCatalog>;
   getContextCompactionStrategy: () => Promise<PineContextCompactionStrategy>;
   getUserProfile: () => Promise<PineUserProfile>;
   getTinyFishCredentialStatus: () => Promise<TinyFishCredentialStatus>;

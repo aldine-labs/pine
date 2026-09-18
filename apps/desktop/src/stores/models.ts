@@ -2,6 +2,8 @@ import { acceptHMRUpdate, defineStore } from "pinia";
 import { computed, ref, shallowRef } from "vue";
 import type {
   AddCustomModelRequest,
+  DeleteCustomModelRequest,
+  DeleteCustomProviderRequest,
   PineAuthType,
   PineModelCatalog,
   PineModelDescriptor,
@@ -9,6 +11,8 @@ import type {
   PineProviderAuthNotice,
   PineProviderAuthPrompt,
   PineProviderDescriptor,
+  UpdateCustomModelRequest,
+  UpdateCustomProviderRequest,
 } from "@/shared/models";
 
 interface ProviderLoginState {
@@ -235,6 +239,30 @@ export const useModelsStore = defineStore("models", () => {
     catalog.value = await window.pine.addCustomModel(input);
   }
 
+  async function updateCustomModel(
+    input: UpdateCustomModelRequest,
+  ): Promise<void> {
+    catalog.value = await window.pine.updateCustomModel(input);
+  }
+
+  async function deleteCustomModel(
+    input: DeleteCustomModelRequest,
+  ): Promise<void> {
+    catalog.value = await window.pine.deleteCustomModel(input);
+  }
+
+  async function updateCustomProvider(
+    input: UpdateCustomProviderRequest,
+  ): Promise<void> {
+    catalog.value = await window.pine.updateCustomProvider(input);
+  }
+
+  async function deleteCustomProvider(
+    input: DeleteCustomProviderRequest,
+  ): Promise<void> {
+    catalog.value = await window.pine.deleteCustomProvider(input);
+  }
+
   async function select(
     model: PineModelDescriptor,
     thinkingLevel?: PineModelSelection["thinkingLevel"],
@@ -345,6 +373,8 @@ export const useModelsStore = defineStore("models", () => {
 
   return {
     addCustomModel,
+    deleteCustomModel,
+    deleteCustomProvider,
     beginLogin,
     cancelLogin,
     catalog,
@@ -375,6 +405,8 @@ export const useModelsStore = defineStore("models", () => {
     setSessionSelection,
     setThinkingLevel,
     toggleFavorite,
+    updateCustomModel,
+    updateCustomProvider,
     utilitySelectedModel,
     utilitySelection,
   };

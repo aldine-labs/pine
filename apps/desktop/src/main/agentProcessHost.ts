@@ -6,11 +6,15 @@ import type { PineContextCompactionStrategy } from "../shared/preferences";
 import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
 import type {
   AddCustomModelRequest,
+  DeleteCustomModelRequest,
+  DeleteCustomProviderRequest,
   LoginProviderRequest,
   PineModelCatalog,
   PineThinkingLevel,
   PineUtilityModelSelection,
   ProviderLoginResult,
+  UpdateCustomModelRequest,
+  UpdateCustomProviderRequest,
 } from "../shared/models";
 import type {
   AgentSessionLocation,
@@ -63,6 +67,22 @@ export interface AgentHost {
   addCustomModel(
     agentDir: string,
     request: AddCustomModelRequest,
+  ): Promise<PineModelCatalog>;
+  updateCustomModel(
+    agentDir: string,
+    request: UpdateCustomModelRequest,
+  ): Promise<PineModelCatalog>;
+  deleteCustomModel(
+    agentDir: string,
+    request: DeleteCustomModelRequest,
+  ): Promise<PineModelCatalog>;
+  updateCustomProvider(
+    agentDir: string,
+    request: UpdateCustomProviderRequest,
+  ): Promise<PineModelCatalog>;
+  deleteCustomProvider(
+    agentDir: string,
+    request: DeleteCustomProviderRequest,
   ): Promise<PineModelCatalog>;
   loginProvider(
     agentDir: string,
@@ -211,6 +231,42 @@ export class AgentProcessHost implements AgentHost {
     request: AddCustomModelRequest,
   ): Promise<PineModelCatalog> {
     return this.request({ type: "models:add-custom", agentDir, ...request });
+  }
+
+  updateCustomModel(
+    agentDir: string,
+    request: UpdateCustomModelRequest,
+  ): Promise<PineModelCatalog> {
+    return this.request({ type: "models:update-custom", agentDir, ...request });
+  }
+
+  deleteCustomModel(
+    agentDir: string,
+    request: DeleteCustomModelRequest,
+  ): Promise<PineModelCatalog> {
+    return this.request({ type: "models:delete-custom", agentDir, ...request });
+  }
+
+  updateCustomProvider(
+    agentDir: string,
+    request: UpdateCustomProviderRequest,
+  ): Promise<PineModelCatalog> {
+    return this.request({
+      type: "providers:update-custom",
+      agentDir,
+      ...request,
+    });
+  }
+
+  deleteCustomProvider(
+    agentDir: string,
+    request: DeleteCustomProviderRequest,
+  ): Promise<PineModelCatalog> {
+    return this.request({
+      type: "providers:delete-custom",
+      agentDir,
+      ...request,
+    });
   }
 
   loginProvider(
