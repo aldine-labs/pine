@@ -42,11 +42,7 @@ import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
 import { useFileToSession } from "@/composables/useFileToSession";
 import { useSessionExport } from "@/composables/useSessionExport";
 import { FILE_TAB_DRAG_TYPE, hasFileTabDrag } from "@/lib/contentTabDrag";
-import {
-  hasSessionDrag,
-  readSessionDrag,
-  writeSessionDrag,
-} from "@/lib/sessionDrag";
+import { readSessionDrag, writeSessionDrag } from "@/lib/sessionDrag";
 import type { PineSessionGroup } from "@/shared/projects";
 import type { PineSessionSummary } from "@/shared/sessions";
 import { useContentTabsStore } from "@/stores/contentTabs";
@@ -101,9 +97,11 @@ const { sendFile } = useFileToSession();
 const { exportSession } = useSessionExport();
 const dropSessionId = ref<string | null>(null);
 const dropGroupId = ref<string | null>(null);
+const draggingSessionId = ref<string | null>(null);
 useEventListener(window, "dragend", () => {
   dropSessionId.value = null;
   dropGroupId.value = null;
+  draggingSessionId.value = null;
 });
 
 function dragOverSession(event: DragEvent, session: PineSessionSummary): void {
@@ -140,10 +138,9 @@ function dropOnSession(event: DragEvent, session: PineSessionSummary): void {
 }
 
 function dragOverGroup(event: DragEvent, group: PineSessionGroup): void {
-  if (!hasSessionDrag(event.dataTransfer)) return;
-  const sessionId = event.dataTransfer
-    ? readSessionDrag(event.dataTransfer)
-    : undefined;
+  const sessionId =
+    draggingSessionId.value ||
+    (event.dataTransfer ? readSessionDrag(event.dataTransfer) : undefined);
   if (!sessionId) return;
   event.preventDefault();
   event.stopPropagation();
@@ -161,10 +158,9 @@ function leaveGroup(event: DragEvent): void {
 }
 
 function dropOnGroup(event: DragEvent, group: PineSessionGroup): void {
-  if (!hasSessionDrag(event.dataTransfer)) return;
-  const sessionId = event.dataTransfer
-    ? readSessionDrag(event.dataTransfer)
-    : undefined;
+  const sessionId =
+    draggingSessionId.value ||
+    (event.dataTransfer ? readSessionDrag(event.dataTransfer) : undefined);
   if (!sessionId) return;
   event.preventDefault();
   event.stopPropagation();
@@ -186,6 +182,7 @@ const groupPendingDelete = ref<PineSessionGroup | null>(null);
 const isGroupDeleteDialogOpen = ref(false);
 const isDeletingGroup = ref(false);
 const openGroupId = ref<string | null>(null);
+const contextMenuGroupId = ref<string | null>(null);
 let groupCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
 watch(isDeleteDialogOpen, (open) => {
@@ -272,15 +269,32 @@ function openGroupMenu(groupId: string): void {
 
 function scheduleCloseGroupMenu(groupId: string): void {
   clearGroupCloseTimer();
+  if (contextMenuGroupId.value === groupId) return;
   groupCloseTimer = setTimeout(() => {
-    if (openGroupId.value === groupId) openGroupId.value = null;
+    if (contextMenuGroupId.value !== groupId && openGroupId.value === groupId)
+      openGroupId.value = null;
     groupCloseTimer = undefined;
   }, 120);
 }
 
 function updateGroupMenuOpen(groupId: string, open: boolean): void {
   if (open) openGroupMenu(groupId);
-  else if (openGroupId.value === groupId) openGroupId.value = null;
+  else if (
+    contextMenuGroupId.value !== groupId &&
+    openGroupId.value === groupId
+  )
+    openGroupId.value = null;
+}
+
+function updateGroupContextMenu(groupId: string, open: boolean): void {
+  if (open) {
+    clearGroupCloseTimer();
+    contextMenuGroupId.value = groupId;
+    openGroupId.value = groupId;
+  } else if (contextMenuGroupId.value === groupId) {
+    contextMenuGroupId.value = null;
+    scheduleCloseGroupMenu(groupId);
+  }
 }
 
 function requestCreateGroup(): void {
@@ -376,7 +390,9 @@ async function moveSessionToGroup(
 }
 
 function startSessionDrag(event: DragEvent, session: PineSessionSummary): void {
-  if (event.dataTransfer) writeSessionDrag(event.dataTransfer, session);
+  if (!event.dataTransfer) return;
+  writeSessionDrag(event.dataTransfer, session);
+  draggingSessionId.value = session.id;
 }
 
 function requestSessionDeletion(session: PineSessionSummary): void {
@@ -445,6 +461,10 @@ watch(
               :data-session-group-id="group.id"
               @mouseenter="openGroupMenu(group.id)"
               @mouseleave="scheduleCloseGroupMenu(group.id)"
+              @dragenter="dragOverGroup($event, group)"
+              @dragover="dragOverGroup($event, group)"
+              @dragleave="leaveGroup"
+              @drop="dropOnGroup($event, group)"
             >
               <ContextMenu>
                 <ContextMenuTrigger as-child>
@@ -462,9 +482,6 @@ watch(
                             'bg-sidebar-accent ring-1 ring-sidebar-ring':
                               dropGroupId === group.id,
                           }"
-                          @dragover="dragOverGroup($event, group)"
-                          @dragleave="leaveGroup"
-                          @drop="dropOnGroup($event, group)"
                         >
                           <FolderOpen aria-hidden="true" />
                           <span class="min-w-0 flex-1 truncate text-left">
@@ -477,6 +494,7 @@ watch(
                         side="right"
                         align="start"
                         class="w-64"
+                        @contextmenu="updateGroupContextMenu(group.id, true)"
                         @mouseenter="clearGroupCloseTimer"
                         @mouseleave="scheduleCloseGroupMenu(group.id)"
                       >
@@ -490,6 +508,9 @@ watch(
                             @export="exportSession(session.id)"
                             @move="moveSessionToGroup(session, $event)"
                             @delete="requestSessionDeletion(session)"
+                            @context-menu-open="
+                              updateGroupContextMenu(group.id, $event)
+                            "
                           >
                             <DropdownMenuItem @select="openSession(session)">
                               <span class="min-w-0 truncate">
@@ -569,6 +590,7 @@ watch(
               <SidebarMenuItem
                 v-for="session in group.sessions"
                 :key="session.id"
+                @dragstart="startSessionDrag($event, session)"
               >
                 <SessionContextMenu
                   :groups="conversationGroups"
@@ -594,7 +616,6 @@ watch(
                       session.id === activeSessionTab.sessionId
                     "
                     @click="openSession(session)"
-                    @dragstart="startSessionDrag($event, session)"
                   >
                     <span class="min-w-0 flex-1 truncate">
                       {{ sessionTitle(session) }}

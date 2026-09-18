@@ -151,11 +151,16 @@ describe("ProjectSessionList", () => {
     });
     await flushPromises();
 
+    const data = new Map<string, string>();
     const transfer = {
-      types: [SESSION_DRAG_TYPE],
-      getData: () => session.id,
+      types: [],
+      setData: (type: string, value: string) => data.set(type, value),
+      getData: (type: string) => data.get(type) ?? "",
       dropEffect: "none",
     };
+    const source = wrapper.get(`[data-session-id="${session.id}"]`);
+    await source.trigger("dragstart", { dataTransfer: transfer });
+    expect(data.get(SESSION_DRAG_TYPE)).toBe(session.id);
     const target = wrapper.get("[data-session-group-drop-target]");
     await target.trigger("dragover", { dataTransfer: transfer });
     expect(transfer.dropEffect).toBe("move");

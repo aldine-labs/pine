@@ -32,6 +32,7 @@ const emit = defineEmits<{
   export: [];
   move: [groupId: string | null];
   delete: [];
+  "context-menu-open": [open: boolean];
 }>();
 
 const { t } = useI18n();
@@ -39,6 +40,7 @@ const groupedSessionIds = computed(
   () => new Set(props.groups.flatMap((group) => group.sessionIds)),
 );
 const isGroupSubmenuOpen = ref(false);
+const isContextMenuOpen = ref(false);
 let groupSubmenuCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
 function clearGroupSubmenuCloseTimer(): void {
@@ -66,12 +68,22 @@ function updateGroupSubmenuOpen(open: boolean): void {
   else scheduleCloseGroupSubmenu();
 }
 
+function updateContextMenuOpen(open: boolean): void {
+  isContextMenuOpen.value = open;
+  emit("context-menu-open", open);
+}
+
 onUnmounted(clearGroupSubmenuCloseTimer);
 </script>
 
 <template>
-  <ContextMenu>
-    <ContextMenuTrigger as-child>
+  <ContextMenu @update:open="updateContextMenuOpen">
+    <ContextMenuTrigger
+      as-child
+      :class="{
+        'bg-accent text-accent-foreground': isContextMenuOpen,
+      }"
+    >
       <slot />
     </ContextMenuTrigger>
     <ContextMenuContent>
