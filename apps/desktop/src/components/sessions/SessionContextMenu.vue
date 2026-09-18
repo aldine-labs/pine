@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Download,
@@ -38,6 +38,35 @@ const { t } = useI18n();
 const groupedSessionIds = computed(
   () => new Set(props.groups.flatMap((group) => group.sessionIds)),
 );
+const isGroupSubmenuOpen = ref(false);
+let groupSubmenuCloseTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearGroupSubmenuCloseTimer(): void {
+  if (groupSubmenuCloseTimer) {
+    clearTimeout(groupSubmenuCloseTimer);
+    groupSubmenuCloseTimer = undefined;
+  }
+}
+
+function openGroupSubmenu(): void {
+  clearGroupSubmenuCloseTimer();
+  isGroupSubmenuOpen.value = true;
+}
+
+function scheduleCloseGroupSubmenu(): void {
+  clearGroupSubmenuCloseTimer();
+  groupSubmenuCloseTimer = setTimeout(() => {
+    isGroupSubmenuOpen.value = false;
+    groupSubmenuCloseTimer = undefined;
+  }, 300);
+}
+
+function updateGroupSubmenuOpen(open: boolean): void {
+  if (open) openGroupSubmenu();
+  else scheduleCloseGroupSubmenu();
+}
+
+onUnmounted(clearGroupSubmenuCloseTimer);
 </script>
 
 <template>
@@ -55,12 +84,22 @@ const groupedSessionIds = computed(
           <Download aria-hidden="true" />
           {{ t("sessions.exportAction") }}
         </ContextMenuItem>
-        <ContextMenuSub v-if="props.groups.length > 0">
-          <ContextMenuSubTrigger>
+        <ContextMenuSub
+          v-if="props.groups.length > 0"
+          v-model:open="isGroupSubmenuOpen"
+          @update:open="updateGroupSubmenuOpen"
+        >
+          <ContextMenuSubTrigger
+            @pointerenter="openGroupSubmenu"
+            @pointerleave="scheduleCloseGroupSubmenu"
+          >
             <FolderPlus aria-hidden="true" />
             {{ t("sessions.moveToGroupAction") }}
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent>
+          <ContextMenuSubContent
+            @pointerenter="openGroupSubmenu"
+            @pointerleave="scheduleCloseGroupSubmenu"
+          >
             <ContextMenuGroup>
               <ContextMenuItem
                 v-for="group in props.groups"

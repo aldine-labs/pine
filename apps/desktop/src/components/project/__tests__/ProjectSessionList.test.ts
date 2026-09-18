@@ -80,7 +80,94 @@ describe("ProjectSessionList", () => {
     await item.trigger("dragstart", { dataTransfer: transfer });
 
     expect(data.get(SESSION_DRAG_TYPE)).toBe(session.id);
-    expect(transfer.effectAllowed).toBe("copy");
+    expect(transfer.effectAllowed).toBe("copyMove");
+    wrapper.unmount();
+  });
+
+  it("moves a conversation into a group when dropped on the group", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/", component: { template: "<div />" } }],
+    });
+    await router.push("/");
+    const group = {
+      id: "group-1",
+      name: "Planning",
+      sessionIds: [],
+    };
+    const groupedProject: PineProject = {
+      ...project,
+      sessionGroups: [group],
+    };
+    const updatedProject: PineProject = {
+      ...groupedProject,
+      sessionGroups: [{ ...group, sessionIds: [session.id] }],
+      updatedAt: "2026-08-26T00:00:00.000Z",
+    };
+    const updateProjectSessionGroups = vi.fn().mockResolvedValue({
+      project: updatedProject,
+    });
+    Object.defineProperty(window, "pine", {
+      configurable: true,
+      value: {
+        searchSessions: vi.fn().mockResolvedValue({ sessions: [session] }),
+        updateProjectSessionGroups,
+      },
+    });
+    useProjectStore().activeProject = groupedProject;
+    const slotStub = { template: "<div><slot /></div>" };
+    const wrapper = mount(ProjectSessionList, {
+      global: {
+        plugins: [pinia, router, createAppI18n("en-US")],
+        stubs: {
+          ContextMenu: slotStub,
+          ContextMenuContent: slotStub,
+          ContextMenuGroup: slotStub,
+          ContextMenuItem: slotStub,
+          ContextMenuSub: slotStub,
+          ContextMenuSubContent: slotStub,
+          ContextMenuSubTrigger: slotStub,
+          ContextMenuTrigger: slotStub,
+          DropdownMenu: slotStub,
+          DropdownMenuContent: slotStub,
+          DropdownMenuGroup: slotStub,
+          DropdownMenuItem: slotStub,
+          DropdownMenuTrigger: slotStub,
+          ScrollArea: slotStub,
+          SidebarGroup: slotStub,
+          SidebarGroupContent: slotStub,
+          SidebarGroupLabel: slotStub,
+          SidebarMenu: slotStub,
+          SidebarMenuButton: {
+            template: '<button v-bind="$attrs"><slot /></button>',
+          },
+          SidebarMenuItem: slotStub,
+          SidebarMenuSkeleton: true,
+          SessionContextMenu: slotStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    const transfer = {
+      types: [SESSION_DRAG_TYPE],
+      getData: () => session.id,
+      dropEffect: "none",
+    };
+    const target = wrapper.get("[data-session-group-drop-target]");
+    await target.trigger("dragover", { dataTransfer: transfer });
+    expect(transfer.dropEffect).toBe("move");
+    expect(target.classes()).toContain("bg-sidebar-accent");
+
+    await target.trigger("drop", { dataTransfer: transfer });
+    await flushPromises();
+
+    expect(updateProjectSessionGroups).toHaveBeenCalledWith({
+      id: project.id,
+      sessionGroups: [{ ...group, sessionIds: [session.id] }],
+    });
     wrapper.unmount();
   });
 

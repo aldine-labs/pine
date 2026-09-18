@@ -17,5 +17,7 @@ export function writeSessionDrag(
   session: Pick<PineSessionSummary, "id">,
 ): void {
   transfer.setData(SESSION_DRAG_TYPE, session.id);
-  transfer.effectAllowed = "copy";
+  // Session drags can either be copied into a session as an attachment or
+  // moved into a session group.
+  transfer.effectAllowed = "copyMove";
 }

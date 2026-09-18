@@ -42,7 +42,11 @@ import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
 import { useFileToSession } from "@/composables/useFileToSession";
 import { useSessionExport } from "@/composables/useSessionExport";
 import { FILE_TAB_DRAG_TYPE, hasFileTabDrag } from "@/lib/contentTabDrag";
-import { writeSessionDrag } from "@/lib/sessionDrag";
+import {
+  hasSessionDrag,
+  readSessionDrag,
+  writeSessionDrag,
+} from "@/lib/sessionDrag";
 import type { PineSessionGroup } from "@/shared/projects";
 import type { PineSessionSummary } from "@/shared/sessions";
 import { useContentTabsStore } from "@/stores/contentTabs";
@@ -96,8 +100,10 @@ const contentTabsStore = useContentTabsStore();
 const { sendFile } = useFileToSession();
 const { exportSession } = useSessionExport();
 const dropSessionId = ref<string | null>(null);
+const dropGroupId = ref<string | null>(null);
 useEventListener(window, "dragend", () => {
   dropSessionId.value = null;
+  dropGroupId.value = null;
 });
 
 function dragOverSession(event: DragEvent, session: PineSessionSummary): void {
@@ -131,6 +137,39 @@ function dropOnSession(event: DragEvent, session: PineSessionSummary): void {
   if (file?.kind === "file" && file.source === "project") {
     void sendFile(file, session);
   }
+}
+
+function dragOverGroup(event: DragEvent, group: PineSessionGroup): void {
+  if (!hasSessionDrag(event.dataTransfer)) return;
+  const sessionId = event.dataTransfer
+    ? readSessionDrag(event.dataTransfer)
+    : undefined;
+  if (!sessionId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  dropGroupId.value = group.id;
+}
+
+function leaveGroup(event: DragEvent): void {
+  if (
+    event.relatedTarget instanceof Node &&
+    (event.currentTarget as HTMLElement).contains(event.relatedTarget)
+  )
+    return;
+  dropGroupId.value = null;
+}
+
+function dropOnGroup(event: DragEvent, group: PineSessionGroup): void {
+  if (!hasSessionDrag(event.dataTransfer)) return;
+  const sessionId = event.dataTransfer
+    ? readSessionDrag(event.dataTransfer)
+    : undefined;
+  if (!sessionId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  dropGroupId.value = null;
+  void moveSessionToGroup(sessionId, group.id);
 }
 const { activeSessionTab } = tabNavigation;
 const { activeProject } = storeToRefs(projectStore);
@@ -311,17 +350,19 @@ async function deleteGroup(): Promise<void> {
 }
 
 async function moveSessionToGroup(
-  session: PineSessionSummary,
+  sessionOrId: PineSessionSummary | string,
   groupId: string | null,
 ): Promise<void> {
+  const sessionId =
+    typeof sessionOrId === "string" ? sessionOrId : sessionOrId.id;
   const groups = conversationGroups.value.map((group) => ({
     ...group,
     sessionIds: group.sessionIds.filter(
-      (sessionId) => sessionId !== session.id,
+      (groupSessionId) => groupSessionId !== sessionId,
     ),
   }));
   const target = groups.find((group) => group.id === groupId);
-  if (target) target.sessionIds = [...target.sessionIds, session.id];
+  if (target) target.sessionIds = [...target.sessionIds, sessionId];
 
   try {
     await projectStore.updateSessionGroups(groups);
@@ -413,7 +454,18 @@ watch(
                       @update:open="updateGroupMenuOpen(group.id, $event)"
                     >
                       <DropdownMenuTrigger as-child>
-                        <SidebarMenuButton class="min-w-0" variant="default">
+                        <SidebarMenuButton
+                          class="min-w-0"
+                          variant="default"
+                          data-session-group-drop-target
+                          :class="{
+                            'bg-sidebar-accent ring-1 ring-sidebar-ring':
+                              dropGroupId === group.id,
+                          }"
+                          @dragover="dragOverGroup($event, group)"
+                          @dragleave="leaveGroup"
+                          @drop="dropOnGroup($event, group)"
+                        >
                           <FolderOpen aria-hidden="true" />
                           <span class="min-w-0 flex-1 truncate text-left">
                             {{ group.name }}
