@@ -9,6 +9,20 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-09-18
+
+### 新增 / Added
+
+- 新增了通过拖拽的方式将对话归类到分组的功能。Added the ability to categorize conversations into groups via drag-and-drop.
+
+### 修复 / Fixed
+
+- 修复了自定义提供商和自定义模型无法被用户编辑或者删除的问题。Fixed an issue where custom providers and custom models could not be edited or deleted by the user.
+
+### 变更 / Changed
+
+- 更换了部分图标，优化视觉。Replaced some icons and optimized the visual design.
+
 ## [0.4.7] - 2026-09-17
 
 ### 修复 / Fixed
@@ -197,7 +211,8 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.7...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.8...HEAD
+[0.4.8]: https://github.com/phosphoros-works/pine/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/phosphoros-works/pine/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/phosphoros-works/pine/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/phosphoros-works/pine/compare/v0.4.4...v0.4.5
