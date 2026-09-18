@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MessageSquareIcon, MessageSquarePlusIcon, XIcon } from "@lucide/vue";
+import { MessageCircleIcon, MessageCirclePlusIcon, XIcon } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import type { ComponentPublicInstance } from "vue";
 import {
@@ -313,7 +313,7 @@ function getTabLabel(tab: ProjectContentTab): string {
 
 function tabIcon(tab: ProjectContentTab) {
   return tab.kind === "session"
-    ? MessageSquareIcon
+    ? MessageCircleIcon
     : fileIcon(fileTargetPath(tab));
 }
 
@@ -522,7 +522,7 @@ watch(activeSession, (session) => {
         :aria-label="t('project.contentTabs.addTab')"
         @click="tabNavigation.createSessionTab"
       >
-        <MessageSquarePlusIcon />
+        <MessageCirclePlusIcon />
       </Button>
     </div>
 

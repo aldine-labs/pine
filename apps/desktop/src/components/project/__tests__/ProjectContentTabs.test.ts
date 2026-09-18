@@ -133,6 +133,18 @@ const secondSession: PineSessionSummary = {
 };
 
 describe("ProjectContentTabs", () => {
+  it("uses circular message icons for session tabs and actions", async () => {
+    const { wrapper } = await mountTabs();
+
+    const sessionIcon = wrapper.get('[role="tab"] svg');
+    expect(sessionIcon.classes()).toContain("lucide-message-circle");
+    expect(sessionIcon.attributes("data-icon")).toBe("inline-start");
+
+    const addTab = wrapper.get('button[aria-label="Add session tab"]');
+    expect(addTab.get("svg").classes()).toContain("lucide-message-circle-plus");
+    wrapper.unmount();
+  });
+
   it("retains connected session and file scrollports and drafts across activation and reorder", async () => {
     const { wrapper, router, file } = await mountTabs(true);
     const store = useContentTabsStore();
