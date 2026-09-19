@@ -9,6 +9,26 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-19
+
+### 新增 / Added
+
+- 新增 AI 图像生成：常驻的 `activate_media_generation` 工具按需启用 `generate_image`，模型可以写提示词、设置参数并把图片生成到项目文件中。Added AI image generation: the always-visible `activate_media_generation` tool enables `generate_image` on demand, so the model can write prompts, set parameters, and save generated images as project files.
+- 重写全局偏好设置为左侧分类、右侧选项的对话框，改为用户画像、模型与图像模型、执行环境等分组，并加入图像模型选择器。Rebuilt global preferences as a sectioned dialog with a category rail on the left and options on the right, covering the user profile, models and the image model, and the execution environment.
+
+### 变更 / Changed
+
+- 生成的图片不再自动用预览器打开；需要呈现给用户时，模型会先把文件放到与 Pine 共享的目录再调用呈现工具。Generated images are no longer opened in a preview automatically; to show one, the model first copies the file into a folder shared with Pine and then calls the presentation tool.
+- 图像生成始终使用用户在设置中选择的模型，模型自身无法指定其它图像模型。Image generation always runs on the model the user picked in settings; the model itself cannot name a different image model.
+- 新会话页背景视差增强上下方向的阻力，拉开图标之间的不透明度层次；Harness 分组本地化为“执行环境”。The new-session parallax now damps vertical travel harder and spreads icon opacity more clearly; the Harness section is localized as 执行环境.
+- Pi 的模型目录可以在 Pi 发版前单独刷新（构建与发版仍基于 npm 上已发布的包），新模型不必等到下一个 Pi 版本。Pi's model catalogs can now be refreshed ahead of a Pi release while builds stay on the published npm packages, so new models no longer wait for the next Pi version.
+
+### 修复 / Fixed
+
+- 修复 OpenRouter 纯图像模型（如 `openai/gpt-image-2.5-flare`）报 “cannot be used with the chat/completions endpoint” 而无法出图的问题，改走 OpenRouter 专用图像 API。Fixed pure image models on OpenRouter (for example `openai/gpt-image-2.5-flare`) failing with "cannot be used with the chat/completions endpoint"; they now use OpenRouter's dedicated image API.
+- 修复项目选择页背景动画让 CPU 持续接近 100% 的问题，只重绘发生变化的格子。Fixed the project start page background animation pegging the CPU near 100% by repainting only the cells that change.
+- 修复呈现文件时 `project-files:preview-presented` 没有处理函数导致的报错。Fixed the `project-files:preview-presented` error thrown when presenting a file.
+
 ## [0.4.8] - 2026-09-18
 
 ### 新增 / Added
