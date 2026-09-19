@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   MAX_TEXT_PREVIEW_BYTES,
+  projectMediaUrl,
   readProjectFilePreview,
   serveProjectMedia,
 } from "../projectFilePreview";
@@ -19,6 +20,33 @@ afterEach(async () => {
 });
 
 describe("file preview", () => {
+  it("mints owner-scoped media URLs and flags presented files", () => {
+    const projectUrl = new URL(
+      projectMediaUrl(7, {
+        folderId: "folder-1",
+        projectId: "project-1",
+        relativePath: "assets/hero.png",
+      }),
+    );
+    expect(projectUrl.protocol).toBe("pine-project-media:");
+    expect(projectUrl.hostname).toBe("preview");
+    expect(Object.fromEntries(projectUrl.searchParams)).toEqual({
+      folderId: "folder-1",
+      owner: "7",
+      projectId: "project-1",
+      relativePath: "assets/hero.png",
+    });
+
+    const presentedUrl = new URL(
+      projectMediaUrl(7, { path: "/tmp/generated.png" }, { presented: true }),
+    );
+    expect(Object.fromEntries(presentedUrl.searchParams)).toEqual({
+      owner: "7",
+      path: "/tmp/generated.png",
+      presented: "1",
+    });
+  });
+
   it("reads text without executing HTML and preserves whitespace and UTF-16", async () => {
     const text = "<script>alert(1)</script>\n  你好\n\n";
     for (const [name, contents] of [

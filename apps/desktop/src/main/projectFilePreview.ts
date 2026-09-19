@@ -5,8 +5,36 @@ import type {
   OfficeDocumentFormat,
   ProjectFilePreview,
 } from "../shared/projectFiles";
+import { PROJECT_MEDIA_PROTOCOL } from "../shared/projectFiles";
 
 export const MAX_TEXT_PREVIEW_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Marks a project-media URL that serves a presented file rather than a project
+ * entry, so the protocol re-checks the window's presented-file grants.
+ */
+export const PRESENTED_MEDIA_PARAM = "presented";
+
+/**
+ * Builds the media URL a preview reads its bytes from. Every URL names the
+ * window allowed to read the file; presented files add the flag that switches
+ * the protocol from project-entry lookup to the presented-file grant check.
+ */
+export function projectMediaUrl(
+  ownerId: number,
+  params: Record<string, string>,
+  options: { presented?: boolean } = {},
+): string {
+  const url = URL.parse(`${PROJECT_MEDIA_PROTOCOL}://preview/`);
+  if (!url) throw new Error("Failed to construct the project media URL.");
+  url.search = new URLSearchParams({
+    ...params,
+    owner: String(ownerId),
+    ...(options.presented ? { [PRESENTED_MEDIA_PARAM]: "1" } : {}),
+  }).toString();
+  return url.href;
+}
+
 const mediaTypes: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",

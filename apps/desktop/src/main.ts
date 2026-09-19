@@ -25,7 +25,9 @@ import { ProjectRuntimeRegistry } from "./main/projectRuntime";
 import { PresentedFileRegistry } from "./main/presentedFiles";
 import { TinyFishCredentialStore } from "./main/tinyfishCredentials";
 import {
+  PRESENTED_MEDIA_PARAM,
   readProjectFilePreview,
+  projectMediaUrl,
   serveProjectMedia,
 } from "./main/projectFilePreview";
 import { installWindowShortcuts } from "./main/windowShortcuts";
@@ -182,6 +184,7 @@ import {
   LIST_PROJECT_DIRECTORY_CHANNEL,
   START_PROJECT_FILE_DRAG_CHANNEL,
   READ_PROJECT_FILE_PREVIEW_CHANNEL,
+  READ_PRESENTED_FILE_PREVIEW_CHANNEL,
   PROJECT_MEDIA_PROTOCOL,
   PROJECT_FILES_CHANGED_CHANNEL,
   SET_WATCHED_PROJECT_DIRECTORIES_CHANNEL,
@@ -462,12 +465,6 @@ const ProjectFilePreviewRequestSchema = ProjectEntryReferenceSchema.extend({
 const PresentedFilePreviewRequestSchema = z.object({
   path: z.string().min(1).max(4096),
 });
-/**
- * Marks a project-media URL that serves a presented file rather than a project
- * entry. These URLs are minted by main, and the protocol re-checks the window's
- * presented-file grants on every request.
- */
-const PRESENTED_MEDIA_PARAM = "presented";
 
 async function previewPath(ownerId: number, request: unknown): Promise<string> {
   const entry = ProjectFilePreviewRequestSchema.parse(request);
@@ -1163,15 +1160,24 @@ ipcMain.handle(
   async (event, request: unknown) => {
     const entry = ProjectFilePreviewRequestSchema.parse(request);
     const filePath = await previewPath(event.sender.id, entry);
-    const url = URL.parse(`${PROJECT_MEDIA_PROTOCOL}://preview/`);
-    if (!url) {
-      throw new Error("Failed to construct the project media URL.");
-    }
-    url.search = new URLSearchParams({
-      ...entry,
-      owner: String(event.sender.id),
-    }).toString();
-    return readProjectFilePreview(filePath, url.href);
+    return readProjectFilePreview(
+      filePath,
+      projectMediaUrl(event.sender.id, entry),
+    );
+  },
+);
+
+ipcMain.handle(
+  READ_PRESENTED_FILE_PREVIEW_CHANNEL,
+  async (event, request: unknown) => {
+    const entry = PresentedFilePreviewRequestSchema.parse(request);
+    // Presented files live outside every project folder, so the tab reads them
+    // through the window-scoped grant instead of a project entry.
+    const filePath = await presentedFilePath(event.sender.id, entry);
+    return readProjectFilePreview(
+      filePath,
+      projectMediaUrl(event.sender.id, { path: filePath }, { presented: true }),
+    );
   },
 );
 
