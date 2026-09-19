@@ -73,6 +73,25 @@ function persistModelKeys(storageKey: string, keys: readonly string[]): void {
   }
 }
 
+/**
+ * The catalog comes back from the main process as fresh objects on every read,
+ * so identity comparison can never short-circuit a re-render. Comparing the
+ * payload keeps the store from republishing an identical catalog (and dragging
+ * every model row through another render pass) each time a picker opens.
+ */
+function isSameCatalog(
+  next: PineModelCatalog,
+  current: PineModelCatalog,
+): boolean {
+  if (
+    next.models.length !== current.models.length ||
+    next.providers.length !== current.providers.length
+  ) {
+    return false;
+  }
+  return JSON.stringify(next) === JSON.stringify(current);
+}
+
 export const useModelsStore = defineStore("models", () => {
   const catalog = shallowRef<PineModelCatalog>({ models: [], providers: [] });
   const favoriteModelKeys = ref<string[]>(
@@ -200,10 +219,19 @@ export const useModelsStore = defineStore("models", () => {
 
   function recordRecent(model: PineModelDescriptor): void {
     const key = pineModelKey(model);
-    recentModelKeys.value = [
+    const next = [
       key,
       ...recentModelKeys.value.filter((candidate) => candidate !== key),
     ].slice(0, RECENT_MODEL_LIMIT);
+    if (
+      next.length === recentModelKeys.value.length &&
+      next.every(
+        (candidate, index) => candidate === recentModelKeys.value[index],
+      )
+    ) {
+      return;
+    }
+    recentModelKeys.value = next;
     persistModelKeys(MODEL_RECENTS_STORAGE_KEY, recentModelKeys.value);
   }
 
@@ -245,7 +273,10 @@ export const useModelsStore = defineStore("models", () => {
   async function load(): Promise<void> {
     isLoading.value = true;
     try {
-      catalog.value = await window.pine.getModelCatalog();
+      const nextCatalog = await window.pine.getModelCatalog();
+      if (!isSameCatalog(nextCatalog, catalog.value)) {
+        catalog.value = nextCatalog;
+      }
       const selected = selectedModel.value;
       if (selected) recordRecent(selected);
     } finally {

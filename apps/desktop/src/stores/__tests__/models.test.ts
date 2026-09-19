@@ -159,6 +159,27 @@ describe("models store lists", () => {
     expect(window.pine.getModelCatalog).toHaveBeenCalledOnce();
   });
 
+  it("keeps the published catalog when a reload returns the same payload", async () => {
+    const store = useModelsStore();
+    const published = { ...catalog, models: [...catalog.models] };
+    store.catalog = published;
+
+    await store.load();
+
+    expect(store.catalog).toBe(published);
+  });
+
+  it("publishes a catalog whose payload changed", async () => {
+    const store = useModelsStore();
+    const published = { ...catalog, models: [alpha] };
+    store.catalog = published;
+
+    await store.load();
+
+    expect(store.catalog).not.toBe(published);
+    expect(store.catalog.models).toEqual(catalog.models);
+  });
+
   it("selects a dedicated utility model without changing the session model", async () => {
     const store = useModelsStore();
     store.catalog = {
