@@ -37,12 +37,11 @@
 
 ## Pi 依赖同步
 
-- Pi 的内置模型目录是上游仓库在发版时生成的快照，npm 版本可能比上游 `main` 落后数周。`bun run sync:pi` 浅克隆上游到 `.pi-src/`（已 gitignore），构建 Pine 运行时加载的整组包（chord、pi-tui、pi-telemetry、pi-ai、pi-agent-core、pi-coding-agent），连同各包声明的依赖版本安装进 `node_modules/@earendil-works/*`。
-- **绝不做部分覆盖。** 只覆盖 `pi-ai` 而保留 npm 的 `pi-coding-agent` 会让 agent 静默丢失全部工具和 system prompt（上游把 stream 入口换成了 `TranscriptContext`）。`verify-pi-agent.mjs` 在同步后用一个 mock provider 真跑一轮 agent 来兜住这类问题，`bun run verify:pi` 可单独运行。
-- `predev` 会在启动前同步（容错：失败回退到上一个通过校验的 commit，再回退到 npm 版本，只警告），`prebuild` 以 `--strict` 同步（回退后仍失败即终止）。`bun run check` 不同步。
-- 常用开关：`PI_SYNC=off` 跳过同步、`PI_REF=<branch|tag|sha>` 指定上游版本、`--force` 强制重建、`--check` 离线检查当前覆盖状态。
-- 上游 API 变动会立刻出现在我们的 typecheck 里；同步后必须跑 `bun run check`，并接受在同一次改动中适配上游 API。
-- 只改同步脚本、校验脚本、文档或依赖覆盖机制时属于基础设施改动，与功能改动分开提交。完整机制与回滚策略见 `docs/architecture/pi-source-sync.md`。
+- **基线是 npm 发布版**：Pine 运行的 `@earendil-works/pi-*` 永远以 `bun.lock` 里解析出的发布版本为准，不做整包覆盖，`dev` / `build` 也不自动改动 `node_modules`。
+- Pi 的内置模型目录是上游发版时生成的快照，npm 版本可能比上游 `main` 落后数周。`bun run backport:models` 浅克隆上游到 `.pi-src/`（已 gitignore），构建上游 `packages/ai`，只把生成的目录数据（`image-models.generated.js`、`models.generated.js`、`providers/*.models.js`、`providers/data/*.json`）回填进已安装的 npm 包——不动任何要执行的代码，也不改版本号或 lockfile。
+- 首次回填会把 npm 原文件备份到 `.pi-backport-backup/`（已 gitignore），因此 `bun run backport:models --restore` 可离线还原；`--check` 报告当前是不是回填状态；`--ref <tag|sha>` 可指定上游来源。
+- `bun run verify:pi` 会用 mock provider 真跑一轮 agent 并断言请求里带 system prompt 和工具定义。它不随 backport 自动运行（需要绑定本地端口），但排查"agent 没有工具"这类问题时应该先跑它。
+- 不要重新引入"构建前自动同步整包"的机制：上游 `main` 不是 API 契约，部分覆盖曾让 agent 静默丢失全部工具和 system prompt。原因与历史见 `docs/architecture/pi-model-backport.md`。
 
 ## shadcn-vue 组件流程
 
