@@ -1,31 +1,36 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { defineComponent, h } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { createAppI18n } from "@/app/i18n";
+import { Command } from "@/components/ui/command";
 import type { PineModelCatalog, PineModelDescriptor } from "@/shared/models";
 import { useModelsStore } from "@/stores/models";
 import ModelPickerDialog from "../ModelPickerDialog.vue";
 
+vi.mock("@tanstack/vue-virtual", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/vue-virtual")>();
+  const { withAllRows } = await import("./helpers/virtualRows");
+  return {
+    ...actual,
+    useVirtualizer: withAllRows(actual.useVirtualizer),
+  };
+});
+
 const passthroughStub = { template: "<div><slot /></div>" };
-const commandItemStub = {
-  props: ["disabled", "value"],
-  emits: ["select"],
-  template: `
-    <div
-      data-command-item
-      :data-value="value"
-      @click="!disabled && $emit('select')"
-    >
-      <slot />
-    </div>
-  `,
-};
 const alertDialogStub = {
   name: "AlertDialogStub",
   props: ["open"],
   emits: ["update:open"],
   template: '<div data-alert-dialog :data-open="open"><slot /></div>',
 };
+const commandDialogStub = defineComponent({
+  name: "CommandDialogStub",
+  props: { description: String, open: Boolean, title: String },
+  setup(_props, { slots }) {
+    return () => h(Command, null, { default: () => slots.default?.() });
+  },
+});
 const customModelDialogStub = {
   name: "CustomModelDialogStub",
   props: ["open", "model"],
@@ -141,13 +146,8 @@ function mountPicker(
         AlertDialogFooter: passthroughStub,
         AlertDialogHeader: passthroughStub,
         AlertDialogTitle: passthroughStub,
-        CommandDialog: passthroughStub,
-        CommandEmpty: passthroughStub,
-        CommandGroup: passthroughStub,
+        CommandDialog: commandDialogStub,
         CommandInput: passthroughStub,
-        CommandItem: commandItemStub,
-        CommandList: passthroughStub,
-        CommandSeparator: passthroughStub,
         CustomModelDialog: customModelDialogStub,
         CustomProviderDialog: customProviderDialogStub,
         ProviderAuthDialog: passthroughStub,
@@ -171,12 +171,12 @@ describe("ModelPickerDialog provider management", () => {
     const { wrapper } = mountPicker();
     await wrapper
       .get(
-        '[data-command-item][data-value="manage configure provider service model"]',
+        '[data-picker-row][data-value="manage configure provider service model"]',
       )
       .trigger("click");
 
     const values = wrapper
-      .findAll("[data-command-item]")
+      .findAll("[data-picker-row]")
       .map((item) => item.attributes("data-value"));
     expect(values.slice(0, 2)).toEqual([
       "back models",
@@ -184,9 +184,7 @@ describe("ModelPickerDialog provider management", () => {
     ]);
 
     await wrapper
-      .get(
-        '[data-command-item][data-value="add custom model provider endpoint"]',
-      )
+      .get('[data-picker-row][data-value="add custom model provider endpoint"]')
       .trigger("click");
     await flushPromises();
 
@@ -199,7 +197,7 @@ describe("ModelPickerDialog provider management", () => {
   it("confirms credential removal", async () => {
     const { getModelCatalog, logoutProvider, wrapper } = mountPicker();
     const manageItem = wrapper.get(
-      '[data-command-item][data-value="manage configure provider service model"]',
+      '[data-picker-row][data-value="manage configure provider service model"]',
     );
 
     await manageItem.trigger("click");
@@ -246,7 +244,7 @@ describe("ModelPickerDialog provider management", () => {
     await flushPromises();
     await wrapper
       .get(
-        '[data-command-item][data-value="manage configure provider service model"]',
+        '[data-picker-row][data-value="manage configure provider service model"]',
       )
       .trigger("click");
     await wrapper.get('[data-testid="custom-provider-edit"]').trigger("click");
@@ -267,7 +265,7 @@ describe("ModelPickerDialog utility model selection", () => {
   it("selects the utility model without changing the session model", async () => {
     const { selectModel, selectUtilityModel, wrapper } = mountPicker("utility");
     const modelItem = wrapper
-      .findAll("[data-command-item]")
+      .findAll("[data-picker-row]")
       .find((item) => item.attributes("data-value")?.includes(utilityModel.id));
 
     expect(modelItem).toBeDefined();
@@ -316,7 +314,7 @@ describe("ModelPickerDialog image model selection", () => {
       imageCatalog,
     );
     const modelItem = wrapper
-      .findAll("[data-command-item]")
+      .findAll("[data-picker-row]")
       .find((item) => item.attributes("data-value")?.includes(imageModel.id));
 
     expect(modelItem).toBeDefined();
@@ -339,13 +337,13 @@ describe("ModelPickerDialog image model selection", () => {
 
     await wrapper
       .get(
-        '[data-command-item][data-value="manage configure provider service model"]',
+        '[data-picker-row][data-value="manage configure provider service model"]',
       )
       .trigger("click");
 
     expect(
       wrapper
-        .findAll("[data-command-item]")
+        .findAll("[data-picker-row]")
         .map((item) => item.attributes("data-value")),
     ).toContain("back models");
     expect(wrapper.text()).toContain("OpenRouter");

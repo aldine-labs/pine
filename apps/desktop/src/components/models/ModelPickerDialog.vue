@@ -1,16 +1,4 @@
 <script setup lang="ts">
-import {
-  ArrowLeftIcon,
-  CheckIcon,
-  HeartIcon,
-  ImageIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-  UnplugIcon,
-  WrenchIcon,
-} from "@lucide/vue";
-import { storeToRefs } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { handleError } from "@/app/errors/errorHandler";
@@ -24,30 +12,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "@/components/ui/command";
+import { CommandDialog, CommandInput } from "@/components/ui/command";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 import type {
   PineImageModelDescriptor,
   PineModelDescriptor,
   PineProviderDescriptor,
 } from "@/shared/models";
-import { pineModelKey, useModelsStore } from "@/stores/models";
-import ModelCapabilities from "./ModelCapabilities.vue";
+import { useModelsStore } from "@/stores/models";
 import CustomModelDialog from "./CustomModelDialog.vue";
 import CustomProviderDialog from "./CustomProviderDialog.vue";
+import ModelPickerList from "./ModelPickerList.vue";
 import ProviderAuthDialog from "./ProviderAuthDialog.vue";
-import ProviderIcon from "./ProviderIcon.vue";
 
 type PickerView = "models" | "providers";
 
@@ -63,18 +39,7 @@ const emit = defineEmits<{ "update:open": [open: boolean] }>();
 
 const { t } = useI18n();
 const modelsStore = useModelsStore();
-const {
-  imageModels,
-  imageSelection,
-  isLoading,
-  models,
-  providers,
-  utilitySelection,
-} = storeToRefs(modelsStore);
 const isImagePurpose = computed(() => props.purpose === "image");
-const sessionSelection = computed(() =>
-  modelsStore.selectionFor(props.sessionId),
-);
 const view = ref<PickerView>("models");
 const isAuthOpen = ref(false);
 const selectedProvider = ref<PineProviderDescriptor | null>(null);
@@ -93,53 +58,6 @@ const customDeleteTarget = ref<
 const isCustomDeleteDialogOpen = ref(false);
 const isDeletingCustom = ref(false);
 const favoriteModelKeysAtOpen = ref<readonly string[]>([]);
-const providerModelGroups = computed(() =>
-  providers.value
-    .filter((provider) => provider.configured)
-    .map((provider) => ({
-      heading: provider.name,
-      id: `provider:${provider.id}`,
-      models: models.value.filter((model) => model.providerId === provider.id),
-    }))
-    .filter((group) => group.models.length > 0),
-);
-const availableModels = computed(() =>
-  providerModelGroups.value.flatMap((group) => group.models),
-);
-const modelGroups = computed(() =>
-  [
-    {
-      heading: t("models.favorites"),
-      id: "favorites",
-      models: availableModels.value.filter((model) =>
-        favoriteModelKeysAtOpen.value.includes(pineModelKey(model)),
-      ),
-    },
-    {
-      heading: t("models.recommended"),
-      id: "recommended",
-      models: availableModels.value.filter((model) =>
-        modelsStore.isRecommended(model),
-      ),
-    },
-    ...providerModelGroups.value,
-  ].filter((group) => group.models.length > 0),
-);
-/**
- * Image models are a separate pi-ai catalog served by OpenRouter only, so the
- * image purpose skips favorites, capabilities, and custom-model management.
- */
-const imageModelGroups = computed(() =>
-  imageModels.value.length > 0
-    ? [
-        {
-          heading: imageModels.value[0]?.providerName ?? "",
-          id: "image-models",
-          models: imageModels.value,
-        },
-      ]
-    : [],
-);
 const title = computed(() =>
   view.value === "providers"
     ? t("providers.picker.title")
@@ -171,25 +89,6 @@ watch(
     void modelsStore.load();
   },
 );
-
-function isSelected(model: PineModelDescriptor): boolean {
-  const selected =
-    props.purpose === "image"
-      ? imageSelection.value
-      : props.purpose === "utility"
-        ? utilitySelection.value
-        : sessionSelection.value;
-  return (
-    selected?.providerId === model.providerId && selected.modelId === model.id
-  );
-}
-
-function isImageModelSelected(model: PineImageModelDescriptor): boolean {
-  return (
-    imageSelection.value?.providerId === model.providerId &&
-    imageSelection.value.modelId === model.id
-  );
-}
 
 function canConfigure(provider: PineProviderDescriptor): boolean {
   return provider.authMethods.length > 0;
@@ -400,252 +299,26 @@ async function handleConnected(): Promise<void> {
     @update:open="emit('update:open', $event)"
   >
     <CommandInput :placeholder="searchPlaceholder" />
-    <CommandList
-      class="h-[50vh] min-h-72 max-h-[50vh] [&>[role=presentation]]:flex [&>[role=presentation]]:min-h-72 [&>[role=presentation]]:flex-col"
-    >
-      <CommandEmpty>
-        <span v-if="isLoading" class="inline-flex items-center gap-2">
-          <Spinner />
-          {{ t("models.loading") }}
-        </span>
-        <template v-else>
-          {{
-            view === "providers"
-              ? t("providers.picker.empty")
-              : isImagePurpose
-                ? t("models.picker.imageEmpty")
-                : t("models.picker.empty")
-          }}
-        </template>
-      </CommandEmpty>
-
-      <template v-if="view === 'models'">
-        <CommandGroup>
-          <CommandItem
-            value="manage configure provider service model"
-            @select="view = 'providers'"
-          >
-            <WrenchIcon aria-hidden="true" />
-            {{ t("models.picker.manageServiceOrModel") }}
-          </CommandItem>
-        </CommandGroup>
-        <CommandSeparator />
-
-        <template v-if="isImagePurpose">
-          <CommandGroup
-            v-for="group in imageModelGroups"
-            :key="group.id"
-            :heading="group.heading"
-          >
-            <CommandItem
-              v-for="model in group.models"
-              :key="`${model.providerId}:${model.id}`"
-              :value="`${model.providerName} ${model.name} ${model.id}`"
-              class="[&>svg:last-child]:hidden"
-              @select="selectImageModel(model)"
-            >
-              <CheckIcon
-                v-if="isImageModelSelected(model)"
-                aria-hidden="true"
-              />
-              <ImageIcon v-else aria-hidden="true" />
-              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span class="truncate">{{ model.name }}</span>
-                <span
-                  class="truncate text-xs font-normal text-muted-foreground"
-                >
-                  {{ model.id }}
-                </span>
-              </span>
-            </CommandItem>
-          </CommandGroup>
-        </template>
-
-        <CommandGroup
-          v-for="group in modelGroups"
-          v-else
-          :key="group.id"
-          :heading="group.heading"
-        >
-          <CommandItem
-            v-for="model in group.models"
-            :key="`${model.providerId}:${model.id}`"
-            :value="`${model.providerName} ${model.name} ${model.id}`"
-            class="[&>svg:last-child]:hidden"
-            @select="selectModel(model)"
-          >
-            <CheckIcon v-if="isSelected(model)" aria-hidden="true" />
-            <ProviderIcon
-              v-else
-              :provider-id="model.providerId"
-              :provider-name="model.providerName"
-            />
-            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span class="truncate">{{ model.name }}</span>
-              <span class="truncate text-xs font-normal text-muted-foreground">
-                {{ model.id }}
-              </span>
-            </span>
-            <span class="ml-auto flex shrink-0 items-center gap-1">
-              <ModelCapabilities
-                :model="model"
-                :recommended="
-                  purpose === 'session' && modelsStore.isRecommended(model)
-                "
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                :aria-label="
-                  modelsStore.isFavorite(model)
-                    ? t('models.picker.removeFavorite', { model: model.name })
-                    : t('models.picker.addFavorite', { model: model.name })
-                "
-                :aria-pressed="modelsStore.isFavorite(model)"
-                @pointerdown.stop
-                @click.stop="modelsStore.toggleFavorite(model)"
-              >
-                <HeartIcon
-                  aria-hidden="true"
-                  :class="
-                    cn({
-                      'fill-current': modelsStore.isFavorite(model),
-                    })
-                  "
-                />
-              </Button>
-              <template
-                v-if="model.isCustom && group.id.startsWith('provider:')"
-              >
-                <Button
-                  type="button"
-                  data-testid="custom-model-edit"
-                  variant="ghost"
-                  size="icon-xs"
-                  :aria-label="t('models.picker.editCustomModel')"
-                  :title="t('models.picker.editCustomModel')"
-                  @pointerdown.stop
-                  @click.stop="openCustomModelEditor(model)"
-                >
-                  <PencilIcon aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  data-testid="custom-model-delete"
-                  variant="ghost"
-                  size="icon-xs"
-                  :aria-label="t('models.picker.deleteCustomModel')"
-                  :title="t('models.picker.deleteCustomModel')"
-                  @pointerdown.stop
-                  @click.stop="requestCustomDelete({ kind: 'model', model })"
-                >
-                  <Trash2Icon aria-hidden="true" />
-                </Button>
-              </template>
-            </span>
-          </CommandItem>
-        </CommandGroup>
-      </template>
-
-      <template v-else>
-        <CommandGroup>
-          <CommandItem value="back models" @select="view = 'models'">
-            <ArrowLeftIcon aria-hidden="true" />
-            {{ t("models.picker.backToModels") }}
-          </CommandItem>
-          <CommandItem
-            value="add custom model provider endpoint"
-            @select="openCustomModel"
-          >
-            <PlusIcon aria-hidden="true" />
-            {{ t("models.picker.addCustomModel") }}
-          </CommandItem>
-        </CommandGroup>
-        <CommandSeparator />
-
-        <CommandGroup :heading="t('providers.picker.all')">
-          <CommandItem
-            v-for="provider in providers"
-            :key="provider.id"
-            :value="`${provider.name} ${provider.id}`"
-            :disabled="
-              !provider.isCustom &&
-              !provider.configured &&
-              !canConfigure(provider)
-            "
-            class="[&>svg:last-child]:hidden"
-            @select="selectProvider(provider)"
-          >
-            <ProviderIcon
-              :provider-id="provider.id"
-              :provider-name="provider.name"
-            />
-            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span class="truncate">{{ provider.name }}</span>
-              <span class="truncate text-xs font-normal text-muted-foreground">
-                {{ provider.id }} ·
-                {{ t("providers.modelCount", { count: provider.modelCount }) }}
-              </span>
-            </span>
-            <span
-              data-slot="provider-actions"
-              class="ml-auto flex shrink-0 items-center gap-1"
-            >
-              <Badge v-if="provider.configured" variant="secondary">
-                {{ t("providers.connected") }}
-              </Badge>
-              <template v-if="provider.isCustom">
-                <Badge variant="outline">
-                  {{ t("providers.custom.label") }}
-                </Badge>
-                <Button
-                  type="button"
-                  data-testid="custom-provider-edit"
-                  variant="ghost"
-                  size="icon-sm"
-                  :aria-label="t('providers.custom.edit')"
-                  :title="t('providers.custom.edit')"
-                  @pointerdown.stop
-                  @click.stop="openCustomProviderEditor(provider)"
-                >
-                  <PencilIcon aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  data-testid="custom-provider-delete"
-                  variant="ghost"
-                  size="icon-sm"
-                  :aria-label="t('providers.custom.delete')"
-                  :title="t('providers.custom.delete')"
-                  @pointerdown.stop
-                  @click.stop="
-                    requestCustomDelete({ kind: 'provider', provider })
-                  "
-                >
-                  <Trash2Icon aria-hidden="true" />
-                </Button>
-              </template>
-              <Button
-                v-if="provider.configured && !provider.isCustom"
-                type="button"
-                data-testid="provider-disconnect"
-                variant="ghost"
-                size="icon-sm"
-                :aria-label="
-                  t('providers.disconnect', { provider: provider.name })
-                "
-                :title="t('providers.disconnect', { provider: provider.name })"
-                @pointerdown.stop
-                @click.stop="requestDisconnect(provider)"
-              >
-                <UnplugIcon aria-hidden="true" />
-              </Button>
-            </span>
-          </CommandItem>
-        </CommandGroup>
-      </template>
-    </CommandList>
+    <ModelPickerList
+      :favorite-keys="favoriteModelKeysAtOpen"
+      :purpose="purpose"
+      :session-id="sessionId"
+      :view="view"
+      @add-custom-model="openCustomModel"
+      @delete-custom-model="
+        (model) => requestCustomDelete({ kind: 'model', model })
+      "
+      @delete-custom-provider="
+        (provider) => requestCustomDelete({ kind: 'provider', provider })
+      "
+      @disconnect-provider="requestDisconnect"
+      @edit-custom-model="openCustomModelEditor"
+      @edit-custom-provider="openCustomProviderEditor"
+      @select-image-model="selectImageModel"
+      @select-model="selectModel"
+      @select-provider="selectProvider"
+      @select-view="view = $event"
+    />
   </CommandDialog>
 
   <ProviderAuthDialog
