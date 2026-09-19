@@ -35,6 +35,21 @@ Generation itself uses pi-ai's image surface (`ImagesModels`) rather than the ch
 
 That catalog is a generated snapshot inside `pi-ai`, so image models reach Pine when `pi-ai` commits them upstream, not when OpenRouter adds them. [Pi Model Backport](./pi-model-backport.md) is what keeps the gap to days instead of release cycles.
 
+### Two OpenRouter transports
+
+OpenRouter serves image models on two endpoints, and pi-ai 0.85.1 only implements the first:
+
+| Transport           | Endpoint                                                     | Models                                                                                                                                                                |
+| ------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat                | `POST /api/v1/chat/completions` with `modalities: ["image"]` | Models whose catalog `output` includes `text`, so the answer can carry prose next to the image (`google/gemini-3-pro-image`, `openai/gpt-5-image`, `openrouter/auto`) |
+| Dedicated image API | `POST /api/v1/images`                                        | Pure image models, which OpenRouter rejects on the chat endpoint (`openai/gpt-image-*`, `black-forest-labs/flux.*`, `recraft/*`, `bytedance-seed/seedream-*`, …)      |
+
+Pine classifies with the catalog's declared modalities (`imageTransportFor` in `apps/desktop/src/agent/media/tools.ts`), so a pure image model never pays for a doomed chat round trip. A model that OpenRouter reclassifies later is still handled: when the chat transport answers with the `cannot be used with the chat/completions endpoint … Use the /api/v1/images endpoint instead` error, the call is retried once on the dedicated API.
+
+`generateImagesViaEndpoint` in `apps/desktop/src/agent/media/openrouter-images-endpoint.ts` speaks the documented image API and returns pi-ai's `AssistantImages` shape, so activation, approval, file writing, and result formatting stay transport-agnostic. Model options from the tool's `parameters` argument pass through unchanged, while `model`, `prompt`, `messages`, and `stream` stay under Pine's control.
+
+This shim exists only because the released pi-ai has not caught up. If a future pi-ai release implements the image API — or `pi` itself starts marking the transport per model — delete the shim and route through `ImagesModels` again.
+
 Image generation leaves the project sandbox, so calls pass through the approval gate like other privileged actions, and generated files are written into the project's temporary directory unless the model names a path inside a folder shared with Pine.
 
 Pine never opens a generated image on the model's behalf. The temporary directory sits outside the folders the user shares with Pine, so a preview of it would only ever be a path the user cannot find again, and an automatic tab steals attention for an image the user may not have asked to see yet. Showing an image is therefore an explicit second step: the model writes or copies the file into a folder shared with Pine and calls `ui_present_file` on that path.

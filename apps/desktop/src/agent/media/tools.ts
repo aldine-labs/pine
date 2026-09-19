@@ -18,6 +18,11 @@ import type { PineApprovalMode } from "../../shared/agent";
 import { UI_PRESENT_FILE_TOOL_NAME } from "../../shared/agent";
 import type { ToolGate } from "../gate";
 import { DEFAULT_IMAGE_MODEL_ID, imageModel, pineImagesModels } from "./models";
+import {
+  PROTECTED_BODY_FIELDS,
+  generateImagesViaEndpoint,
+  isImagesEndpointRedirect,
+} from "./openrouter-images-endpoint";
 
 export const ACTIVATE_MEDIA_GENERATION_TOOL_NAME =
   "activate_media_generation" as const;
@@ -33,7 +38,6 @@ export const MEDIA_GENERATION_DYNAMIC_TOOL_NAMES = [
 ] as const;
 
 const MAX_PROMPT_LENGTH = 8_000;
-const PROTECTED_PAYLOAD_FIELDS = new Set(["messages", "model", "stream"]);
 
 const IMAGE_FILE_EXTENSIONS: Record<string, string> = {
   "image/avif": "avif",
@@ -117,18 +121,45 @@ export interface MediaGenerationToolOptions {
   generateImages?: (request: GenerateImageRequest) => Promise<AssistantImages>;
 }
 
+/**
+ * OpenRouter serves image models on two transports: chat models that emit an
+ * image alongside their text answer use `chat/completions`, while pure image
+ * models are only reachable on the dedicated `/api/v1/images` endpoint. Pi
+ * 0.85.1 implements the first one, so Pine routes by the catalog's declared
+ * output modalities instead of waiting for a Pi release.
+ */
+export function imageTransportFor(
+  model: ImagesModel<ImagesApi>,
+): "chat" | "images" {
+  return model.output.includes("text") ? "chat" : "images";
+}
+
 export async function generateImagesWithOpenRouter(
   request: GenerateImageRequest,
 ): Promise<AssistantImages> {
+  if (imageTransportFor(request.model) === "images") {
+    return generateImagesViaEndpoint(request);
+  }
+
   const context: ImagesContext = {
     input: [{ type: "text", text: request.prompt }],
   };
-  return pineImagesModels().generateImages(request.model, context, {
-    apiKey: request.apiKey,
-    onPayload: (payload: unknown) =>
-      mergeImageParameters(payload, request.parameters),
-    ...(request.signal ? { signal: request.signal } : {}),
-  });
+  const result = await pineImagesModels().generateImages(
+    request.model,
+    context,
+    {
+      apiKey: request.apiKey,
+      onPayload: (payload: unknown) =>
+        mergeImageParameters(payload, request.parameters),
+      ...(request.signal ? { signal: request.signal } : {}),
+    },
+  );
+  // Models can be reclassified upstream without a Pi release; when OpenRouter
+  // answers that the model lives on the image API, retry there once.
+  if (isImagesEndpointRedirect(result.errorMessage)) {
+    return generateImagesViaEndpoint(request);
+  }
+  return result;
 }
 
 /**
@@ -149,7 +180,7 @@ export function mergeImageParameters(
   }
   const body = { ...(payload as Record<string, unknown>) };
   for (const [key, value] of Object.entries(parameters)) {
-    if (PROTECTED_PAYLOAD_FIELDS.has(key)) continue;
+    if (PROTECTED_BODY_FIELDS.has(key)) continue;
     body[key] = value;
   }
   return body;
@@ -168,7 +199,7 @@ const generateImageParams = Type.Object(
     parameters: Type.Optional(
       Type.Record(Type.String(), Type.Unknown(), {
         description:
-          "Extra OpenRouter request-body fields for model-specific options, such as size, quality, aspect_ratio, style, or image_config. Passed through unchanged; models that do not support a field may ignore or reject it. messages, model, and stream cannot be overridden here.",
+          "Extra OpenRouter request-body fields for model-specific options, such as size, quality, aspect_ratio, n, background, or output_format. Passed through unchanged; models that do not support a field may ignore or reject it. model, prompt, messages, and stream cannot be overridden here.",
       }),
     ),
     output_path: Type.Optional(

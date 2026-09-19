@@ -10,10 +10,10 @@ lookup, so npm only sees them at the next release.
 
 The gap is measured in weeks:
 
-| Snapshot | Source | OpenRouter image models |
-| --- | --- | --- |
-| `@earendil-works/pi-ai` 0.85.1 (npm, published 2026-09-05) | npm | 52 |
-| upstream `main` (`bdee230f`, 2026-09-16) | GitHub | 54 (`gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`) |
+| Snapshot                                                   | Source | OpenRouter image models                              |
+| ---------------------------------------------------------- | ------ | ---------------------------------------------------- |
+| `@earendil-works/pi-ai` 0.85.1 (npm, published 2026-09-05) | npm    | 52                                                   |
+| upstream `main` (`bdee230f`, 2026-09-16)                   | GitHub | 54 (`gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`) |
 
 `bun run backport:models` closes that gap by copying the newest generated
 catalogs onto the npm-installed package.
@@ -40,12 +40,12 @@ So the base stays npm, and only the data that actually lags is refreshed.
 
 Only generated catalog files inside `node_modules/@earendil-works/pi-ai`:
 
-| Path | Contents |
-| --- | --- |
-| `dist/image-models.generated.js` | the OpenRouter image catalog |
-| `dist/models.generated.js` | the aggregator over per-provider catalogs |
-| `dist/providers/*.models.js` | one chat catalog per provider |
-| `dist/providers/data/*.json` | the provider data those catalogs import |
+| Path                             | Contents                                  |
+| -------------------------------- | ----------------------------------------- |
+| `dist/image-models.generated.js` | the OpenRouter image catalog              |
+| `dist/models.generated.js`       | the aggregator over per-provider catalogs |
+| `dist/providers/*.models.js`     | one chat catalog per provider             |
+| `dist/providers/data/*.json`     | the provider data those catalogs import   |
 
 No JavaScript that Pine or Pi executes is replaced, `.d.ts` files stay as npm
 shipped them, and package versions and `bun.lock` stay untouched. The file set is
@@ -56,14 +56,14 @@ the one on `main`.
 
 ## Commands
 
-| Command | Behavior |
-| --- | --- |
-| `bun run backport:models` | Build the catalogs from upstream `main` and apply them |
-| `bun run backport:models --ref <ref>` | Take them from a tag or commit instead of `main` |
-| `bun run backport:models --check` | Report what is installed and how many models it has |
-| `bun run backport:models --restore` | Put the released files back (works offline) |
-| `bun run backport:models --force` | Re-apply even when the recorded commit is unchanged |
-| `bun run verify:pi` | Boot a real agent against a mock provider and assert the request still carries the system prompt and tools |
+| Command                               | Behavior                                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `bun run backport:models`             | Build the catalogs from upstream `main` and apply them                                                     |
+| `bun run backport:models --ref <ref>` | Take them from a tag or commit instead of `main`                                                           |
+| `bun run backport:models --check`     | Report what is installed and how many models it has                                                        |
+| `bun run backport:models --restore`   | Put the released files back (works offline)                                                                |
+| `bun run backport:models --force`     | Re-apply even when the recorded commit is unchanged                                                        |
+| `bun run verify:pi`                   | Boot a real agent against a mock provider and assert the request still carries the system prompt and tools |
 
 The first backport copies the released files into `.pi-backport-backup/`
 (gitignored) before overwriting anything, which is what makes `--restore` work
@@ -95,3 +95,23 @@ If a future `pi-ai` release changes the generator layout (for example the
 provider data stops being plain imports), `--restore` returns the tree to the
 released state; the script also warns when the installed version is not the one
 its file list was written for.
+
+## Catalogs are not the whole contract
+
+Refreshing the catalogs makes new models _selectable_, which is not the same as
+making them _work_. `openai/gpt-image-2.5-flare` arrived through the backport and
+then failed with:
+
+```
+404: openai/gpt-image-2.5-flare is an image generation model and cannot be used
+with the chat/completions endpoint. Use the /api/v1/images endpoint instead.
+```
+
+The model list was current; the released generation code was not. OpenRouter now
+routes pure image models through `/api/v1/images`, while pi-ai 0.85.1 only speaks
+`chat/completions`. Pine covers that gap in its own media layer instead of
+patching the package: see [Two OpenRouter transports](./pi-extension-boundary.md#two-openrouter-transports).
+
+So when a freshly backported model fails, check the shape of the provider error
+before assuming the catalog is stale. Anything that reads like a routing or
+endpoint complaint belongs in Pine's transport code, not in this script.
