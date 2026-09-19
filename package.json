@@ -20,7 +20,8 @@
     "test:coverage": "bun run --filter @pine/desktop test:coverage",
     "typecheck": "bun run --filter @pine/desktop typecheck",
     "shadcn:add": "bun run apps/desktop/scripts/shadcn-add.mjs",
-    "sync:pi": "bun run apps/desktop/scripts/sync-pi.mjs"
+    "sync:pi": "bun run apps/desktop/scripts/sync-pi.mjs",
+    "verify:pi": "bun run apps/desktop/scripts/verify-pi-agent.mjs"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

@@ -6,7 +6,6 @@ import {
   SessionManager,
   SettingsManager,
   type AgentSession,
-  type CompactionSettings,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -392,7 +391,10 @@ interface LiveAgentSession {
   tinyFishApiKey?: string;
   locale: "en-US" | "zh-CN";
   contextCompactionStrategy: PineContextCompactionStrategy;
-  baseCompactionSettings: Required<CompactionSettings>;
+  /** Pi's resolved compaction settings: `enabled`, `reserveTokens`, and
+   * `keepRecentTokens`. Per-model `modelOverrides` stay inside Pi and are
+   * resolved when the settings manager is asked for the session's model. */
+  baseCompactionSettings: ReturnType<SettingsManager["getCompactionSettings"]>;
 }
 
 export interface PineAgentRuntimeOptions {

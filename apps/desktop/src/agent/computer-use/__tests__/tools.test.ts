@@ -50,7 +50,7 @@ describe("ComputerUseController", () => {
 
     expect(client.start).toHaveBeenCalledOnce();
     expect(activate).toHaveBeenCalledOnce();
-    expect(result.addedToolNames).toBeUndefined();
+    expect(result.details.addedToolNames).toBeUndefined();
     expect(result.content[0]).toMatchObject({
       type: "text",
       text: expect.stringContaining("<computer_use_skill>"),

@@ -46,34 +46,57 @@ const DEFAULT_REF = "main";
 const MARKER_FILE = ".pine-pi-sync.json";
 
 /**
- * The packages this script rebuilds from upstream, in build order.
+ * Every Pi package Pine loads at runtime, in upstream build order.
  *
- * The scope is deliberately one package. `@earendil-works/pi-ai` owns the
- * generated model catalogs that lag npm the longest — both `gpt-image-2.5`
- * models reached `main` on 2026-09-16, eleven days after the 0.85.1 release —
- * and its public API barely moves, so swapping it under the released
- * `pi-agent-core` and `pi-coding-agent` gives Pine a current catalog without
- * dragging upstream's in-flight API churn into our own typecheck.
+ * The list has to stay whole. Pi's packages share one release train and one set
+ * of runtime contracts, and mixing a package built from `main` with a released
+ * sibling fails silently: overlaying only `pi-ai` from `main` left the agent
+ * with **no tools and no system prompt**, because `main` moved the stream entry
+ * point to the new `TranscriptContext` while the released `pi-coding-agent` was
+ * still calling it with the old `Context`. The request went out with the user
+ * message alone, and the model answered that it had no tools. Nothing threw.
  *
- * Widening the list to the whole runtime closure (chord, pi-tui, pi-telemetry,
- * pi-agent-core, pi-coding-agent) works mechanically — the script builds and
- * installs every entry the same way — but it does pull that churn in: building
- * `pi-agent-core` from `main` today already breaks `runtime.ts`, because
- * `CompactionSettings` gained a required `modelOverrides` field. Add packages
- * here only when Pine needs something npm has not shipped, and expect to adapt
- * our code in the same change.
+ * The payoff of syncing the whole closure is the generated model catalogs that
+ * lag npm by weeks — the two `gpt-image-2.5` models reached `main` on
+ * 2026-09-16, eleven days after the 0.85.1 release — plus upstream fixes Pine
+ * would otherwise wait a release for. The cost is that upstream API changes
+ * reach our typecheck immediately; `verify-pi-agent.mjs` catches the ones that
+ * do not show up as type errors before they reach the app.
  *
  * `extraPaths` are non-`dist` folders from the published file list that the
  * runtime may touch, such as Pi's bundled native prebuilds.
  */
 const PACKAGES = [
+  { build: "build", dir: "packages/chord", name: "@earendil-works/chord" },
+  {
+    build: "build",
+    dir: "packages/tui",
+    extraPaths: ["native"],
+    name: "@earendil-works/pi-tui",
+  },
+  {
+    build: "build",
+    dir: "packages/telemetry",
+    name: "@earendil-works/pi-telemetry",
+  },
   { build: "build", dir: "packages/ai", name: "@earendil-works/pi-ai" },
+  {
+    build: "build",
+    dir: "packages/agent",
+    name: "@earendil-works/pi-agent-core",
+  },
+  {
+    build: "build",
+    dir: "packages/coding-agent",
+    name: "@earendil-works/pi-coding-agent",
+  },
 ];
 
 const HELP = `Usage: bun run sync:pi [options]
 
-Builds @earendil-works/pi-ai from https://github.com/earendil-works/pi and
-installs the result into node_modules. See docs/architecture/pi-source-sync.md.
+Builds the @earendil-works/pi-* packages Pine loads at runtime from
+https://github.com/earendil-works/pi and installs them into node_modules. See
+docs/architecture/pi-source-sync.md.
 
 Options:
   --ref <ref>   Branch, tag, or commit to build (default: main, or PI_REF)
@@ -241,6 +264,36 @@ function checkoutSource(ref) {
   return { committedAt, head, subject };
 }
 
+const VERIFY_SCRIPT = path.join(SCRIPT_DIR, "verify-pi-agent.mjs");
+
+/**
+ * Runs the agent end to end against a mock provider. Type checks cannot see
+ * this class of breakage: an overlay that pairs `pi-ai` from one commit with a
+ * released `pi-coding-agent` imports cleanly and still sends requests with no
+ * tools and no system prompt.
+ */
+function verifiesAsAgent() {
+  log("verifying the agent still sends its system prompt and tools");
+  const result = spawnSync("bun", [VERIFY_SCRIPT], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+  if (result.status === 0) {
+    if (!options.quiet) process.stdout.write(result.stdout ?? "");
+    return true;
+  }
+  warn((result.stderr ?? "").trim() || "agent verification failed");
+  return false;
+}
+
+/** Removes every overlay and reinstalls the published releases. */
+function restoreNpmReleases() {
+  for (const entry of PACKAGES) {
+    rmSync(packageDirectory(entry.name), { force: true, recursive: true });
+  }
+  run("bun", ["install", "--frozen-lockfile"], { cwd: REPO_ROOT });
+}
+
 function installSourceDependencies() {
   log("installing upstream build dependencies (npm, scripts disabled)");
   run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], {
@@ -361,24 +414,54 @@ function writeMarkers(state) {
 }
 
 /**
- * Imports the freshly installed overlay the same way the agent process does, so
- * a broken build fails here instead of at runtime.
+ * Builds everything the freshly checked-out source needs and installs it.
  */
+function installSource(source) {
+  if (
+    readState()?.sha !== source.head ||
+    !existsSync(path.join(SOURCE_DIR, "node_modules"))
+  ) {
+    installSourceDependencies();
+  }
+  buildPackages();
+  installOverlay();
+  return source;
+}
+
 async function verifyOverlay() {
   const { builtinImagesModels } =
     await import("@earendil-works/pi-ai/providers/all");
   const imageModels = builtinImagesModels().getModels("openrouter").length;
-  await import("@earendil-works/pi-coding-agent");
-  await import("@earendil-works/pi-agent-core/node");
   return { imageModels };
 }
 
-function report(result) {
-  log(
-    `synced ${result.sha.slice(0, 8)} (${result.ref}, ${result.committedAt})`,
-  );
-  log(`  subject: ${result.subject}`);
-  log(`  openrouter image models: ${result.imageModels}`);
+async function record({ ref, repository, source }) {
+  const { imageModels } = await verifyOverlay();
+  const syncedAt = new Date().toISOString();
+  writeMarkers({
+    committedAt: source.committedAt,
+    ref,
+    repository,
+    sha: source.head,
+    subject: source.subject,
+    syncedAt,
+  });
+  writeState({
+    committedAt: source.committedAt,
+    imageModels,
+    packages: PACKAGES.map((entry) => ({
+      name: entry.name,
+      version: readInstalledVersion(entry.name),
+    })),
+    ref,
+    repository,
+    sha: source.head,
+    subject: source.subject,
+    syncedAt,
+  });
+  log(`synced ${source.head.slice(0, 8)} (${ref}, ${source.committedAt})`);
+  log(`  subject: ${source.subject}`);
+  log(`  openrouter image models: ${imageModels}`);
   for (const entry of PACKAGES) {
     log(`  ${entry.name} ${readInstalledVersion(entry.name) ?? "missing"}`);
   }
@@ -403,55 +486,49 @@ function checkOnly() {
 async function sync() {
   const repository = process.env.PI_SYNC_REPO?.trim() || DEFAULT_REPO;
   restoreUnownedOverlays();
-  const source = checkoutSource(options.ref);
-  const state = readState();
+  const previous = readState();
+  const requested = checkoutSource(options.ref);
   if (
     !options.force &&
-    state?.sha === source.head &&
-    overlayMatches(source.head)
+    previous?.sha === requested.head &&
+    overlayMatches(requested.head)
   ) {
     log(
-      `already at ${source.head.slice(0, 8)} (${options.ref}), ${
-        state.imageModels ?? "?"
+      `already at ${requested.head.slice(0, 8)} (${options.ref}), ${
+        previous.imageModels ?? "?"
       } openrouter image models`,
     );
     return;
   }
 
-  if (
-    state?.sha !== source.head ||
-    !existsSync(path.join(SOURCE_DIR, "node_modules"))
-  ) {
-    installSourceDependencies();
+  const source = installSource(requested);
+  if (verifiesAsAgent()) {
+    await record({ ref: options.ref, repository, source });
+    return;
   }
-  buildPackages();
-  installOverlay();
-  // Import the overlay before recording it: a build that cannot even load must
-  // not look like a successful sync.
-  const { imageModels } = await verifyOverlay();
-  const syncedAt = new Date().toISOString();
-  writeMarkers({
-    committedAt: source.committedAt,
-    ref: options.ref,
-    repository,
-    sha: source.head,
-    subject: source.subject,
-    syncedAt,
-  });
-  writeState({
-    committedAt: source.committedAt,
-    imageModels,
-    packages: PACKAGES.map((entry) => ({
-      name: entry.name,
-      version: readInstalledVersion(entry.name),
-    })),
-    ref: options.ref,
-    repository,
-    sha: source.head,
-    subject: source.subject,
-    syncedAt,
-  });
-  report({ ...source, imageModels, ref: options.ref, sha: source.head });
+
+  // The new commit broke the agent. A working overlay beats a newer one, so
+  // fall back to the last verified commit before giving up on the overlay.
+  if (previous?.sha && previous.sha !== source.head) {
+    warn(
+      `falling back to the last verified commit ${previous.sha.slice(0, 8)}`,
+    );
+    const fallback = installSource(checkoutSource(previous.sha));
+    if (verifiesAsAgent()) {
+      await record({
+        ref: previous.ref ?? previous.sha,
+        repository,
+        source: fallback,
+      });
+      return;
+    }
+  }
+
+  warn("no verified overlay available; restoring the published releases");
+  restoreNpmReleases();
+  throw new Error(
+    `the build from ${options.ref} (${source.head.slice(0, 8)}) failed agent verification`,
+  );
 }
 
 if (process.env.PI_SYNC?.trim() === "off") {
