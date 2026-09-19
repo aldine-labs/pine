@@ -93,11 +93,10 @@ function mountDialog() {
 /** Switches the settings dialog to one of its left-rail categories. */
 async function openSection(wrapper: VueWrapper, label: string): Promise<void> {
   const tab = wrapper
-    .findAll('[role="tab"]')
+    .findAll('[data-slot="item"]')
     .find((candidate) => candidate.text().includes(label));
   if (!tab) throw new Error(`Missing preferences section: ${label}`);
-  // Reka activates automatic tabs on mousedown, not click.
-  await tab.trigger("mousedown");
+  await tab.trigger("click");
   await flushPromises();
 }
 

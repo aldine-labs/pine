@@ -35,9 +35,9 @@ import {
   FieldTitle,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -80,33 +80,24 @@ const canSaveTinyFishApiKey = computed(
 );
 
 const sections = computed<
-  {
-    description: string;
-    icon: Component;
-    id: PreferenceSection;
-    label: string;
-  }[]
+  { icon: Component; id: PreferenceSection; label: string }[]
 >(() => [
   {
-    description: t("preferences.sections.generalDescription"),
     icon: SlidersHorizontalIcon,
     id: "general",
     label: t("preferences.sections.general"),
   },
   {
-    description: t("preferences.sections.modelsDescription"),
     icon: SparklesIcon,
     id: "models",
     label: t("preferences.sections.models"),
   },
   {
-    description: t("preferences.sections.personalizationDescription"),
     icon: UserRoundIcon,
     id: "personalization",
     label: t("preferences.sections.personalization"),
   },
   {
-    description: t("preferences.sections.advancedDescription"),
     icon: WrenchIcon,
     id: "advanced",
     label: t("preferences.sections.advanced"),
@@ -253,36 +244,33 @@ function updateSidebarVibrancy(value: boolean): void {
         </DialogDescription>
       </DialogHeader>
 
-      <Tabs
-        v-model="activeSection"
-        orientation="vertical"
-        class="flex min-h-0 flex-1 flex-row gap-0"
-      >
-        <div class="w-48 shrink-0 border-r bg-muted/20 p-3">
-          <TabsList variant="line" class="w-full">
-            <TabsTrigger
-              v-for="section in sections"
-              :key="section.id"
-              :value="section.id"
-              class="h-auto flex-none"
-            >
+      <div class="flex min-h-0 flex-1">
+        <nav
+          class="flex w-44 shrink-0 flex-col gap-1 border-r bg-muted/20 p-2"
+          :aria-label="t('preferences.sectionsLabel')"
+        >
+          <Item
+            v-for="section in sections"
+            :key="section.id"
+            as="button"
+            type="button"
+            size="xs"
+            :variant="activeSection === section.id ? 'muted' : 'default'"
+            :aria-current="activeSection === section.id ? 'true' : undefined"
+            class="hover:bg-muted"
+            @click="activeSection = section.id"
+          >
+            <ItemMedia variant="icon">
               <component :is="section.icon" aria-hidden="true" />
-              {{ section.label }}
-            </TabsTrigger>
-          </TabsList>
-        </div>
+            </ItemMedia>
+            <ItemContent class="min-w-0">
+              <ItemTitle>{{ section.label }}</ItemTitle>
+            </ItemContent>
+          </Item>
+        </nav>
 
         <ScrollArea class="min-h-0 min-w-0 flex-1">
-          <TabsContent value="general" class="flex flex-col gap-5 p-6">
-            <div class="flex flex-col gap-1">
-              <h2 class="font-medium">
-                {{ t("preferences.sections.general") }}
-              </h2>
-              <p class="text-muted-foreground">
-                {{ t("preferences.sections.generalDescription") }}
-              </p>
-            </div>
-
+          <div v-if="activeSection === 'general'" class="p-6">
             <FieldGroup>
               <Field orientation="horizontal">
                 <FieldTitle id="pine-language-setting">
@@ -346,18 +334,9 @@ function updateSidebarVibrancy(value: boolean): void {
                 />
               </Field>
             </FieldGroup>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="models" class="flex flex-col gap-5 p-6">
-            <div class="flex flex-col gap-1">
-              <h2 class="font-medium">
-                {{ t("preferences.sections.models") }}
-              </h2>
-              <p class="text-muted-foreground">
-                {{ t("preferences.sections.modelsDescription") }}
-              </p>
-            </div>
-
+          <div v-else-if="activeSection === 'models'" class="p-6">
             <FieldGroup>
               <Field orientation="horizontal">
                 <div class="flex min-w-0 flex-1 flex-col gap-1">
@@ -400,18 +379,9 @@ function updateSidebarVibrancy(value: boolean): void {
                 </Button>
               </Field>
             </FieldGroup>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="personalization" class="flex flex-col gap-5 p-6">
-            <div class="flex flex-col gap-1">
-              <h2 class="font-medium">
-                {{ t("preferences.sections.personalization") }}
-              </h2>
-              <p class="text-muted-foreground">
-                {{ t("preferences.sections.personalizationDescription") }}
-              </p>
-            </div>
-
+          <div v-else-if="activeSection === 'personalization'" class="p-6">
             <FieldGroup>
               <Field orientation="horizontal">
                 <div class="flex min-w-0 flex-1 flex-col gap-1">
@@ -434,18 +404,9 @@ function updateSidebarVibrancy(value: boolean): void {
                 </Button>
               </Field>
             </FieldGroup>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="advanced" class="flex flex-col gap-5 p-6">
-            <div class="flex flex-col gap-1">
-              <h2 class="font-medium">
-                {{ t("preferences.sections.advanced") }}
-              </h2>
-              <p class="text-muted-foreground">
-                {{ t("preferences.sections.advancedDescription") }}
-              </p>
-            </div>
-
+          <div v-else-if="activeSection === 'advanced'" class="p-6">
             <FieldGroup>
               <Field orientation="horizontal">
                 <div class="flex min-w-0 flex-1 items-baseline gap-2">
@@ -517,9 +478,9 @@ function updateSidebarVibrancy(value: boolean): void {
                 </Button>
               </Field>
             </FieldGroup>
-          </TabsContent>
+          </div>
         </ScrollArea>
-      </Tabs>
+      </div>
     </DialogContent>
   </Dialog>
 

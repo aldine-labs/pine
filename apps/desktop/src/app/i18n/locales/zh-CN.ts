@@ -32,15 +32,11 @@ export default {
     open: "打开 Pine 设置",
     sections: {
       general: "通用",
-      generalDescription: "语言、外观，以及 Pine 在这台设备上的呈现方式。",
       models: "模型",
-      modelsDescription: "选择负责后台任务和图像生成的模型。",
       personalization: "个性化",
-      personalizationDescription:
-        "告诉 Pine 如何称呼你，以及你希望它如何与你协作。",
       advanced: "高级",
-      advancedDescription: "上下文处理与可选的网络工具。",
     },
+    sectionsLabel: "设置分类",
     language: "语言",
     languageChinese: "简体中文",
     languageEnglish: "English",

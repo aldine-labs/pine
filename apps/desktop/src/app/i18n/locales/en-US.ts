@@ -35,17 +35,11 @@ export default {
     open: "Open Pine settings",
     sections: {
       general: "General",
-      generalDescription:
-        "Language, appearance, and how Pine renders on this device.",
       models: "Models",
-      modelsDescription:
-        "Choose which models handle background work and image generation.",
       personalization: "Personalization",
-      personalizationDescription:
-        "Tell Pine what to call you and how you want it to work with you.",
       advanced: "Advanced",
-      advancedDescription: "Context handling and optional web tools.",
     },
+    sectionsLabel: "Settings sections",
     language: "Language",
     languageChinese: "简体中文",
     languageEnglish: "English",
