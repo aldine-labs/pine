@@ -94,7 +94,7 @@ export default {
     userProfileInstructionsLabel: "自定义指令",
     userProfileInstructionsPlaceholder: "输入你希望 Pine 遵循的额外工作方式……",
     userProfileInstructionsDescription:
-      "保存后会作为 Pine 系统提示词级别的个性化指令使用，但不能绕过安全、权限和审批规则。",
+      "作为系统级个性化指令生效，但不能绕过安全和审批规则。",
     userProfileUnsavedChanges: "有未保存的更改",
     userProfileSaved: "用户画像已保存",
   },

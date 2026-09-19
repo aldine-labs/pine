@@ -103,7 +103,7 @@ export default {
     userProfileInstructionsPlaceholder:
       "Enter additional ways you want Pine to work…",
     userProfileInstructionsDescription:
-      "Saved as system-level personalization for Pine, but cannot bypass safety, access, or approval rules.",
+      "System-level personalization; safety and approval rules still apply.",
     userProfileUnsavedChanges: "Unsaved changes",
     userProfileSaved: "User profile saved",
   },
