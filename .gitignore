@@ -39,3 +39,6 @@ HANDOFF*
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# released pi-ai catalog backup used by scripts/backport-models.mjs
+.pi-backport-backup
