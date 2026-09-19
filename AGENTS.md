@@ -35,6 +35,14 @@
 - Bun 版本以根目录 `package.json` 的 `packageManager` 为准；首次安装、CI 和复现构建使用 `bun install --frozen-lockfile`。
 - 依赖安装默认不使用 `--force`；强制安装会重新解析并可能更新无关传递依赖。仅在确认需要完整重建依赖时使用。
 
+## Pi 依赖同步
+
+- `@earendil-works/pi-ai` 的内置模型目录是上游仓库在发版时生成的快照，npm 版本可能比上游 `main` 落后数周。`bun run sync:pi` 会浅克隆上游到 `.pi-src/`（已 gitignore），构建 `pi-ai`，并把产物连同它声明的依赖版本安装进 `node_modules/@earendil-works/pi-ai`。
+- `predev` 会在启动前同步（容错，失败只警告），`prebuild` 会以 `--strict` 同步（失败即终止）。`bun run check` 不同步，必须能在干净 `bun install` 且无网络时通过。
+- 常用开关：`PI_SYNC=off` 跳过同步、`PI_REF=<branch|tag|sha>` 指定上游版本、`--force` 强制重建、`--check` 离线检查当前覆盖状态。
+- 同步范围默认只有 `pi-ai`。要扩大范围（例如 `pi-agent-core`）需同时把我们自己的代码适配到上游 API，并在同一次改动里跑通 `bun run check`。
+- 只改同步脚本、文档或依赖覆盖机制时属于基础设施改动，与功能改动分开提交。完整机制说明见 `docs/architecture/pi-source-sync.md`。
+
 ## shadcn-vue 组件流程
 
 - 默认 UI 基底使用 shadcn-vue 官方 `reka-luma` style，配置在 `apps/desktop/components.json`。

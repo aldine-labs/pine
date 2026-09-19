@@ -2,7 +2,7 @@
 
 ## Context
 
-Pine embeds `@earendil-works/pi-agent-core` and supplies its own Electron host and Vue UI. The locally installed Pi CLI is `@earendil-works/pi-coding-agent` 0.80.3, while Pine currently resolves `pi-agent-core` 0.80.6.
+Pine embeds `@earendil-works/pi-agent-core` and supplies its own Electron host and Vue UI. The embedded Pi packages are pinned to `0.85.1` (`pi-agent-core`, `pi-ai`, `pi-coding-agent`), and `pi-ai` is additionally rebuilt from the upstream repository before dev and release builds so its generated model catalogs are current: see [Pi Source Sync](./pi-source-sync.md).
 
 Before implementing behavior related to Pi, first check whether it belongs in a reusable Pi extension. Prefer an extension when the behavior is useful inside Pi itself and can be expressed through its public extension lifecycle without replacing host UI.
 
@@ -15,7 +15,7 @@ Pi extensions can:
 - switch through the supported `ctx.switchSession()` command API;
 - observe or cancel `session_before_switch` and rebuild state during `session_start`.
 
-Pi extensions cannot non-invasively replace the built-in `/resume` selector. In Pi 0.80.3, interactive mode handles the exact `/resume` input before extension command dispatch. A same-name extension command is reported as a built-in conflict and omitted from autocomplete. The `session_before_switch` event runs only after the built-in selector has already chosen a target.
+Pi extensions cannot non-invasively replace the built-in `/resume` selector. In the embedded Pi 0.85.1, interactive mode handles the exact `/resume` input before extension command dispatch. A same-name extension command is reported as a built-in conflict and omitted from autocomplete. The `session_before_switch` event runs only after the built-in selector has already chosen a target.
 
 Pine therefore owns its Electron Session Search Overlay and session switching at the host boundary. It keeps Pi JSONL sessions as the source of truth and uses `JsonlSessionRepo` rather than introducing a second session format.
 
@@ -32,6 +32,8 @@ If CLI integration is needed later, extract the search engine behind a shared pa
 Image generation is a Pine-native tool pair: `activate_media_generation` is always visible, and activating it exposes `generate_image` for the rest of the session. Activation is recorded as a session entry so resumed sessions keep the tool, and the tool set is recomputed through the same `toolNamesFor*State` narrowing as Computer Use and Skill authoring. The indirection exists because more media tools are expected later; each new one joins `MEDIA_GENERATION_DYNAMIC_TOOL_NAMES` instead of widening the always-visible tool set.
 
 Generation itself uses pi-ai's image surface (`ImagesModels`) rather than the chat/stream APIs, with OpenRouter as the aggregating provider. The OpenRouter credential comes from the same `auth.json` that authenticates chat models, so no separate key is stored. The selected image model is a Pine setting (`pine-settings.json`) chosen in the settings dialog's Harness section, where the shared model picker lists pi-ai's image catalog instead of Pine's chat models. That setting is also the only way to choose an image model: the tools take no model argument, so a call always runs on the user's selection, falling back to Pine's default when the user never picked one.
+
+That catalog is a generated snapshot inside `pi-ai`, so image models reach Pine when `pi-ai` commits them upstream, not when OpenRouter adds them. [Pi Source Sync](./pi-source-sync.md) is what keeps the gap to days instead of release cycles.
 
 Image generation leaves the project sandbox, so calls pass through the approval gate like other privileged actions, and generated files are written into the project's temporary directory unless the model names a path inside a folder shared with Pine.
 
