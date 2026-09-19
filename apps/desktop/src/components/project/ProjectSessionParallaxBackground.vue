@@ -291,10 +291,13 @@ onBeforeUnmount(() => {
     data-slot="session-parallax-background"
     class="pointer-events-none absolute inset-0 overflow-hidden"
   >
+    <!-- Icons barely drift up and down, so vertical pointer travel is damped
+    hard while horizontal travel keeps its full range. -->
     <ParallaxFloat
       class="absolute inset-0"
       :easing-factor="0.05"
-      :sensitivity="-0.1"
+      :sensitivity="-0.25"
+      :vertical-resistance="0.15"
     >
       <ParallaxFloatElement
         v-for="item in parallaxIconsWithFade"

@@ -9,11 +9,13 @@ interface Props {
   class?: HTMLAttributes["class"];
   sensitivity?: number;
   easingFactor?: number;
+  verticalResistance?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sensitivity: 1,
   easingFactor: 0.05,
+  verticalResistance: 1,
 });
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -62,10 +64,11 @@ function handleTouchMove(event: TouchEvent) {
 }
 
 function animate() {
+  const verticalResistance = Math.max(props.verticalResistance, 0);
   elements.forEach((data, element) => {
     const strength = (data.depth * props.sensitivity) / 20;
     const targetX = mousePosition.x * strength;
-    const targetY = mousePosition.y * strength;
+    const targetY = mousePosition.y * strength * verticalResistance;
     const easingFactor = Math.min(Math.max(props.easingFactor, 0), 1);
 
     data.currentPosition.x += (targetX - data.currentPosition.x) * easingFactor;
