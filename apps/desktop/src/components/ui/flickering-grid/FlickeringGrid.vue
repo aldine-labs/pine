@@ -28,7 +28,12 @@ const canvasRef = ref<HTMLCanvasElement>();
 const context = ref<CanvasRenderingContext2D>();
 
 const isInView = ref(false);
-const canvasSize = ref({ width: 0, height: 0 });
+
+/** The grid only redraws the cells that actually flickered, and only at this
+ * rate: repainting every square every frame is what kept a background
+ * decoration pegged to a full CPU core. */
+const FRAME_INTERVAL_MS = 1000 / 30;
+const MAX_FRAME_DELTA_SECONDS = 0.05;
 
 const computedColor = computed(() => {
   if (!context.value) return "transparent";
@@ -65,37 +70,73 @@ function setupCanvas(
   return { cols, rows, squares, dpr };
 }
 
-function updateSquares(squares: Float32Array, deltaTime: number) {
-  for (let i = 0; i < squares.length; i++) {
-    if (Math.random() < flickerChance.value * deltaTime) {
-      squares[i] = Math.random() * maxOpacity.value;
-    }
-  }
+/** Device-pixel geometry of one grid cell, indexed column by column. */
+function cellOrigin(rows: number, dpr: number, index: number) {
+  const pitch = (squareSize.value + gridGap.value) * dpr;
+  return {
+    pitch,
+    size: squareSize.value * dpr,
+    x: Math.floor(index / rows) * pitch,
+    y: (index % rows) * pitch,
+  };
+}
+
+function fillCell(
+  ctx: CanvasRenderingContext2D,
+  rows: number,
+  squares: Float32Array,
+  dpr: number,
+  index: number,
+) {
+  const { size, x, y } = cellOrigin(rows, dpr, index);
+  ctx.globalAlpha = squares[index] ?? 0;
+  ctx.fillRect(x, y, size, size);
+}
+
+/** Clears and redraws a single cell, for a square that just flickered. */
+function repaintCell(
+  ctx: CanvasRenderingContext2D,
+  rows: number,
+  squares: Float32Array,
+  dpr: number,
+  index: number,
+) {
+  const { pitch, x, y } = cellOrigin(rows, dpr, index);
+  ctx.clearRect(x, y, pitch, pitch);
+  fillCell(ctx, rows, squares, dpr, index);
 }
 
 function drawGrid(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
+  canvas: HTMLCanvasElement,
   cols: number,
   rows: number,
   squares: Float32Array,
   dpr: number,
 ) {
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "transparent";
-  ctx.fillRect(0, 0, width, height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = computedColor.value;
-  for (let i = 0; i < cols; i++) {
-    for (let j = 0; j < rows; j++) {
-      const opacity = squares[i * rows + j];
-      ctx.globalAlpha = opacity;
-      ctx.fillRect(
-        i * (squareSize.value + gridGap.value) * dpr,
-        j * (squareSize.value + gridGap.value) * dpr,
-        squareSize.value * dpr,
-        squareSize.value * dpr,
-      );
+  for (let index = 0; index < cols * rows; index++) {
+    fillCell(ctx, rows, squares, dpr, index);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Repaints just the squares that flickered this frame. */
+function updateSquares(
+  ctx: CanvasRenderingContext2D,
+  rows: number,
+  squares: Float32Array,
+  dpr: number,
+  deltaTime: number,
+) {
+  const chance = flickerChance.value * deltaTime;
+  if (chance <= 0) return;
+
+  for (let index = 0; index < squares.length; index++) {
+    if (Math.random() < chance) {
+      squares[index] = Math.random() * maxOpacity.value;
+      repaintCell(ctx, rows, squares, dpr, index);
     }
   }
   ctx.globalAlpha = 1;
@@ -107,30 +148,43 @@ function updateCanvasSize() {
   const newWidth = width.value || containerRef.value!.clientWidth;
   const newHeight = height.value || containerRef.value!.clientHeight;
 
-  canvasSize.value = { width: newWidth, height: newHeight };
   gridParams.value = setupCanvas(canvasRef.value!, newWidth, newHeight);
+  drawGrid(
+    context.value!,
+    canvasRef.value!,
+    gridParams.value.cols,
+    gridParams.value.rows,
+    gridParams.value.squares,
+    gridParams.value.dpr,
+  );
 }
 
 let animationFrameId: number | undefined;
 let resizeObserver: ResizeObserver | undefined;
 let intersectionObserver: IntersectionObserver | undefined;
-let lastTime = 0;
+/** -1 until the first frame arrives, so that frame never flickers the grid. */
+let lastTime = -1;
 
 function animate(time: number) {
   if (!isInView.value) return;
 
-  const deltaTime = (time - lastTime) / 1000;
+  if (lastTime >= 0 && time - lastTime < FRAME_INTERVAL_MS) {
+    animationFrameId = requestAnimationFrame(animate);
+    return;
+  }
+
+  const deltaTime =
+    lastTime < 0
+      ? 0
+      : Math.min((time - lastTime) / 1000, MAX_FRAME_DELTA_SECONDS);
   lastTime = time;
 
-  updateSquares(gridParams.value!.squares, deltaTime);
-  drawGrid(
+  updateSquares(
     context.value!,
-    canvasRef.value!.width,
-    canvasRef.value!.height,
-    gridParams.value!.cols,
     gridParams.value!.rows,
     gridParams.value!.squares,
     gridParams.value!.dpr,
+    deltaTime,
   );
   animationFrameId = requestAnimationFrame(animate);
 }
@@ -178,11 +232,8 @@ onBeforeUnmount(() => {
     ref="containerRef"
     :class="cn(`h-full w-full`, props.class)"
   >
-    <canvas
-      ref="canvasRef"
-      class="pointer-events-none"
-      :width="canvasSize.width"
-      :height="canvasSize.height"
-    />
+    <!-- The canvas keeps its own device-pixel size; Vue never resets it, so a
+    resize cannot wipe the grid. -->
+    <canvas ref="canvasRef" class="pointer-events-none" />
   </div>
 </template>
