@@ -37,6 +37,7 @@ import type {
   ProviderAuthResponseRequest,
   ProviderLoginResult,
   SelectModelRequest,
+  SelectImageModelRequest,
   SelectUtilityModelRequest,
   UpdateCustomModelRequest,
   UpdateCustomProviderRequest,
@@ -282,6 +283,9 @@ export interface PineDesktopApi extends PineWindowApi {
   selectModel: (request: SelectModelRequest) => Promise<{ disposed: boolean }>;
   selectUtilityModel: (
     request: SelectUtilityModelRequest,
+  ) => Promise<{ updated: boolean }>;
+  selectImageModel: (
+    request: SelectImageModelRequest,
   ) => Promise<{ updated: boolean }>;
   openProviderAuthUrl: (url: string) => Promise<void>;
   onProviderAuthEvent: (listener: ProviderAuthEventListener) => () => void;

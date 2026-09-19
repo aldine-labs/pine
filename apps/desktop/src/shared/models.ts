@@ -9,6 +9,7 @@ export const DELETE_CUSTOM_PROVIDER_CHANNEL =
 export const LOOKUP_MODEL_METADATA_CHANNEL = "models:lookup-metadata" as const;
 export const SELECT_MODEL_CHANNEL = "models:select" as const;
 export const SELECT_UTILITY_MODEL_CHANNEL = "models:select-utility" as const;
+export const SELECT_IMAGE_MODEL_CHANNEL = "models:select-image" as const;
 export const LOGIN_PROVIDER_CHANNEL = "providers:login" as const;
 export const RESPOND_PROVIDER_AUTH_CHANNEL = "providers:auth-response" as const;
 export const CANCEL_PROVIDER_AUTH_CHANNEL = "providers:auth-cancel" as const;
@@ -69,7 +70,30 @@ export type PineUtilityModelSelection = Pick<
   "modelId" | "providerId"
 >;
 
+/**
+ * An image-generation model from pi-ai's image catalog. Image models live in
+ * their own collection rather than in the chat model list, so they are
+ * described separately and never appear in the chat model picker.
+ */
+export interface PineImageModelDescriptor {
+  id: string;
+  name: string;
+  providerId: string;
+  providerName: string;
+  /** The model can take reference images as additional input. */
+  acceptsImageInput: boolean;
+  /** The model answers with text besides images. */
+  returnsText: boolean;
+}
+
+export type PineImageModelSelection = Pick<
+  PineModelSelection,
+  "modelId" | "providerId"
+>;
+
 export interface PineModelCatalog {
+  imageModels?: readonly PineImageModelDescriptor[];
+  imageSelection?: PineImageModelSelection;
   models: readonly PineModelDescriptor[];
   providers: readonly PineProviderDescriptor[];
   recommendedModelIds?: readonly string[];
@@ -204,6 +228,7 @@ export type SelectModelRequest = PineModelSelection & {
   sessionId?: string;
 };
 export type SelectUtilityModelRequest = PineUtilityModelSelection;
+export type SelectImageModelRequest = PineImageModelSelection;
 
 export interface LogoutProviderRequest {
   providerId: string;

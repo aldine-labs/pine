@@ -4,6 +4,7 @@ import {
   FilePlusIcon,
   FileTextIcon,
   GlobeIcon,
+  ImageIcon,
   MonitorCogIcon,
   PanelTopIcon,
   PlusIcon,
@@ -25,6 +26,7 @@ export type ToolKind =
   | "edit"
   | "fetch"
   | "generic"
+  | "media"
   | "presentFile"
   | "read"
   | "search"
@@ -39,6 +41,7 @@ export const TOOL_KIND_ICON: Record<ToolKind, Component> = {
   edit: SquarePenIcon,
   fetch: GlobeIcon,
   generic: WrenchIcon,
+  media: ImageIcon,
   presentFile: EyeIcon,
   read: FileTextIcon,
   search: SearchIcon,
@@ -58,6 +61,14 @@ export const SKILL_OPERATION_ICON: Record<SkillOperation, Component> = {
   remove: Trash2Icon,
 };
 
+export type MediaOperation = "activateMediaGeneration" | "generateImage";
+
+/** Icons shown for the dynamically activated media generation tools. */
+export const MEDIA_OPERATION_ICON: Record<MediaOperation, Component> = {
+  activateMediaGeneration: ImageIcon,
+  generateImage: WandSparklesIcon,
+};
+
 /** Order used to render a tool run's summary, matching the user's example
  * ("read 3 files, edited 2, ran 5 commands"). */
 export const TOOL_KIND_ORDER: readonly ToolKind[] = [
@@ -67,6 +78,7 @@ export const TOOL_KIND_ORDER: readonly ToolKind[] = [
   "search",
   "fetch",
   "presentFile",
+  "media",
   "computer",
   "browser",
   "bash",
@@ -82,14 +94,25 @@ const SKILL_OPERATION_KEYS: Record<string, SkillOperation> = {
   remove_skill: "remove",
 };
 
+const MEDIA_OPERATION_KEYS: Record<string, MediaOperation> = {
+  activate_media_generation: "activateMediaGeneration",
+  generate_image: "generateImage",
+};
+
 export function skillOperationKey(name: string): SkillOperation | undefined {
   return SKILL_OPERATION_KEYS[name.toLowerCase().split(/[.:/]/).at(-1) ?? name];
+}
+
+export function mediaOperationKey(name: string): MediaOperation | undefined {
+  return MEDIA_OPERATION_KEYS[name.toLowerCase().split(/[.:/]/).at(-1) ?? name];
 }
 
 /** Resolve the most specific icon for a tool call, including Skill operations. */
 export function toolIconForName(name: string): Component {
   const skillOperation = skillOperationKey(name);
   if (skillOperation) return SKILL_OPERATION_ICON[skillOperation];
+  const mediaOperation = mediaOperationKey(name);
+  if (mediaOperation) return MEDIA_OPERATION_ICON[mediaOperation];
   return TOOL_KIND_ICON[toolKind(name)];
 }
 
@@ -145,6 +168,7 @@ export function toolKind(name: string): ToolKind {
     return "write";
   }
   if (skillOperationKey(normalized)) return "skill";
+  if (mediaOperationKey(normalized)) return "media";
   return "generic";
 }
 

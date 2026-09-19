@@ -101,6 +101,7 @@ import {
   PROVIDER_AUTH_EVENT_CHANNEL,
   RESPOND_PROVIDER_AUTH_CHANNEL,
   SELECT_MODEL_CHANNEL,
+  SELECT_IMAGE_MODEL_CHANNEL,
   SELECT_UTILITY_MODEL_CHANNEL,
   UPDATE_CUSTOM_MODEL_CHANNEL,
   UPDATE_CUSTOM_PROVIDER_CHANNEL,
@@ -719,6 +720,10 @@ const SelectUtilityModelRequestSchema = SelectModelRequestSchema.pick({
   modelId: true,
   providerId: true,
 });
+const SelectImageModelRequestSchema = SelectModelRequestSchema.pick({
+  modelId: true,
+  providerId: true,
+});
 const ProviderAuthUrlSchema = z.url().refine((url) => {
   try {
     return ["http:", "https:"].includes(new URL(url).protocol);
@@ -1315,6 +1320,14 @@ ipcMain.handle(
   (_event, request: unknown): Promise<{ updated: boolean }> =>
     getProjectRuntimes().selectUtilityModel(
       SelectUtilityModelRequestSchema.parse(request),
+    ),
+);
+
+ipcMain.handle(
+  SELECT_IMAGE_MODEL_CHANNEL,
+  (_event, request: unknown): Promise<{ updated: boolean }> =>
+    getProjectRuntimes().selectImageModel(
+      SelectImageModelRequestSchema.parse(request),
     ),
 );
 

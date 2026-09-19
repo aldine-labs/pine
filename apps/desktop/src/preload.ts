@@ -56,6 +56,7 @@ import {
   PROVIDER_AUTH_EVENT_CHANNEL,
   RESPOND_PROVIDER_AUTH_CHANNEL,
   SELECT_MODEL_CHANNEL,
+  SELECT_IMAGE_MODEL_CHANNEL,
   SELECT_UTILITY_MODEL_CHANNEL,
   UPDATE_CUSTOM_MODEL_CHANNEL,
   UPDATE_CUSTOM_PROVIDER_CHANNEL,
@@ -74,6 +75,7 @@ import {
   type UpdateCustomModelRequest,
   type UpdateCustomProviderRequest,
   type SelectModelRequest,
+  type SelectImageModelRequest,
   type SelectUtilityModelRequest,
 } from "./shared/models";
 import {
@@ -339,6 +341,10 @@ const pineApi: PineDesktopApi = {
     request: SelectUtilityModelRequest,
   ): Promise<{ updated: boolean }> =>
     ipcRenderer.invoke(SELECT_UTILITY_MODEL_CHANNEL, request),
+  selectImageModel: (
+    request: SelectImageModelRequest,
+  ): Promise<{ updated: boolean }> =>
+    ipcRenderer.invoke(SELECT_IMAGE_MODEL_CHANNEL, request),
   openProviderAuthUrl: (url: string): Promise<void> =>
     ipcRenderer.invoke(OPEN_PROVIDER_AUTH_URL_CHANNEL, url),
   setTinyFishApiKey: (

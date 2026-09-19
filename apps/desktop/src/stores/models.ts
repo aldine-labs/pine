@@ -5,6 +5,7 @@ import type {
   DeleteCustomModelRequest,
   DeleteCustomProviderRequest,
   PineAuthType,
+  PineImageModelDescriptor,
   PineModelCatalog,
   PineModelDescriptor,
   PineModelSelection,
@@ -144,6 +145,23 @@ export const useModelsStore = defineStore("models", () => {
     const selected = utilitySelection.value;
     return selected
       ? models.value.find(
+          (model) =>
+            model.providerId === selected.providerId &&
+            model.id === selected.modelId,
+        )
+      : undefined;
+  });
+  const imageModels = computed(() => catalog.value.imageModels ?? []);
+  const imageSelection = computed(() => catalog.value.imageSelection);
+  const imageProviderConfigured = computed(
+    () =>
+      providers.value.find((provider) => provider.id === "openrouter")
+        ?.configured === true,
+  );
+  const imageSelectedModel = computed(() => {
+    const selected = imageSelection.value;
+    return selected
+      ? imageModels.value.find(
           (model) =>
             model.providerId === selected.providerId &&
             model.id === selected.modelId,
@@ -309,6 +327,22 @@ export const useModelsStore = defineStore("models", () => {
     };
   }
 
+  async function selectImageModel(
+    model: PineImageModelDescriptor,
+  ): Promise<void> {
+    await window.pine.selectImageModel({
+      providerId: model.providerId,
+      modelId: model.id,
+    });
+    catalog.value = {
+      ...catalog.value,
+      imageSelection: {
+        providerId: model.providerId,
+        modelId: model.id,
+      },
+    };
+  }
+
   async function beginLogin(
     provider: PineProviderDescriptor,
     authType: PineAuthType,
@@ -385,6 +419,10 @@ export const useModelsStore = defineStore("models", () => {
     favoriteModels,
     favoriteModelKeysSnapshot,
     featuredModels,
+    imageModels,
+    imageProviderConfigured,
+    imageSelectedModel,
+    imageSelection,
     isFavorite,
     isRecommended,
     isLoading,
@@ -396,6 +434,7 @@ export const useModelsStore = defineStore("models", () => {
     recentModels,
     respondToPrompt,
     select,
+    selectImageModel,
     selectUtilityModel,
     selectedModel,
     selectedModelFor,

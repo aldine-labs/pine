@@ -50,6 +50,7 @@ function createAgentHost(): AgentHost {
     logoutProvider: vi.fn().mockResolvedValue({ disposed: true }),
     selectModel: vi.fn().mockResolvedValue({ disposed: true }),
     selectUtilityModel: vi.fn().mockResolvedValue({ updated: true }),
+    selectImageModel: vi.fn().mockResolvedValue({ updated: true }),
     setTinyFishApiKey: vi.fn().mockResolvedValue({ updated: true }),
     setContextCompactionStrategy: vi.fn().mockResolvedValue({ updated: true }),
     openSession: vi.fn().mockResolvedValue({ session: sessionSummary }),

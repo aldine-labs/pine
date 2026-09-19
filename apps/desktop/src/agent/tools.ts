@@ -70,6 +70,7 @@ import {
   createTinyFishToolDefinitions,
   type TinyFishToolFactoryOptions,
 } from "./tinyfishTools";
+import { createMediaGenerationToolDefinitions } from "./media/tools";
 
 interface FileIO {
   access(path: string, mode: number): Promise<void>;
@@ -230,6 +231,8 @@ function gateFileTool<TParams extends TSchema, TDetails, TState>(
 }
 
 export interface PineToolPermissionContext {
+  /** Media generation beyond the project sandbox: activation, credentials, and the picked image model. */
+  mediaGeneration?: PineMediaGenerationContext;
   getApprovalMode(): PineApprovalMode;
   getGate(): ToolGate | null;
   getTinyFishApiKey?: () => string | undefined;
@@ -240,6 +243,15 @@ export interface PineToolPermissionContext {
   ) => Promise<AskUserQuestionSubmission>;
   /** Opens a file tab for the user without moving their focus. */
   presentFile?: (toolCallId: string, filePath: string) => void;
+}
+
+export interface PineMediaGenerationContext {
+  /** Enables the hidden media tools for the live session. */
+  activate(): void;
+  /** Resolves the OpenRouter credential; undefined when it is not configured. */
+  resolveOpenRouterApiKey(): Promise<string | undefined>;
+  /** The image model the user picked in the composer's model selector. */
+  imageModelId?(): Promise<string | undefined> | string | undefined;
 }
 
 export async function createPineToolDefinitions(
@@ -594,6 +606,29 @@ export async function createPineToolDefinitions(
       })
     : null;
 
+  const mediaGeneration = permissions?.mediaGeneration;
+  const activateMediaGeneration = mediaGeneration
+    ? () => mediaGeneration.activate()
+    : undefined;
+  const defaultImageModelId = mediaGeneration?.imageModelId
+    ? () => mediaGeneration.imageModelId?.()
+    : undefined;
+  const mediaTools = createMediaGenerationToolDefinitions({
+    activateMediaGeneration,
+    authorizeWrite: (targetPath) =>
+      policy.authorize(targetPath, "write", { allowMissing: true }),
+    cwd: location.cwd,
+    defaultImageModelId,
+    getApprovalMode,
+    getGate,
+    outputDirectory: path.join(canonicalBashTemporaryDirectory, "media"),
+    presentFile: presentFile
+      ? (toolCallId, filePath) => presentFile(toolCallId, filePath)
+      : undefined,
+    resolveApiKey: () =>
+      mediaGeneration?.resolveOpenRouterApiKey() ?? Promise.resolve(undefined),
+  });
+
   return [
     {
       ...gatedReadTool,
@@ -607,5 +642,6 @@ export async function createPineToolDefinitions(
     ...(uiPresentFileTool ? [uiPresentFileTool] : []),
     ...(askUserQuestionTool ? [askUserQuestionTool] : []),
     ...tinyFishTools,
+    ...mediaTools,
   ] as ToolDefinition[];
 }

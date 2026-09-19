@@ -1,6 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { PineUtilityModelSelection } from "../shared/models";
+import type {
+  PineImageModelSelection,
+  PineUtilityModelSelection,
+} from "../shared/models";
 import {
   isPineContextCompactionStrategy,
   type PineContextCompactionStrategy,
@@ -15,13 +18,14 @@ const PINE_SETTINGS_FILE = "pine-settings.json";
 
 export interface PineAgentSettings {
   contextCompactionStrategy?: PineContextCompactionStrategy;
+  imageModel?: PineImageModelSelection;
   utilityModel?: PineUtilityModelSelection;
   userProfile?: PineUserProfile;
 }
 
-function isUtilityModelSelection(
+function isModelSelection(
   value: unknown,
-): value is PineUtilityModelSelection {
+): value is PineUtilityModelSelection | PineImageModelSelection {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
@@ -72,6 +76,7 @@ export async function readPineAgentSettings(
       return {};
     }
     const settings = parsed as Record<string, unknown>;
+    const imageModel = settings.imageModel;
     const utilityModel = settings.utilityModel;
     const userProfile = settings.userProfile;
     const contextCompactionStrategy = settings.contextCompactionStrategy;
@@ -79,7 +84,8 @@ export async function readPineAgentSettings(
       ...(isPineContextCompactionStrategy(contextCompactionStrategy)
         ? { contextCompactionStrategy }
         : {}),
-      ...(isUtilityModelSelection(utilityModel) ? { utilityModel } : {}),
+      ...(isModelSelection(imageModel) ? { imageModel } : {}),
+      ...(isModelSelection(utilityModel) ? { utilityModel } : {}),
       ...(isPineUserProfile(userProfile) ? { userProfile } : {}),
     };
   } catch (error) {
@@ -100,6 +106,13 @@ export async function writeUtilityModelSelection(
   utilityModel: PineUtilityModelSelection,
 ): Promise<void> {
   await writePineAgentSettings(agentDir, { utilityModel });
+}
+
+export async function writeImageModelSelection(
+  agentDir: string,
+  imageModel: PineImageModelSelection,
+): Promise<void> {
+  await writePineAgentSettings(agentDir, { imageModel });
 }
 
 export async function writePineUserProfile(

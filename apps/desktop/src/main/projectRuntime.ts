@@ -22,6 +22,7 @@ import type {
   ProviderLoginResult,
   SelectModelRequest,
   SelectUtilityModelRequest,
+  SelectImageModelRequest,
   UpdateCustomModelRequest,
   UpdateCustomProviderRequest,
 } from "../shared/models";
@@ -531,6 +532,12 @@ export class ProjectRuntimeRegistry {
     request: SelectUtilityModelRequest,
   ): Promise<{ updated: boolean }> {
     return this.agentHost.selectUtilityModel(this.agentDir, request);
+  }
+
+  selectImageModel(
+    request: SelectImageModelRequest,
+  ): Promise<{ updated: boolean }> {
+    return this.agentHost.selectImageModel(this.agentDir, request);
   }
 
   setTinyFishApiKey(apiKey: string | undefined): Promise<{ updated: boolean }> {

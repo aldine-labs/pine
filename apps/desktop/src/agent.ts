@@ -115,6 +115,12 @@ async function handleRequest(request: AgentWorkerRequest): Promise<void> {
         request.selection,
       );
       break;
+    case "models:select-image":
+      result = await runtime.selectImageModel(
+        request.agentDir,
+        request.selection,
+      );
+      break;
     case "runtime:dispose":
       result = await runtime.dispose();
       break;

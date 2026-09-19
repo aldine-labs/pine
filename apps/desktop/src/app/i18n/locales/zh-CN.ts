@@ -90,6 +90,10 @@ export default {
   },
   models: {
     favorites: "收藏的模型",
+    imageModel: "图像模型",
+    imageModelDefault: "默认模型",
+    imageModelUnconfigured:
+      "尚未配置 OpenRouter。请在模型设置中添加它的 API Key 后再生成图片。",
     loading: "正在加载模型",
     recent: "最近使用",
     recommended: "推荐的模型",
@@ -495,6 +499,10 @@ export default {
           active: "正在抓取 {count} 个网页",
           complete: "抓取了 {count} 个网页",
         },
+        media: {
+          active: "正在生成 {count} 张图片",
+          complete: "生成了 {count} 张图片",
+        },
         presentFile: {
           active: "正在打开 {count} 个文件",
           complete: "打开了 {count} 个文件",
@@ -514,6 +522,7 @@ export default {
         computer: "电脑操作",
         edit: "编辑",
         generic: "工具",
+        media: "图像生成",
         read: "读取",
         search: "搜索",
         fetch: "网页抓取",
@@ -635,6 +644,20 @@ export default {
             complete: "已删除{scope}工作技能",
             running: "正在删除{scope}工作技能",
             error: "删除{scope}工作技能失败",
+          },
+        },
+        mediaOperations: {
+          activateMediaGeneration: {
+            label: "启用图像生成",
+            complete: "已启用图像生成",
+            running: "正在启用图像生成",
+            error: "启用图像生成失败",
+          },
+          generateImage: {
+            label: "生成图片",
+            complete: "已生成图片",
+            running: "正在生成图片",
+            error: "生成图片失败",
           },
         },
         bash: {

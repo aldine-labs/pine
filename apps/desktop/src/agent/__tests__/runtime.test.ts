@@ -12,6 +12,7 @@ import {
   authorizationGrantsFromSessionEntries,
   buildGateTurnContext,
   computerUseActiveFromSessionEntries,
+  mediaGenerationActiveFromSessionEntries,
   skillAuthoringActiveFromSessionEntries,
   judgeStreamOptions,
   normalizeGeneratedTitle,
@@ -24,6 +25,7 @@ import {
   titleFromAssistantMessage,
   toolNamesForApprovalMode,
   toolNamesForComputerUseState,
+  toolNamesForMediaGenerationState,
   toolNamesForSkillAuthoringState,
 } from "../runtime";
 import { serializeAttachmentMessage } from "../../shared/attachments";
@@ -452,6 +454,48 @@ describe("toolNamesForSkillAuthoringState", () => {
         },
       ]),
     ).toBe(true);
+  });
+});
+
+describe("toolNamesForMediaGenerationState", () => {
+  const tools = [
+    "read",
+    "activate_media_generation",
+    "generate_image",
+    "web_search",
+  ];
+
+  it("keeps only the activator visible before media generation is activated", () => {
+    expect(toolNamesForMediaGenerationState(tools, false)).toEqual([
+      "read",
+      "activate_media_generation",
+      "web_search",
+    ]);
+  });
+
+  it("restores the image tool after activation", () => {
+    expect(toolNamesForMediaGenerationState(tools, true)).toEqual(tools);
+  });
+
+  it("restores activation from session metadata", () => {
+    expect(
+      mediaGenerationActiveFromSessionEntries([
+        {
+          type: "custom",
+          customType: "pine.media-generation-active",
+          data: { active: true },
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      mediaGenerationActiveFromSessionEntries([
+        {
+          type: "custom",
+          customType: "pine.media-generation-active",
+          data: { active: false },
+        },
+      ]),
+    ).toBe(false);
   });
 });
 

@@ -26,3 +26,11 @@ Empty Pi sessions are excluded from the derived search index and deleted through
 The SQLite FTS5 database under `.pine/cache/` is a derived, disposable index. It uses the trigram tokenizer for Latin and CJK substring search, stores source modification times for incremental refresh, and can be rebuilt entirely from Pi JSONL files.
 
 If CLI integration is needed later, extract the search engine behind a shared package and add a thin `/pine-resume` Pi extension adapter. Do not patch or shadow the built-in `/resume` command.
+
+## Media generation decision
+
+Image generation is a Pine-native tool pair: `activate_media_generation` is always visible, and activating it exposes `generate_image` for the rest of the session. Activation is recorded as a session entry so resumed sessions keep the tool, and the tool set is recomputed through the same `toolNamesFor*State` narrowing as Computer Use and Skill authoring. The indirection exists because more media tools are expected later; each new one joins `MEDIA_GENERATION_DYNAMIC_TOOL_NAMES` instead of widening the always-visible tool set.
+
+Generation itself uses pi-ai's image surface (`ImagesModels`) rather than the chat/stream APIs, with OpenRouter as the aggregating provider. The OpenRouter credential comes from the same `auth.json` that authenticates chat models, so no separate key is stored. The selected image model is a Pine setting (`pine-settings.json`) chosen from the composer's model selector; the model picker lists pi-ai's image catalog instead of Pine's chat models.
+
+Image generation leaves the project sandbox, so calls pass through the approval gate like other privileged actions, and generated files are written into the project's temporary directory unless the model names a path inside a folder shared with Pine.

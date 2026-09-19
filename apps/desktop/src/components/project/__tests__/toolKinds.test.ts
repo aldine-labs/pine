@@ -1,6 +1,7 @@
 import {
   BookOpenIcon,
   EyeIcon,
+  ImageIcon,
   MonitorCogIcon,
   PanelTopIcon,
   PlusIcon,
@@ -10,6 +11,7 @@ import {
 } from "@lucide/vue";
 import { describe, expect, it } from "vitest";
 import {
+  MEDIA_OPERATION_ICON,
   SKILL_OPERATION_ICON,
   TOOL_KIND_ICON,
   toolIconForName,
@@ -43,5 +45,14 @@ describe("Computer Use tool kinds", () => {
     expect(SKILL_OPERATION_ICON.edit).toBe(SquarePenIcon);
     expect(SKILL_OPERATION_ICON.remove).toBe(Trash2Icon);
     expect(toolIconForName("invoke_skill")).toBe(BookOpenIcon);
+  });
+
+  it("uses a dedicated kind and icons for media generation", () => {
+    expect(toolKind("activate_media_generation")).toBe("media");
+    expect(toolKind("generate_image")).toBe("media");
+    expect(TOOL_KIND_ICON.media).toBe(ImageIcon);
+    expect(MEDIA_OPERATION_ICON.activateMediaGeneration).toBe(ImageIcon);
+    expect(MEDIA_OPERATION_ICON.generateImage).toBe(WandSparklesIcon);
+    expect(toolIconForName("generate_image")).toBe(WandSparklesIcon);
   });
 });

@@ -15,6 +15,7 @@ import ProjectToolCallDialog from "./ProjectToolCallDialog.vue";
 import {
   isDeniedTool,
   isRunningTool,
+  mediaOperationKey,
   skillOperationKey,
   toolIconForName,
   toolKind,
@@ -53,6 +54,24 @@ function isPresentFileTool(name: string): boolean {
 
 function isComputerUseActivationTool(name: string): boolean {
   return normalizedToolName(name) === "activate_computer_use";
+}
+
+/** First generated image path reported by generate_image, as a file name. */
+function generatedImageFileName(output: unknown): string | undefined {
+  const details = inputRecord(inputRecord(output).details);
+  const files = Array.isArray(details.files) ? details.files : [];
+  const first = files[0];
+  if (typeof first !== "object" || first === null || Array.isArray(first)) {
+    return undefined;
+  }
+  const filePath = (first as Record<string, unknown>).path;
+  return typeof filePath === "string" ? filename(filePath) : undefined;
+}
+
+/** The prompt that produced an image generation call, compacted for the row. */
+function mediaPrompt(input: Record<string, unknown>): string | undefined {
+  const prompt = firstString(input, ["prompt"]);
+  return prompt ? compactInline(prompt) : undefined;
 }
 
 const COMPUTER_USE_OPERATION_KEYS: Record<string, string> = {
@@ -672,9 +691,13 @@ const presentation = computed(() => {
               )
             : kind === "skill"
               ? skillName
-              : path
-                ? `${filename(path)}${suffix}`
-                : props.toolCall.name;
+              : kind === "media"
+                ? (generatedImageFileName(props.toolCall.output) ??
+                  mediaPrompt(input) ??
+                  "")
+                : path
+                  ? `${filename(path)}${suffix}`
+                  : props.toolCall.name;
   const targetMono =
     kind === "bash" ||
     kind === "read" ||
@@ -693,11 +716,15 @@ const presentation = computed(() => {
       : undefined;
   const skillOperation =
     kind === "skill" ? skillOperationKey(props.toolCall.name) : undefined;
+  const mediaOperation =
+    kind === "media" ? mediaOperationKey(props.toolCall.name) : undefined;
   const operationPath = computerOperationKey
     ? `project.transcript.tools.computerOperations.${computerOperationKey}`
     : skillOperation
       ? `project.transcript.tools.skillOperations.${skillOperation}`
-      : undefined;
+      : mediaOperation
+        ? `project.transcript.tools.mediaOperations.${mediaOperation}`
+        : undefined;
   // Review holds replace the tense label entirely: the reader must see that
   // the call is gated, not that it is running.
   const state = isDenied.value

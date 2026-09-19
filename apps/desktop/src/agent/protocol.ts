@@ -9,6 +9,7 @@ import type {
   DeleteCustomModelRequest,
   DeleteCustomProviderRequest,
   LoginProviderRequest,
+  PineImageModelSelection,
   PineModelCatalog,
   PineProviderAuthEvent,
   PineThinkingLevel,
@@ -181,6 +182,12 @@ export type AgentWorkerRequest =
       type: "models:select-utility";
       agentDir: string;
       selection: PineUtilityModelSelection;
+    }
+  | {
+      id: string;
+      type: "models:select-image";
+      agentDir: string;
+      selection: PineImageModelSelection;
     }
   | {
       id: string;

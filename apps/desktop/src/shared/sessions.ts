@@ -20,6 +20,10 @@ export const PINE_COMPUTER_USE_ACTIVE_ENTRY =
 export const PINE_SKILL_AUTHORING_ACTIVE_ENTRY =
   "pine.skill-authoring-active" as const;
 
+/** Custom session entry recording that media generation was activated. */
+export const PINE_MEDIA_GENERATION_ACTIVE_ENTRY =
+  "pine.media-generation-active" as const;
+
 /** Audit/authorization records used by the automatic approval context. */
 export const PINE_AUTHORIZATION_GRANT_ENTRY =
   "pine.authorization-grant" as const;

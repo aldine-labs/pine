@@ -50,6 +50,7 @@ beforeEach(() => {
     value: {
       getModelCatalog: vi.fn().mockResolvedValue(catalog),
       logoutProvider: vi.fn().mockResolvedValue({ disposed: true }),
+      selectImageModel: vi.fn().mockResolvedValue({ updated: true }),
       selectModel: vi.fn().mockResolvedValue(undefined),
       selectUtilityModel: vi.fn().mockResolvedValue({ updated: true }),
     },
@@ -177,6 +178,40 @@ describe("models store lists", () => {
     });
     expect(store.selectedModel).toBe(alpha);
     expect(store.utilitySelectedModel).toBe(beta);
+  });
+
+  it("selects an image model without changing the chat model", async () => {
+    const store = useModelsStore();
+    const imageModel = {
+      acceptsImageInput: true,
+      id: "google/gemini-3-pro-image",
+      name: "Google: Nano Banana Pro",
+      providerId: "openrouter",
+      providerName: "OpenRouter",
+      returnsText: true,
+    };
+    store.catalog = {
+      ...catalog,
+      imageModels: [imageModel],
+      selection: {
+        providerId: alpha.providerId,
+        modelId: alpha.id,
+        thinkingLevel: "high",
+      },
+    };
+
+    await store.selectImageModel(imageModel);
+
+    expect(window.pine.selectImageModel).toHaveBeenCalledWith({
+      providerId: imageModel.providerId,
+      modelId: imageModel.id,
+    });
+    expect(store.selectedModel).toBe(alpha);
+    expect(store.imageSelectedModel).toBe(imageModel);
+    expect(store.imageSelection).toEqual({
+      providerId: imageModel.providerId,
+      modelId: imageModel.id,
+    });
   });
 });
 

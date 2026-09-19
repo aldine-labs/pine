@@ -100,6 +100,10 @@ export default {
   },
   models: {
     favorites: "Favorites",
+    imageModel: "Image model",
+    imageModelDefault: "Default model",
+    imageModelUnconfigured:
+      "OpenRouter is not configured. Add its API key in the model settings to generate images.",
     loading: "Loading models",
     recent: "Recently used",
     recommended: "Recommended models",
@@ -526,6 +530,10 @@ export default {
           active: "Fetching {count} web pages",
           complete: "Fetched {count} web pages",
         },
+        media: {
+          active: "Generating {count} images",
+          complete: "Generated {count} images",
+        },
         presentFile: {
           active: "Presenting {count} files",
           complete: "Presented {count} files",
@@ -545,6 +553,7 @@ export default {
         computer: "computer action",
         edit: "edit",
         generic: "tool",
+        media: "image generation",
         read: "read",
         search: "search",
         fetch: "web fetch",
@@ -666,6 +675,20 @@ export default {
             complete: "Removed a {scope} Skill",
             running: "Removing a {scope} Skill",
             error: "Couldn’t remove a {scope} Skill",
+          },
+        },
+        mediaOperations: {
+          activateMediaGeneration: {
+            label: "enable image generation",
+            complete: "Enabled image generation",
+            running: "Enabling image generation",
+            error: "Couldn’t enable image generation",
+          },
+          generateImage: {
+            label: "generate an image",
+            complete: "Generated an image",
+            running: "Generating an image",
+            error: "Couldn’t generate the image",
           },
         },
         bash: {

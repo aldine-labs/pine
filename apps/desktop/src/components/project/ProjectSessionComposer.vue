@@ -7,6 +7,7 @@ import {
   FileIcon,
   FolderIcon,
   HistoryIcon,
+  ImageIcon,
   PlusIcon,
   SearchIcon,
   ShieldCheckIcon,
@@ -48,6 +49,9 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -72,7 +76,10 @@ import {
   type PineAttachment,
   type PastedImageMimeType,
 } from "@/shared/attachments";
-import type { PineThinkingLevel } from "@/shared/models";
+import type {
+  PineImageModelDescriptor,
+  PineThinkingLevel,
+} from "@/shared/models";
 import type { SessionSearchResult } from "@/shared/sessions";
 import type {
   PinePendingApproval,
@@ -124,11 +131,37 @@ const approvalMode = defineModel<ApprovalMode>("approvalMode", {
 });
 const { t } = useI18n();
 const modelsStore = useModelsStore();
-const { favoriteModels, featuredModels } = storeToRefs(modelsStore);
+const {
+  favoriteModels,
+  featuredModels,
+  imageModels,
+  imageProviderConfigured,
+  imageSelection,
+} = storeToRefs(modelsStore);
 const selection = computed(() => modelsStore.selectionFor(props.sessionId));
 const selectedModel = computed(() =>
   modelsStore.selectedModelFor(props.sessionId),
 );
+const isImageModelPickerVisible = computed(() => imageModels.value.length > 0);
+
+function imageModelKey(model: PineImageModelDescriptor): string {
+  return JSON.stringify([model.providerId, model.id]);
+}
+
+const imageSelectionKey = computed(() => {
+  const selected = imageSelection.value;
+  return selected
+    ? JSON.stringify([selected.providerId, selected.modelId])
+    : "";
+});
+
+function selectImageModelByKey(value: unknown): void {
+  if (typeof value !== "string") return;
+  const model = imageModels.value.find(
+    (candidate) => imageModelKey(candidate) === value,
+  );
+  if (model) void modelsStore.selectImageModel(model);
+}
 const messageId = useId();
 const isModelPickerOpen = ref(false);
 const isSessionPickerOpen = ref(false);
@@ -716,6 +749,59 @@ function handleRootSubmit(event: Event): void {
               {{ t("models.picker.browse") }}
             </DropdownMenuItem>
           </DropdownMenuGroup>
+
+          <template v-if="isImageModelPickerVisible">
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger data-slot="image-model-trigger">
+                <ImageIcon />
+                <span class="flex min-w-0 flex-1 flex-col items-start">
+                  <span>{{ t("models.imageModel") }}</span>
+                  <span class="truncate text-xs text-muted-foreground">
+                    {{
+                      modelsStore.imageSelectedModel?.name ??
+                      t("models.imageModelDefault")
+                    }}
+                  </span>
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent
+                data-slot="image-model-content"
+                class="max-h-80 w-64 overflow-y-auto"
+              >
+                <template v-if="imageProviderConfigured">
+                  <DropdownMenuLabel>
+                    {{ t("models.imageModel") }}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    :model-value="imageSelectionKey"
+                    @update:model-value="selectImageModelByKey"
+                  >
+                    <DropdownMenuRadioItem
+                      v-for="model in imageModels"
+                      :key="imageModelKey(model)"
+                      data-slot="image-model-option"
+                      :value="imageModelKey(model)"
+                    >
+                      <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span class="truncate">{{ model.name }}</span>
+                        <span class="truncate text-xs text-muted-foreground">
+                          {{ model.providerName }}
+                        </span>
+                      </span>
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </template>
+                <DropdownMenuLabel
+                  v-else
+                  data-slot="image-model-unconfigured"
+                  class="font-normal whitespace-normal text-muted-foreground"
+                >
+                  {{ t("models.imageModelUnconfigured") }}
+                </DropdownMenuLabel>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </template>
 
           <template v-if="selectedModel && thinkingLevels.length > 1">
             <DropdownMenuSeparator />

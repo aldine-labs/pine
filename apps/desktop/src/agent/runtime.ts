@@ -34,6 +34,7 @@ import type {
   DeleteCustomProviderRequest,
   PineAuthType,
   PineCustomModelApi,
+  PineImageModelSelection,
   PineModelCatalog,
   PineProviderAuthEvent,
   PineThinkingLevel,
@@ -56,6 +57,7 @@ import {
   PINE_APPROVAL_DECISION_ENTRY,
   PINE_APPROVAL_MODE_ENTRY,
   PINE_COMPUTER_USE_ACTIVE_ENTRY,
+  PINE_MEDIA_GENERATION_ACTIVE_ENTRY,
   PINE_SKILL_AUTHORING_ACTIVE_ENTRY,
   type PineApprovalDecision,
   type PineContextUsage,
@@ -114,9 +116,16 @@ import {
   SKILL_AUTHORING_DYNAMIC_TOOL_NAMES,
   createSkillToolsExtension,
 } from "./skills/tools";
+import { MEDIA_GENERATION_DYNAMIC_TOOL_NAMES } from "./media/tools";
+import {
+  imageModel,
+  imageModelDescriptors,
+  IMAGE_MODEL_PROVIDER_ID,
+} from "./media/models";
 import { PineSkillRepository } from "./skills/repository";
 import {
   readPineAgentSettings,
+  writeImageModelSelection,
   writeUtilityModelSelection,
 } from "./pineSettings";
 import { createDefaultPineUserProfile } from "../shared/userProfile";
@@ -377,6 +386,7 @@ interface LiveAgentSession {
   availableToolNames: string[];
   computerUseActive: boolean;
   computerUseController?: ComputerUseController;
+  mediaGenerationActive: boolean;
   skillAuthoringActive: boolean;
   tinyFishApiKey?: string;
   locale: "en-US" | "zh-CN";
@@ -501,24 +511,30 @@ export function toolNamesForComputerUseState(
 export function computerUseActiveFromSessionEntries(
   entries: readonly unknown[],
 ): boolean {
-  return entries.some((value) => {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return false;
-    }
-    const entry = value as Record<string, unknown>;
-    return (
-      entry.type === "custom" &&
-      entry.customType === PINE_COMPUTER_USE_ACTIVE_ENTRY &&
-      typeof entry.data === "object" &&
-      entry.data !== null &&
-      !Array.isArray(entry.data) &&
-      (entry.data as { active?: unknown }).active === true
-    );
-  });
+  return activeFlagFromSessionEntries(entries, PINE_COMPUTER_USE_ACTIVE_ENTRY);
 }
 
 export function skillAuthoringActiveFromSessionEntries(
   entries: readonly unknown[],
+): boolean {
+  return activeFlagFromSessionEntries(
+    entries,
+    PINE_SKILL_AUTHORING_ACTIVE_ENTRY,
+  );
+}
+
+export function mediaGenerationActiveFromSessionEntries(
+  entries: readonly unknown[],
+): boolean {
+  return activeFlagFromSessionEntries(
+    entries,
+    PINE_MEDIA_GENERATION_ACTIVE_ENTRY,
+  );
+}
+
+function activeFlagFromSessionEntries(
+  entries: readonly unknown[],
+  customType: string,
 ): boolean {
   return entries.some((value) => {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -527,7 +543,7 @@ export function skillAuthoringActiveFromSessionEntries(
     const entry = value as Record<string, unknown>;
     return (
       entry.type === "custom" &&
-      entry.customType === PINE_SKILL_AUTHORING_ACTIVE_ENTRY &&
+      entry.customType === customType &&
       typeof entry.data === "object" &&
       entry.data !== null &&
       !Array.isArray(entry.data) &&
@@ -545,6 +561,19 @@ export function toolNamesForSkillAuthoringState(
     (name) =>
       !SKILL_AUTHORING_DYNAMIC_TOOL_NAMES.includes(
         name as (typeof SKILL_AUTHORING_DYNAMIC_TOOL_NAMES)[number],
+      ),
+  );
+}
+
+export function toolNamesForMediaGenerationState(
+  toolNames: readonly string[],
+  active: boolean,
+): string[] {
+  if (active) return [...toolNames];
+  return toolNames.filter(
+    (name) =>
+      !MEDIA_GENERATION_DYNAMIC_TOOL_NAMES.includes(
+        name as (typeof MEDIA_GENERATION_DYNAMIC_TOOL_NAMES)[number],
       ),
   );
 }
@@ -1115,7 +1144,18 @@ export class PineAgentRuntime {
         ? utilitySelection
         : undefined;
 
+    const imageSelection = (await readPineAgentSettings(agentDir)).imageModel;
+    const validImageSelection =
+      imageSelection &&
+      imageSelection.providerId === IMAGE_MODEL_PROVIDER_ID &&
+      runtime.hasConfiguredAuth(IMAGE_MODEL_PROVIDER_ID) &&
+      imageModel(imageSelection.modelId)
+        ? imageSelection
+        : undefined;
+
     return {
+      imageModels: imageModelDescriptors(),
+      ...(validImageSelection ? { imageSelection: validImageSelection } : {}),
       providers,
       models: models.map((model) =>
         this.describeModel(model, providers, customModelsFile),
@@ -1328,6 +1368,24 @@ export class PineAgentRuntime {
     return { updated: true };
   }
 
+  async selectImageModel(
+    agentDir: string,
+    selection: PineImageModelSelection,
+  ): Promise<{ updated: boolean }> {
+    if (selection.providerId !== IMAGE_MODEL_PROVIDER_ID) {
+      throw new Error("Unsupported image model provider.");
+    }
+    const runtime = await this.getModelRuntime(agentDir);
+    if (!runtime.hasConfiguredAuth(IMAGE_MODEL_PROVIDER_ID)) {
+      throw new Error("Configure OpenRouter before selecting an image model.");
+    }
+    if (!imageModel(selection.modelId)) {
+      throw new Error("Image model not found.");
+    }
+    await writeImageModelSelection(agentDir, selection);
+    return { updated: true };
+  }
+
   setContextCompactionStrategy(strategy: PineContextCompactionStrategy): {
     updated: boolean;
   } {
@@ -1378,6 +1436,9 @@ export class PineAgentRuntime {
       attachedPaths,
       availableToolNames: [],
       computerUseActive: computerUseActiveFromSessionEntries(
+        sessionManager.getEntries(),
+      ),
+      mediaGenerationActive: mediaGenerationActiveFromSessionEntries(
         sessionManager.getEntries(),
       ),
       skillAuthoringActive: skillAuthoringActiveFromSessionEntries(
@@ -1468,6 +1529,7 @@ export class PineAgentRuntime {
       live,
       live.approvalMode === "let-me-review" ? "user" : "auto",
     );
+    const modelRuntime = await this.getModelRuntime(location.agentDir);
     const pineTools = await createPineToolDefinitions(
       location,
       live.gate,
@@ -1476,6 +1538,26 @@ export class PineAgentRuntime {
         getApprovalMode: () => live.approvalMode,
         getGate: () => live.gate,
         getTinyFishApiKey: () => live.tinyFishApiKey,
+        mediaGeneration: {
+          activate: () => {
+            if (live.mediaGenerationActive) return;
+            live.mediaGenerationActive = true;
+            live.session.sessionManager.appendCustomEntry(
+              PINE_MEDIA_GENERATION_ACTIVE_ENTRY,
+              { active: true },
+            );
+            this.syncApprovalModeTools(live);
+          },
+          imageModelId: async () => {
+            const selected = (await readPineAgentSettings(live.agentDir))
+              .imageModel;
+            return selected && imageModel(selected.modelId)
+              ? selected.modelId
+              : undefined;
+          },
+          resolveOpenRouterApiKey: async () =>
+            (await modelRuntime.getAuth(IMAGE_MODEL_PROVIDER_ID))?.auth.apiKey,
+        },
         requestQuestionnaire: (toolCallId, params, signal) =>
           this.requestQuestionnaire(live, toolCallId, params, signal),
         presentFile: (toolCallId, filePath) =>
@@ -1495,7 +1577,7 @@ export class PineAgentRuntime {
     const { session } = await createAgentSession({
       cwd: location.cwd,
       agentDir: location.agentDir,
-      modelRuntime: await this.getModelRuntime(location.agentDir),
+      modelRuntime,
       resourceLoader,
       sessionManager,
       settingsManager,
@@ -1624,12 +1706,15 @@ export class PineAgentRuntime {
   private syncApprovalModeTools(live: LiveAgentSession): void {
     const activeToolNames = live.session.getActiveToolNames();
     const nextToolNames = toolNamesForApprovalMode(
-      toolNamesForComputerUseState(
-        toolNamesForSkillAuthoringState(
-          live.availableToolNames,
-          live.skillAuthoringActive,
+      toolNamesForMediaGenerationState(
+        toolNamesForComputerUseState(
+          toolNamesForSkillAuthoringState(
+            live.availableToolNames,
+            live.skillAuthoringActive,
+          ),
+          live.computerUseActive,
         ),
-        live.computerUseActive,
+        live.mediaGenerationActive,
       ),
       live.approvalMode,
       live.tinyFishApiKey !== undefined,
