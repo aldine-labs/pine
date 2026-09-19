@@ -31,39 +31,60 @@ building `pi-ai` from the upstream repository and installing the result into
 2. Skips everything when the checkout already matches the recorded commit and
    the installed overlay is intact, so a no-op sync costs one `git fetch`.
 3. Installs the upstream build toolchain (`npm install --ignore-scripts` in the
-   clone) and runs `npm run build` in `packages/ai`.
-4. Copies the built `dist/` and `package.json` into
-   `node_modules/@earendil-works/pi-ai`, together with the dependency versions
-   that build declares. Those dependencies are installed **inside** the package
-   directory (`node_modules/@earendil-works/pi-ai/node_modules/...`) so Pi gets
-   the versions it was compiled against while the rest of the app keeps the
-   versions it resolved.
+   clone) and runs each package's own `npm run build` in dependency order:
+   chord, pi-tui, pi-telemetry, pi-ai, pi-agent-core, pi-coding-agent.
+4. Copies each built `dist/` and `package.json` into
+   `node_modules/@earendil-works/<package>`, together with the dependency
+   versions that build declares. Those dependencies are installed **inside** the
+   package directory (`node_modules/@earendil-works/pi-ai/node_modules/...`) so
+   Pi gets the versions it was compiled against while the rest of the app keeps
+   the versions it resolved.
 5. Drops a `.pine-pi-sync.json` marker (upstream commit, ref, timestamp) into
    the package and records the same state in `.pi-src/pi-sync-state.json`.
-6. Imports the result once (`providers/all`, `pi-coding-agent`,
-   `pi-agent-core/node`) and reports the OpenRouter image model count, so a
-   broken upstream build fails at sync time instead of at runtime.
+6. Boots a real agent session against a local mock provider
+   (`verify-pi-agent.mjs`) and asserts the outgoing request still carries the
+   system prompt and the tool definitions. Only then is the commit recorded as
+   good.
 
 Because `pi-ai`'s package version on `main` is still the released `0.85.1`, the
 install stays compatible with `bun.lock`: **`bun install` does not remove the
 overlay**, and the overlay is replaced automatically the day a real release
 bumps the version.
 
-## Scope: why `pi-ai` only
+## Scope: the whole runtime closure, never a subset
 
-The script rebuilds exactly one package. `pi-ai` is where the catalogs live, and
-its public API is stable — between 0.85.1 and `main` the only surface change was
-one added module (`./utils/transcript.ts`) — so it can be swapped underneath the
-released `pi-agent-core` and `pi-coding-agent` without touching Pine's own code.
+The script rebuilds every Pi package Pine loads: chord, pi-tui, pi-telemetry,
+pi-ai, pi-agent-core, pi-coding-agent. Partial overlays are not a smaller version
+of this mechanism, they are a broken one, and the failure is silent.
 
-Widening `PACKAGES` in the script to the whole runtime closure (chord, `pi-tui`,
-`pi-telemetry`, `pi-agent-core`, `pi-coding-agent`) is mechanically supported,
-and the script restores the npm copies of anything it no longer owns. It is not
-the default because it drags upstream's in-flight API churn into our typecheck:
-building `pi-agent-core` from `main` already breaks `runtime.ts`, where
-`CompactionSettings` gained a required `modelOverrides` field. Widen the list
-only when Pine needs something npm has not shipped, and adapt our code in the
-same change.
+Observed on 2026-09-19: overlaying only `pi-ai` from `main` under the released
+`pi-coding-agent` left the agent with **no tools and no system prompt**. Nothing
+threw. `main` had moved the stream entry point to the new `TranscriptContext`
+while the released `pi-coding-agent` still called it with the old `Context`, so
+every request went out with the user message alone and the model truthfully
+answered that it had no tools. Type checks, imports, and the model catalog all
+looked healthy.
+
+`verify-pi-agent.mjs` is the guard for that class of breakage; it is why the
+scope can be `main` at all.
+
+Tracking the closure has a second cost: upstream API changes reach our typecheck
+as soon as they land upstream. Both errors seen on 2026-09-19 were small —
+`CompactionSettings` grew per-model `modelOverrides`, so Pine now types its
+cached value as `ReturnType<SettingsManager["getCompactionSettings"]>`, and a
+computer-use test read a property the result type no longer exposes — but they
+have to be fixed in the same change that syncs, which is what `bun run check`
+and `--strict` are for.
+
+## Failure handling
+
+1. Build or verification fails for the requested commit → the script rebuilds the
+   last commit that passed verification and records that instead.
+2. No verified overlay exists (first run, or the fallback fails too) → the script
+   removes the overlays and reinstalls the published releases, so the app keeps
+   working on npm.
+3. `--strict` (used by `prebuild`) turns the failure into a non-zero exit after
+   the fallback, so a release never ships an unverified overlay silently.
 
 ## Commands and hooks
 
@@ -74,6 +95,7 @@ same change.
 | `bun run sync:pi --force` | Rebuild even when the recorded commit is unchanged |
 | `bun run sync:pi --check` | Verify the installed overlay offline, exit non-zero when missing |
 | `bun run sync:pi --verbose` | Stream every `git` / `npm` / `bun` command |
+| `bun run verify:pi` | Run the agent verification on its own (mock provider, no network) |
 | `bun run dev` | `predev` syncs first (tolerant), then starts Electron Forge |
 | `bun run build` | `prebuild` syncs first with `--strict`, then packages the app |
 
@@ -116,14 +138,14 @@ still need to start the app.
 
 ## What it cannot do
 
-- **Chat models are refreshed too, provider data is not.** The `pi-ai` build
-  hydrates provider model data from public endpoints (`models.dev`, OpenRouter,
-  and friends) and needs network access; it does not need API keys. If that
-  hydration fails, the sync fails rather than silently keeping the old catalog.
-- **No unreleased `pi-ai` code paths by default.** Only `pi-ai` is overlaid; new
-  APIs in `pi-agent-core` or `pi-coding-agent` stay on npm until released.
+- **It needs network.** The `pi-ai` build hydrates provider model data from public
+  endpoints (`models.dev`, OpenRouter, and friends); no API keys are involved,
+  but an unreachable network fails the sync.
+- **It cannot make upstream safe.** `main` can be broken for reasons only the
+  Verifier or the app itself notices. `PI_REF=<tag|sha>` pins a commit, and
+  `PI_SYNC=off` drops the overlay entirely.
 - **Packaging copies whatever is installed.** `forge.config.ts` bakes the agent
   runtime dependency closure from `node_modules` into the app, so a packaged
-  build ships the overlaid `pi-ai` when one is present and the npm release when
-  it is not. `bun run build` syncs with `--strict` first, so release builds are
-  never a surprise.
+  build ships the overlaid Pi when one is present and the npm releases when it is
+  not. `bun run build` syncs with `--strict` first, so release builds are never a
+  surprise.

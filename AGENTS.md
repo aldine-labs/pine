@@ -37,11 +37,12 @@
 
 ## Pi 依赖同步
 
-- `@earendil-works/pi-ai` 的内置模型目录是上游仓库在发版时生成的快照，npm 版本可能比上游 `main` 落后数周。`bun run sync:pi` 会浅克隆上游到 `.pi-src/`（已 gitignore），构建 `pi-ai`，并把产物连同它声明的依赖版本安装进 `node_modules/@earendil-works/pi-ai`。
-- `predev` 会在启动前同步（容错，失败只警告），`prebuild` 会以 `--strict` 同步（失败即终止）。`bun run check` 不同步，必须能在干净 `bun install` 且无网络时通过。
+- Pi 的内置模型目录是上游仓库在发版时生成的快照，npm 版本可能比上游 `main` 落后数周。`bun run sync:pi` 浅克隆上游到 `.pi-src/`（已 gitignore），构建 Pine 运行时加载的整组包（chord、pi-tui、pi-telemetry、pi-ai、pi-agent-core、pi-coding-agent），连同各包声明的依赖版本安装进 `node_modules/@earendil-works/*`。
+- **绝不做部分覆盖。** 只覆盖 `pi-ai` 而保留 npm 的 `pi-coding-agent` 会让 agent 静默丢失全部工具和 system prompt（上游把 stream 入口换成了 `TranscriptContext`）。`verify-pi-agent.mjs` 在同步后用一个 mock provider 真跑一轮 agent 来兜住这类问题，`bun run verify:pi` 可单独运行。
+- `predev` 会在启动前同步（容错：失败回退到上一个通过校验的 commit，再回退到 npm 版本，只警告），`prebuild` 以 `--strict` 同步（回退后仍失败即终止）。`bun run check` 不同步。
 - 常用开关：`PI_SYNC=off` 跳过同步、`PI_REF=<branch|tag|sha>` 指定上游版本、`--force` 强制重建、`--check` 离线检查当前覆盖状态。
-- 同步范围默认只有 `pi-ai`。要扩大范围（例如 `pi-agent-core`）需同时把我们自己的代码适配到上游 API，并在同一次改动里跑通 `bun run check`。
-- 只改同步脚本、文档或依赖覆盖机制时属于基础设施改动，与功能改动分开提交。完整机制说明见 `docs/architecture/pi-source-sync.md`。
+- 上游 API 变动会立刻出现在我们的 typecheck 里；同步后必须跑 `bun run check`，并接受在同一次改动中适配上游 API。
+- 只改同步脚本、校验脚本、文档或依赖覆盖机制时属于基础设施改动，与功能改动分开提交。完整机制与回滚策略见 `docs/architecture/pi-source-sync.md`。
 
 ## shadcn-vue 组件流程
 
