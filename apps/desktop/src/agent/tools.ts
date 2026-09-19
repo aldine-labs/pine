@@ -622,9 +622,6 @@ export async function createPineToolDefinitions(
     getGate,
     imageModelId,
     outputDirectory: path.join(canonicalBashTemporaryDirectory, "media"),
-    presentFile: presentFile
-      ? (toolCallId, filePath) => presentFile(toolCallId, filePath)
-      : undefined,
     resolveApiKey: () =>
       mediaGeneration?.resolveOpenRouterApiKey() ?? Promise.resolve(undefined),
   });

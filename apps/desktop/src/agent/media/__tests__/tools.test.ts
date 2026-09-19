@@ -73,7 +73,6 @@ function createOptions(
     getApprovalMode: () => "auto-approve",
     getGate: () => fakeGate(),
     outputDirectory: "/tmp/pine-project-tmp/media",
-    presentFile: vi.fn(),
     resolveApiKey: () => Promise.resolve("sk-or-test"),
     ...overrides,
   };
@@ -248,13 +247,11 @@ describe("generate_image", () => {
     expect(review).not.toHaveBeenCalled();
   });
 
-  it("saves generated images, presents them, and reports the paths", async () => {
+  it("saves generated images without opening them and reports the paths", async () => {
     const outputDirectory = await createOutputDirectory();
-    const presentFile = vi.fn();
     const options = createOptions({
       generateImages: () => Promise.resolve(pngOutput()),
       outputDirectory,
-      presentFile,
     });
 
     const result = await execute(options, GENERATE_IMAGE_TOOL_NAME, {
@@ -270,10 +267,12 @@ describe("generate_image", () => {
     const file = files[0];
     if (!file) throw new Error("expected one generated image file");
     expect(await readFile(file.path, "utf8")).toBe("image-bytes");
-    expect(presentFile).toHaveBeenCalledWith("call-1", file.path);
     expect(result.content[0]).toMatchObject({
       type: "text",
       text: expect.stringContaining("A red circle on white."),
+    });
+    expect(result.content[0]).toMatchObject({
+      text: expect.stringContaining("Pine does not open generated images"),
     });
   });
 

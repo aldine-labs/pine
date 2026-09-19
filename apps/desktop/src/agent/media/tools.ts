@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
 import type { PineApprovalMode } from "../../shared/agent";
+import { UI_PRESENT_FILE_TOOL_NAME } from "../../shared/agent";
 import type { ToolGate } from "../gate";
 import { DEFAULT_IMAGE_MODEL_ID, imageModel, pineImagesModels } from "./models";
 
@@ -32,7 +33,6 @@ export const MEDIA_GENERATION_DYNAMIC_TOOL_NAMES = [
 ] as const;
 
 const MAX_PROMPT_LENGTH = 8_000;
-const MAX_PRESENTED_IMAGES = 4;
 const PROTECTED_PAYLOAD_FIELDS = new Set(["messages", "model", "stream"]);
 
 const IMAGE_FILE_EXTENSIONS: Record<string, string> = {
@@ -47,7 +47,9 @@ const ACTIVATION_GUIDANCE = `Media generation is active for this session.
 
 Call ${GENERATE_IMAGE_TOOL_NAME} with a self-contained prompt: name the subject, its actions and setting, then the composition, medium or style, lighting, colour palette, and any text that must appear in the image. Write the prompt in the language the user is using unless the prompt itself benefits from another language. Prefer one clear image per call; ask for variants with separate calls instead of stacking contradictory instructions in one prompt.
 
-The image model itself is a user preference: every call runs on the model the user picked in Pine's settings, and the tool has no model argument. Use parameters only for model-specific options the user asked for (for example size, quality, aspect ratio, or style). Generated files are saved to disk and opened in a background tab for the user; mention what you generated and where it was saved.`;
+The image model itself is a user preference: every call runs on the model the user picked in Pine's settings, and the tool has no model argument. Use parameters only for model-specific options the user asked for (for example size, quality, aspect ratio, or style).
+
+Generated files are written to disk but never opened for the user, and the default output lands in this project's temporary directory, outside the folders the user shares with Pine. When the user should actually look at the image, put it somewhere they can reach first — pass an output_path inside a folder shared with Pine, or copy the generated file there with the shell — and then call ${UI_PRESENT_FILE_TOOL_NAME} on that path. Mention the path you kept.`;
 
 function textResult(
   text: string,
@@ -111,8 +113,6 @@ export interface MediaGenerationToolOptions {
   outputDirectory: string;
   /** Authorizes (and canonicalizes) a project write target. */
   authorizeWrite(targetPath: string): Promise<string>;
-  /** Opens a generated file for the user without moving their focus. */
-  presentFile?: (toolCallId: string, filePath: string) => void;
   /** Injectable image generation, used by tests. */
   generateImages?: (request: GenerateImageRequest) => Promise<AssistantImages>;
 }
@@ -174,7 +174,7 @@ const generateImageParams = Type.Object(
     output_path: Type.Optional(
       Type.String({
         description:
-          "File path for the generated image. A relative path resolves against the project root and must stay inside a folder shared with Pine. Omit to save into this project's Pine temporary directory. When several images are returned, later files get a numeric suffix.",
+          "File path for the generated image. A relative path resolves against the project root and must stay inside a folder shared with Pine; use this when the user should keep or open the image. Omit to save into this project's Pine temporary directory, which the user cannot browse from Pine. When several images are returned, later files get a numeric suffix.",
         maxLength: 4_096,
       }),
     ),
@@ -213,14 +213,17 @@ function createGenerateImageTool(options: MediaGenerationToolOptions) {
     name: GENERATE_IMAGE_TOOL_NAME,
     label: "Generate Image",
     description:
-      "Generate an image from a text prompt with OpenRouter's aggregated image models, save the result as a file, and open it for the user in a background tab. Requires activate_media_generation first. This call reaches the network and may cost money, so it is reviewed like other privileged actions.",
+      "Generate an image from a text prompt with OpenRouter's aggregated image models and save the result as a file. The file is not opened for the user: keep it in a folder shared with Pine and call " +
+      UI_PRESENT_FILE_TOOL_NAME +
+      " if the user should see it. Requires activate_media_generation first. This call reaches the network and may cost money, so it is reviewed like other privileged actions.",
     promptSnippet:
       "Generate images from a prompt with OpenRouter image models and save them as project files",
     promptGuidelines: [
       `Write ${GENERATE_IMAGE_TOOL_NAME} prompts that a reader could execute without seeing the conversation: describe the subject, setting, composition, style, lighting, and palette, and spell out text that must appear in the image.`,
       `Prefer one image per call and iterate on the prompt instead of asking for many unrelated images at once.`,
-      `Pass output_path only when the user wants the file in a specific location; otherwise Pine saves into this project's temporary directory and reports the path.`,
-      `The generated file is opened in a background tab: say what was created and where it was saved instead of assuming the user already looked at it.`,
+      `Without output_path the image lands in this project's temporary directory, which never shows up in Pine's file tree and is not opened for the user.`,
+      `When the user should look at the image, write or copy it into a folder shared with Pine and call ${UI_PRESENT_FILE_TOOL_NAME} on that path; opening the temporary copy needs an approval and is a poor default.`,
+      `Generated images do not enter the conversation as attachments: describe what you created and name the path you kept.`,
     ],
     parameters: generateImageParams,
     prepareArguments: (args) => args as Static<typeof generateImageParams>,
@@ -328,10 +331,6 @@ function createGenerateImageTool(options: MediaGenerationToolOptions) {
         });
       }
 
-      for (const file of files.slice(0, MAX_PRESENTED_IMAGES)) {
-        options.presentFile?.(toolCallId, file.path);
-      }
-
       const list = files
         .map(
           (file) =>
@@ -342,9 +341,7 @@ function createGenerateImageTool(options: MediaGenerationToolOptions) {
         `Generated ${files.length} image${files.length === 1 ? "" : "s"} with ${model.name}:`,
         list,
         ...(modelText ? [`\n${model.name} also returned:\n${modelText}`] : []),
-        files.length > MAX_PRESENTED_IMAGES
-          ? `\nOnly the first ${MAX_PRESENTED_IMAGES} images were opened in background tabs.`
-          : "",
+        `\nPine does not open generated images. To show one to the user, write or copy it into a folder shared with Pine and call ${UI_PRESENT_FILE_TOOL_NAME} on that path.`,
       ]
         .filter(Boolean)
         .join("\n");
