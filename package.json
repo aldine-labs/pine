@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test",
+    "predev": "bun run sync:pi",
     "dev": "bun run --filter @pine/desktop start",
+    "prebuild": "bun run sync:pi --strict",
     "build": "bun run --filter @pine/desktop make",
     "format": "bun run --filter @pine/desktop format",
     "format:check": "bun run --filter @pine/desktop format:check",
@@ -17,7 +19,8 @@
     "test": "bun run --filter @pine/desktop test:run",
     "test:coverage": "bun run --filter @pine/desktop test:coverage",
     "typecheck": "bun run --filter @pine/desktop typecheck",
-    "shadcn:add": "bun run apps/desktop/scripts/shadcn-add.mjs"
+    "shadcn:add": "bun run apps/desktop/scripts/shadcn-add.mjs",
+    "sync:pi": "bun run apps/desktop/scripts/sync-pi.mjs"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

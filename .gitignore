@@ -1,6 +1,9 @@
 # dependencies (bun install)
 node_modules
 
+# upstream Pi source used by scripts/sync-pi.mjs
+.pi-src
+
 # output
 out
 dist
