@@ -37,11 +37,19 @@
 
 ## Pi 依赖同步
 
-- **基线是 npm 发布版**：Pine 运行的 `@earendil-works/pi-*` 永远以 `bun.lock` 里解析出的发布版本为准，不做整包覆盖，`dev` / `build` 也不自动改动 `node_modules`。
+- **基线是 npm 发布版**：Pine 运行的 `@earendil-works/pi-*` 永远以 `bun.lock` 里解析出的发布版本为准，不做整包覆盖；本地 `dev` / `build` 不自动改动 `node_modules`，桌面端 CI 构建会在打包前自动跑一次 `backport:models`，让安装包带上最新模型目录。
 - Pi 的内置模型目录是上游发版时生成的快照，npm 版本可能比上游 `main` 落后数周。`bun run backport:models` 浅克隆上游到 `.pi-src/`（已 gitignore），构建上游 `packages/ai`，只把生成的目录数据（`image-models.generated.js`、`models.generated.js`、`providers/*.models.js`、`providers/data/*.json`）回填进已安装的 npm 包——不动任何要执行的代码，也不改版本号或 lockfile。
 - 首次回填会把 npm 原文件备份到 `.pi-backport-backup/`（已 gitignore），因此 `bun run backport:models --restore` 可离线还原；`--check` 报告当前是不是回填状态；`--ref <tag|sha>` 可指定上游来源。
 - `bun run verify:pi` 会用 mock provider 真跑一轮 agent 并断言请求里带 system prompt 和工具定义。它不随 backport 自动运行（需要绑定本地端口），但排查"agent 没有工具"这类问题时应该先跑它。
 - 不要重新引入"构建前自动同步整包"的机制：上游 `main` 不是 API 契约，部分覆盖曾让 agent 静默丢失全部工具和 system prompt。原因与历史见 `docs/architecture/pi-model-backport.md`。
+
+## CHANGELOG 与发布记录
+
+- CHANGELOG 只写“和上一个已发布版本相比，用户能感知到的差异”，不写实现过程。
+- 写用户视角的结果：用户在什么场景下会看到界面、行为、可用模型、性能或错误信息发生变化。不写内部机制、脚本与 CI 步骤、提交顺序、排查过程、失败的尝试，也不写“重构了 X”“同步了 Y 目录”这类只有参与者看得懂的内容。
+- 每条记录必须能在没有对话上下文时被单独读懂。避免“修复了某通道”“改了某流程”这种读者无法判断意义的表述，改成读者能验证的现象。
+- 平台和流程细节不是卖点。只有当它确实改变用户拿到的东西时才提（例如“新模型会随版本一起到来”）。
+- 分类沿用 Keep a Changelog 的 新增 / Added、变更 / Changed、修复 / Fixed，每条中英双语、先中文后英文。宁可少写一条，也不要写用户看不懂的一条。
 
 ## shadcn-vue 组件流程
 
