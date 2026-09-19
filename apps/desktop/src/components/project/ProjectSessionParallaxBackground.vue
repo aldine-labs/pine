@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
     <ParallaxFloat
       class="absolute inset-0"
       :easing-factor="0.05"
-      :sensitivity="-0.5"
+      :sensitivity="-0.1"
     >
       <ParallaxFloatElement
         v-for="item in parallaxIconsWithFade"

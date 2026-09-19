@@ -32,7 +32,7 @@ export default {
     open: "打开 Pine 设置",
     sections: {
       general: "通用",
-      models: "Harness",
+      models: "执行环境",
       personalization: "用户画像",
     },
     sectionsLabel: "设置分类",
