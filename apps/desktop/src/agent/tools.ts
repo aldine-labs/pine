@@ -610,7 +610,7 @@ export async function createPineToolDefinitions(
   const activateMediaGeneration = mediaGeneration
     ? () => mediaGeneration.activate()
     : undefined;
-  const defaultImageModelId = mediaGeneration?.imageModelId
+  const imageModelId = mediaGeneration?.imageModelId
     ? () => mediaGeneration.imageModelId?.()
     : undefined;
   const mediaTools = createMediaGenerationToolDefinitions({
@@ -618,9 +618,9 @@ export async function createPineToolDefinitions(
     authorizeWrite: (targetPath) =>
       policy.authorize(targetPath, "write", { allowMissing: true }),
     cwd: location.cwd,
-    defaultImageModelId,
     getApprovalMode,
     getGate,
+    imageModelId,
     outputDirectory: path.join(canonicalBashTemporaryDirectory, "media"),
     presentFile: presentFile
       ? (toolCallId, filePath) => presentFile(toolCallId, filePath)

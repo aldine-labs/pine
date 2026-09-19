@@ -152,25 +152,26 @@ describe("generate_image", () => {
     ).rejects.toThrow(/OpenRouter is not configured/u);
   });
 
-  it("rejects unknown image models and lists the catalog", async () => {
-    const options = createOptions();
+  it("never exposes a model argument", () => {
+    const parameters = toolNamed(createOptions(), GENERATE_IMAGE_TOOL_NAME)
+      .parameters as { properties: Record<string, unknown> };
 
-    await expect(
-      execute(options, GENERATE_IMAGE_TOOL_NAME, {
-        model: "acme/not-an-image-model",
-        prompt: "A red circle",
-      }),
-    ).rejects.toThrow(/Unknown image model "acme\/not-an-image-model"/u);
+    expect(Object.keys(parameters.properties)).toEqual([
+      "prompt",
+      "parameters",
+      "output_path",
+    ]);
   });
 
   it("uses the image model picked in the model selector", async () => {
     const generateImages = vi.fn(() => Promise.resolve(pngOutput()));
     const options = createOptions({
-      defaultImageModelId: () => "google/gemini-2.5-flash-image",
+      imageModelId: () => "google/gemini-2.5-flash-image",
       generateImages,
     });
 
     await execute(options, GENERATE_IMAGE_TOOL_NAME, {
+      model: "acme/not-an-image-model",
       prompt: "A red circle",
     });
 
@@ -181,6 +182,31 @@ describe("generate_image", () => {
         }),
       }),
     );
+  });
+
+  it("falls back to the default when the user never picked a model", async () => {
+    const generateImages = vi.fn(() => Promise.resolve(pngOutput()));
+    const options = createOptions({ generateImages });
+
+    await execute(options, GENERATE_IMAGE_TOOL_NAME, {
+      prompt: "A red circle",
+    });
+
+    expect(generateImages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: expect.objectContaining({ id: "google/gemini-3-pro-image" }),
+      }),
+    );
+  });
+
+  it("reports a stale model selection instead of picking another model", async () => {
+    const options = createOptions({
+      imageModelId: () => "acme/not-an-image-model",
+    });
+
+    await expect(
+      execute(options, GENERATE_IMAGE_TOOL_NAME, { prompt: "A red circle" }),
+    ).rejects.toThrow(/pick another image model in Pine's settings/u);
   });
 
   it("requires approval before reaching the provider", async () => {

@@ -16,12 +16,7 @@ import {
 import { Type, type Static } from "typebox";
 import type { PineApprovalMode } from "../../shared/agent";
 import type { ToolGate } from "../gate";
-import {
-  DEFAULT_IMAGE_MODEL_ID,
-  imageModel,
-  imageModelIds,
-  pineImagesModels,
-} from "./models";
+import { DEFAULT_IMAGE_MODEL_ID, imageModel, pineImagesModels } from "./models";
 
 export const ACTIVATE_MEDIA_GENERATION_TOOL_NAME =
   "activate_media_generation" as const;
@@ -38,7 +33,6 @@ export const MEDIA_GENERATION_DYNAMIC_TOOL_NAMES = [
 
 const MAX_PROMPT_LENGTH = 8_000;
 const MAX_PRESENTED_IMAGES = 4;
-const MODEL_LIST_PREVIEW_LIMIT = 24;
 const PROTECTED_PAYLOAD_FIELDS = new Set(["messages", "model", "stream"]);
 
 const IMAGE_FILE_EXTENSIONS: Record<string, string> = {
@@ -53,7 +47,7 @@ const ACTIVATION_GUIDANCE = `Image generation is active for this session.
 
 Call ${GENERATE_IMAGE_TOOL_NAME} with a self-contained prompt: name the subject, its actions and setting, then the composition, medium or style, lighting, colour palette, and any text that must appear in the image. Write the prompt in the language the user is using unless the prompt itself benefits from another language. Prefer one clear image per call; ask for variants with separate calls instead of stacking contradictory instructions in one prompt.
 
-Use model only when the result needs a specific model's strengths, and parameters only for model-specific options the user asked for (for example size, quality, aspect ratio, or style). Generated files are saved to disk and opened in a background tab for the user; mention what you generated and where it was saved.`;
+The image model itself is a user preference: every call runs on the model the user picked in Pine's settings, and the tool has no model argument. Use parameters only for model-specific options the user asked for (for example size, quality, aspect ratio, or style). Generated files are saved to disk and opened in a background tab for the user; mention what you generated and where it was saved.`;
 
 function textResult(
   text: string,
@@ -91,13 +85,6 @@ function withSequence(filePath: string, sequence: number): string {
   return `${filePath.slice(0, filePath.length - extension.length)}-${sequence}${extension}`;
 }
 
-function modelListMessage(): string {
-  const ids = imageModelIds();
-  const preview = ids.slice(0, MODEL_LIST_PREVIEW_LIMIT);
-  const rest = ids.length - preview.length;
-  return `${preview.join(", ")}${rest > 0 ? `, and ${rest} more` : ""}`;
-}
-
 export interface GenerateImageRequest {
   apiKey: string;
   model: ImagesModel<ImagesApi>;
@@ -115,8 +102,11 @@ export interface MediaGenerationToolOptions {
   getGate(): ToolGate | null;
   /** Resolves the OpenRouter credential; undefined when it is not configured. */
   resolveApiKey(): Promise<string | undefined>;
-  /** The image model chosen in the model picker, when the user picked one. */
-  defaultImageModelId?: () => Promise<string | undefined> | string | undefined;
+  /**
+   * The image model the user picked in settings. It is the only way to choose
+   * an image model; the tool itself cannot ask for one.
+   */
+  imageModelId?: () => Promise<string | undefined> | string | undefined;
   /** Directory that receives generated files when output_path is omitted. */
   outputDirectory: string;
   /** Authorizes (and canonicalizes) a project write target. */
@@ -175,12 +165,6 @@ const generateImageParams = Type.Object(
       minLength: 1,
       maxLength: MAX_PROMPT_LENGTH,
     }),
-    model: Type.Optional(
-      Type.String({
-        description: `OpenRouter image model id, for example "google/gemini-3-pro-image" or "black-forest-labs/flux.2-pro". Omit to use the model chosen in Pine's image model picker.`,
-        maxLength: 200,
-      }),
-    ),
     parameters: Type.Optional(
       Type.Record(Type.String(), Type.Unknown(), {
         description:
@@ -249,14 +233,12 @@ function createGenerateImageTool(options: MediaGenerationToolOptions) {
         );
       }
 
-      const requestedModelId =
-        params.model?.trim() ||
-        (await options.defaultImageModelId?.())?.trim() ||
-        DEFAULT_IMAGE_MODEL_ID;
-      const model = imageModel(requestedModelId);
+      const selectedModelId =
+        (await options.imageModelId?.())?.trim() || DEFAULT_IMAGE_MODEL_ID;
+      const model = imageModel(selectedModelId);
       if (!model) {
         throw new Error(
-          `Unknown image model "${requestedModelId}". Available OpenRouter image models: ${modelListMessage()}.`,
+          `The image model "${selectedModelId}" from Pine's settings is not in OpenRouter's image catalog. Ask the user to pick another image model in Pine's settings, then try again.`,
         );
       }
 
