@@ -68,10 +68,6 @@ export default {
     tinyFishApiKeyLabel: "API 密钥",
     tinyFishApiKeyPlaceholder: "输入 TinyFish API 密钥",
     saveTinyFishApiKey: "保存密钥",
-    userProfile: "用户画像",
-    userProfileDescription: "告诉 Pine 如何称呼你，以及你希望它如何与你协作。",
-    userProfileDialogTitle: "编辑用户画像",
-    userProfileDialogDescription: "这些偏好会用于 Pine 的后续对话和工作过程。",
     userProfileNicknameLabel: "昵称",
     userProfileNicknamePlaceholder: "Pine 应该如何称呼你？",
     userProfileNicknameDescription: "Pine 会在合适的时候使用这个称呼。",
@@ -99,7 +95,8 @@ export default {
     userProfileInstructionsPlaceholder: "输入你希望 Pine 遵循的额外工作方式……",
     userProfileInstructionsDescription:
       "保存后会作为 Pine 系统提示词级别的个性化指令使用，但不能绕过安全、权限和审批规则。",
-    saveUserProfile: "保存画像",
+    userProfileUnsavedChanges: "有未保存的更改",
+    userProfileSaved: "用户画像已保存",
   },
   models: {
     favorites: "收藏的模型",

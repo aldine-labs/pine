@@ -2,7 +2,6 @@
 import { handleError } from "@/app/errors/errorHandler";
 import {
   CircleHelpIcon,
-  PencilIcon,
   SettingsIcon,
   SlidersHorizontalIcon,
   SparklesIcon,
@@ -11,11 +10,11 @@ import {
 } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import type { Component } from "vue";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { toast } from "vue-sonner";
 import { isAppLocale, persistAppLocale } from "@/app/i18n";
 import ModelPickerDialog from "@/components/models/ModelPickerDialog.vue";
-import UserProfileDialog from "@/components/preferences/UserProfileDialog.vue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +36,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -46,18 +47,27 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useModelsStore } from "@/stores/models";
+import { useUserProfileStore } from "@/stores/userProfile";
 import { isThemePreference, useAppearanceStore } from "@/stores/appearance";
 import {
   DEFAULT_CONTEXT_COMPACTION_STRATEGY,
   isPineContextCompactionStrategy,
   type PineContextCompactionStrategy,
 } from "@/shared/preferences";
+import {
+  createDefaultPineUserProfile,
+  isPineCommunicationStyle,
+  isPineTechnicalBackground,
+  normalizePineUserProfile,
+  type PineUserProfile,
+} from "@/shared/userProfile";
 
 type PreferenceSection = "general" | "models" | "personalization" | "advanced";
 
 const { locale, t } = useI18n();
 const appearanceStore = useAppearanceStore();
 const modelsStore = useModelsStore();
+const userProfileStore = useUserProfileStore();
 const { supportsSidebarVibrancy, themePreference } =
   storeToRefs(appearanceStore);
 const { imageProviderConfigured, imageSelectedModel, utilitySelectedModel } =
@@ -66,17 +76,40 @@ const isOpen = ref(false);
 const activeSection = ref<PreferenceSection>("general");
 const isUtilityModelPickerOpen = ref(false);
 const isImageModelPickerOpen = ref(false);
-const isUserProfileDialogOpen = ref(false);
 const isTinyFishCredentialDialogOpen = ref(false);
 const isTinyFishCredentialConfigured = ref(false);
 const tinyFishApiKey = ref("");
 const isSavingTinyFishApiKey = ref(false);
+const profileDraft = reactive<PineUserProfile>(createDefaultPineUserProfile());
 const contextCompactionStrategy = ref<PineContextCompactionStrategy>(
   DEFAULT_CONTEXT_COMPACTION_STRATEGY,
 );
 const isSavingContextCompactionStrategy = ref(false);
 const canSaveTinyFishApiKey = computed(
   () => tinyFishApiKey.value.trim().length > 0 && !isSavingTinyFishApiKey.value,
+);
+const communicationStyleDescription = computed(() =>
+  t(
+    profileDraft.communicationStyle === "calm-professional"
+      ? "preferences.userProfileStyleCalmDescription"
+      : "preferences.userProfileStyleWarmDescription",
+  ),
+);
+const technicalBackgroundDescription = computed(() =>
+  t(
+    profileDraft.technicalBackground === "general-user"
+      ? "preferences.userProfileTechGeneralDescription"
+      : profileDraft.technicalBackground === "enthusiast"
+        ? "preferences.userProfileTechEnthusiastDescription"
+        : "preferences.userProfileTechProfessionalDescription",
+  ),
+);
+const isProfileDirty = computed(
+  () =>
+    !userProfilesEqual(
+      normalizePineUserProfile(profileDraft),
+      normalizePineUserProfile(userProfileStore.profile),
+    ),
 );
 
 const sections = computed<
@@ -114,14 +147,67 @@ watch(isOpen, (open) => {
   if (!open) return;
   activeSection.value = "general";
   void modelsStore.load();
+  void loadUserProfile();
   void loadTinyFishCredentialStatus();
   void loadContextCompactionStrategy();
 });
 
 onMounted(() => {
+  void loadUserProfile();
   void loadTinyFishCredentialStatus();
   void loadContextCompactionStrategy();
 });
+
+function userProfilesEqual(a: PineUserProfile, b: PineUserProfile): boolean {
+  return (
+    a.communicationStyle === b.communicationStyle &&
+    a.customInstructions === b.customInstructions &&
+    a.nickname === b.nickname &&
+    a.personalDetails === b.personalDetails &&
+    a.technicalBackground === b.technicalBackground
+  );
+}
+
+async function loadUserProfile(): Promise<void> {
+  try {
+    await userProfileStore.load();
+    Object.assign(profileDraft, userProfileStore.profile);
+  } catch (error) {
+    handleError(error, {
+      id: "user-profile.load",
+      title: t("errors.userProfile.title"),
+      description: t("errors.userProfile.description"),
+    });
+  }
+}
+
+async function saveUserProfile(): Promise<void> {
+  if (!isProfileDirty.value || userProfileStore.isSaving) return;
+  try {
+    const saved = normalizePineUserProfile({ ...profileDraft });
+    await userProfileStore.save(saved);
+    Object.assign(profileDraft, saved);
+    toast.success(t("preferences.userProfileSaved"));
+  } catch (error) {
+    handleError(error, {
+      id: "user-profile.save",
+      title: t("errors.userProfile.title"),
+      description: t("errors.userProfile.description"),
+    });
+  }
+}
+
+function updateCommunicationStyle(value: unknown): void {
+  if (typeof value === "string" && isPineCommunicationStyle(value)) {
+    profileDraft.communicationStyle = value;
+  }
+}
+
+function updateTechnicalBackground(value: unknown): void {
+  if (typeof value === "string" && isPineTechnicalBackground(value)) {
+    profileDraft.technicalBackground = value;
+  }
+}
 
 async function loadContextCompactionStrategy(): Promise<void> {
   if (typeof window.pine?.getContextCompactionStrategy !== "function") return;
@@ -269,7 +355,153 @@ function updateSidebarVibrancy(value: boolean): void {
           </Item>
         </nav>
 
-        <ScrollArea class="min-h-0 min-w-0 flex-1">
+        <form
+          v-if="activeSection === 'personalization'"
+          data-testid="pine-user-profile-form"
+          class="flex min-h-0 min-w-0 flex-1 flex-col"
+          @submit.prevent="saveUserProfile"
+        >
+          <ScrollArea
+            class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade"
+          >
+            <FieldGroup class="gap-5 p-6">
+              <Field>
+                <FieldLabel for="pine-user-profile-nickname">
+                  {{ t("preferences.userProfileNicknameLabel") }}
+                </FieldLabel>
+                <Input
+                  id="pine-user-profile-nickname"
+                  v-model="profileDraft.nickname"
+                  maxlength="100"
+                  autocomplete="nickname"
+                  :placeholder="t('preferences.userProfileNicknamePlaceholder')"
+                />
+                <FieldDescription>
+                  {{ t("preferences.userProfileNicknameDescription") }}
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel id="pine-user-profile-style-label">
+                  {{ t("preferences.userProfileStyleLabel") }}
+                </FieldLabel>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  :spacing="2"
+                  class="w-full"
+                  :model-value="profileDraft.communicationStyle"
+                  aria-labelledby="pine-user-profile-style-label"
+                  @update:model-value="updateCommunicationStyle"
+                >
+                  <ToggleGroupItem value="calm-professional" class="flex-1">
+                    {{ t("preferences.userProfileStyleCalm") }}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="warm-friendly" class="flex-1">
+                    {{ t("preferences.userProfileStyleWarm") }}
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <FieldDescription>
+                  {{ communicationStyleDescription }}
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel id="pine-user-profile-background-label">
+                  {{ t("preferences.userProfileTechLabel") }}
+                </FieldLabel>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  :spacing="2"
+                  class="w-full"
+                  :model-value="profileDraft.technicalBackground"
+                  aria-labelledby="pine-user-profile-background-label"
+                  @update:model-value="updateTechnicalBackground"
+                >
+                  <ToggleGroupItem value="general-user" class="flex-1">
+                    {{ t("preferences.userProfileTechGeneral") }}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="enthusiast" class="flex-1">
+                    {{ t("preferences.userProfileTechEnthusiast") }}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="professional-user" class="flex-1">
+                    {{ t("preferences.userProfileTechProfessional") }}
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <FieldDescription>
+                  {{ technicalBackgroundDescription }}
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel for="pine-user-profile-details">
+                  {{ t("preferences.userProfileDetailsLabel") }}
+                </FieldLabel>
+                <Textarea
+                  id="pine-user-profile-details"
+                  v-model="profileDraft.personalDetails"
+                  maxlength="10000"
+                  rows="4"
+                  :placeholder="t('preferences.userProfileDetailsPlaceholder')"
+                />
+                <FieldDescription>
+                  {{ t("preferences.userProfileDetailsDescription") }}
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel for="pine-user-profile-instructions">
+                  {{ t("preferences.userProfileInstructionsLabel") }}
+                </FieldLabel>
+                <Textarea
+                  id="pine-user-profile-instructions"
+                  v-model="profileDraft.customInstructions"
+                  maxlength="20000"
+                  rows="6"
+                  :placeholder="
+                    t('preferences.userProfileInstructionsPlaceholder')
+                  "
+                />
+                <FieldDescription>
+                  {{ t("preferences.userProfileInstructionsDescription") }}
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+          </ScrollArea>
+
+          <div class="flex items-center gap-3 px-6 py-3">
+            <p
+              v-if="isProfileDirty"
+              class="mr-auto text-sm text-muted-foreground"
+            >
+              {{ t("preferences.userProfileUnsavedChanges") }}
+            </p>
+            <Button
+              class="ml-auto"
+              type="submit"
+              size="sm"
+              :disabled="!isProfileDirty || userProfileStore.isSaving"
+            >
+              <Spinner
+                v-if="userProfileStore.isSaving"
+                data-icon="inline-start"
+              />
+              {{
+                userProfileStore.isSaving
+                  ? t("common.saving")
+                  : t("common.save")
+              }}
+            </Button>
+          </div>
+        </form>
+
+        <ScrollArea
+          v-else
+          class="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade"
+        >
           <div v-if="activeSection === 'general'" class="p-6">
             <FieldGroup>
               <Field orientation="horizontal">
@@ -381,31 +613,6 @@ function updateSidebarVibrancy(value: boolean): void {
             </FieldGroup>
           </div>
 
-          <div v-else-if="activeSection === 'personalization'" class="p-6">
-            <FieldGroup>
-              <Field orientation="horizontal">
-                <div class="flex min-w-0 flex-1 flex-col gap-1">
-                  <FieldTitle id="pine-user-profile-setting">
-                    {{ t("preferences.userProfile") }}
-                  </FieldTitle>
-                  <FieldDescription>
-                    {{ t("preferences.userProfileDescription") }}
-                  </FieldDescription>
-                </div>
-                <Button
-                  data-testid="pine-user-profile-edit-button"
-                  variant="outline"
-                  size="sm"
-                  aria-labelledby="pine-user-profile-setting"
-                  @click="isUserProfileDialogOpen = true"
-                >
-                  <PencilIcon data-icon="inline-start" />
-                  {{ t("common.edit") }}
-                </Button>
-              </Field>
-            </FieldGroup>
-          </div>
-
           <div v-else-if="activeSection === 'advanced'" class="p-6">
             <FieldGroup>
               <Field orientation="horizontal">
@@ -483,8 +690,6 @@ function updateSidebarVibrancy(value: boolean): void {
       </div>
     </DialogContent>
   </Dialog>
-
-  <UserProfileDialog v-model:open="isUserProfileDialogOpen" />
 
   <Dialog v-model:open="isTinyFishCredentialDialogOpen">
     <DialogContent class="sm:max-w-md">

@@ -73,12 +73,6 @@ export default {
     tinyFishApiKeyLabel: "API key",
     tinyFishApiKeyPlaceholder: "Enter your TinyFish API key",
     saveTinyFishApiKey: "Save key",
-    userProfile: "User profile",
-    userProfileDescription:
-      "Tell Pine what to call you and how you want it to work with you.",
-    userProfileDialogTitle: "Edit user profile",
-    userProfileDialogDescription:
-      "These preferences shape Pine's future conversations and work.",
     userProfileNicknameLabel: "Nickname",
     userProfileNicknamePlaceholder: "What should Pine call you?",
     userProfileNicknameDescription:
@@ -110,7 +104,8 @@ export default {
       "Enter additional ways you want Pine to work…",
     userProfileInstructionsDescription:
       "Saved as system-level personalization for Pine, but cannot bypass safety, access, or approval rules.",
-    saveUserProfile: "Save profile",
+    userProfileUnsavedChanges: "Unsaved changes",
+    userProfileSaved: "User profile saved",
   },
   models: {
     favorites: "Favorites",

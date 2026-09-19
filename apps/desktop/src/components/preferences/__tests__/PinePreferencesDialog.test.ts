@@ -5,6 +5,7 @@ import { APP_LOCALE_STORAGE_KEY, createAppI18n } from "@/app/i18n";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import type { PineModelCatalog } from "@/shared/models";
+import { createDefaultPineUserProfile } from "@/shared/userProfile";
 import {
   SIDEBAR_VIBRANCY_STORAGE_KEY,
   THEME_PREFERENCE_STORAGE_KEY,
@@ -19,11 +20,6 @@ const modelPickerStub = {
   emits: ["update:open"],
   template:
     '<div data-model-picker :data-open="open" :data-purpose="purpose" />',
-};
-const userProfileStub = {
-  props: ["open"],
-  emits: ["update:open"],
-  template: '<div data-user-profile-dialog :data-open="open" />',
 };
 const setSidebarVibrancy = vi.fn().mockResolvedValue({ applied: true });
 const getTinyFishCredentialStatus = vi
@@ -82,7 +78,6 @@ function mountDialog() {
         DialogTitle: passthroughStub,
         DialogTrigger: passthroughStub,
         ModelPickerDialog: modelPickerStub,
-        UserProfileDialog: userProfileStub,
       },
     },
   });
@@ -260,18 +255,76 @@ describe("PinePreferencesDialog", () => {
     expect(picker?.attributes("data-open")).toBe("true");
   });
 
-  it("opens the user profile editor", async () => {
+  it("edits the user profile inline in the personalization section", async () => {
+    installPineApi("linux");
+    getUserProfile.mockResolvedValue({
+      ...createDefaultPineUserProfile(),
+      nickname: "Loaded nickname",
+    });
     const { wrapper } = mountDialog();
     await openSection(wrapper, "个性化");
-    const editor = wrapper.get("[data-user-profile-dialog]");
 
-    expect(editor.attributes("data-open")).toBe("false");
+    const form = wrapper.get('[data-testid="pine-user-profile-form"]');
+    const nickname = form.get("#pine-user-profile-nickname");
+    expect(
+      form
+        .get('[data-slot="scroll-area"]')
+        .classes()
+        .some((className) => className.includes("scroll-fade")),
+    ).toBe(true);
+    await vi.waitFor(() =>
+      expect((nickname.element as HTMLInputElement).value).toBe(
+        "Loaded nickname",
+      ),
+    );
 
-    await wrapper
-      .get('[data-testid="pine-user-profile-edit-button"]')
-      .trigger("click");
+    const saveButton = form.get('button[type="submit"]');
+    expect(saveButton.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("冷静专业");
 
-    expect(editor.attributes("data-open")).toBe("true");
+    const [styleGroup, backgroundGroup] = wrapper
+      .findAllComponents(ToggleGroup)
+      .filter((group) =>
+        [
+          "pine-user-profile-style-label",
+          "pine-user-profile-background-label",
+        ].includes(group.attributes("aria-labelledby") ?? ""),
+      );
+
+    expect(styleGroup?.props("modelValue")).toBe("calm-professional");
+    expect(backgroundGroup?.props("modelValue")).toBe("enthusiast");
+
+    await nickname.setValue("  小 Pine  ");
+    await form
+      .get("#pine-user-profile-details")
+      .setValue("正在学习桌面应用开发");
+    await form
+      .get("#pine-user-profile-instructions")
+      .setValue("先给出结论，再解释关键原因。");
+    styleGroup?.vm.$emit("update:modelValue", "warm-friendly");
+    backgroundGroup?.vm.$emit("update:modelValue", "professional-user");
+    await wrapper.vm.$nextTick();
+
+    expect(saveButton.attributes("disabled")).toBeUndefined();
+    expect(wrapper.text()).toContain("有未保存的更改");
+
+    await form.trigger("submit");
+
+    await vi.waitFor(() =>
+      expect(setUserProfile).toHaveBeenCalledWith({
+        communicationStyle: "warm-friendly",
+        customInstructions: "先给出结论，再解释关键原因。",
+        nickname: "小 Pine",
+        personalDetails: "正在学习桌面应用开发",
+        technicalBackground: "professional-user",
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect((nickname.element as HTMLInputElement).value).toBe("小 Pine"),
+    );
+    expect(saveButton.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).not.toContain("有未保存的更改");
   });
 
   it("applies and persists language and theme selections", async () => {
