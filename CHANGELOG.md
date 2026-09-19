@@ -9,6 +9,16 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-19
+
+### 修复 / Fixed
+
+- 安装版里缺失最新图像模型的问题：模型选择器现在能看到 GPT Image 2.5 系列等新上线的图像模型。The installed app no longer misses the newest image models: the model picker now offers the GPT Image 2.5 family and the models released alongside it.
+
+### 变更 / Changed
+
+- 模型选择器更流畅：长列表只渲染屏幕内可见的模型，滚动和打开都更跟手；模型列表没有变化时不再重复加载。The model picker is smoother: long lists render only the models on screen, scrolling and opening feel more responsive, and an unchanged model list is no longer reloaded.
+
 ## [0.5.0] - 2026-09-19
 
 ### 新增 / Added
