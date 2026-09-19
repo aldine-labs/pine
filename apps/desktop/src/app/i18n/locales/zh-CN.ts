@@ -32,7 +32,7 @@ export default {
     open: "打开 Pine 设置",
     sections: {
       general: "通用",
-      models: "模型",
+      models: "辅助模型和服务",
       personalization: "个性化",
       advanced: "高级",
     },

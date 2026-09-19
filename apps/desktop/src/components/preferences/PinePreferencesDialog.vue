@@ -332,7 +332,7 @@ function updateSidebarVibrancy(value: boolean): void {
 
       <div class="flex min-h-0 flex-1">
         <nav
-          class="flex w-44 shrink-0 flex-col gap-1 border-r bg-muted/20 p-2"
+          class="flex w-48 shrink-0 flex-col gap-1 border-r bg-muted/20 p-2"
           :aria-label="t('preferences.sectionsLabel')"
         >
           <Item
@@ -610,6 +610,30 @@ function updateSidebarVibrancy(value: boolean): void {
                   {{ t("preferences.selectImageModel") }}
                 </Button>
               </Field>
+
+              <Field orientation="horizontal">
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                  <FieldTitle id="pine-tinyfish-credential-setting">
+                    {{ t("preferences.tinyFish") }}
+                  </FieldTitle>
+                  <FieldDescription>
+                    {{ t("preferences.tinyFishDescription") }}
+                  </FieldDescription>
+                </div>
+                <Button
+                  data-testid="pine-tinyfish-credential-button"
+                  variant="outline"
+                  size="sm"
+                  aria-labelledby="pine-tinyfish-credential-setting"
+                  @click="openTinyFishCredentialDialog"
+                >
+                  {{
+                    isTinyFishCredentialConfigured
+                      ? t("preferences.changeTinyFishApiKey")
+                      : t("preferences.addTinyFishApiKey")
+                  }}
+                </Button>
+              </Field>
             </FieldGroup>
           </div>
 
@@ -659,30 +683,6 @@ function updateSidebarVibrancy(value: boolean): void {
                     {{ t("preferences.contextCompactionRecommended") }}
                   </ToggleGroupItem>
                 </ToggleGroup>
-              </Field>
-
-              <Field orientation="horizontal">
-                <div class="flex min-w-0 flex-1 flex-col gap-1">
-                  <FieldTitle id="pine-tinyfish-credential-setting">
-                    {{ t("preferences.tinyFish") }}
-                  </FieldTitle>
-                  <FieldDescription>
-                    {{ t("preferences.tinyFishDescription") }}
-                  </FieldDescription>
-                </div>
-                <Button
-                  data-testid="pine-tinyfish-credential-button"
-                  variant="outline"
-                  size="sm"
-                  aria-labelledby="pine-tinyfish-credential-setting"
-                  @click="openTinyFishCredentialDialog"
-                >
-                  {{
-                    isTinyFishCredentialConfigured
-                      ? t("preferences.changeTinyFishApiKey")
-                      : t("preferences.addTinyFishApiKey")
-                  }}
-                </Button>
               </Field>
             </FieldGroup>
           </div>

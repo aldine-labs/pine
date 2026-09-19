@@ -146,7 +146,7 @@ describe("PinePreferencesDialog", () => {
     };
 
     useModelsStore(pinia).catalog = catalog;
-    await openSection(wrapper, "模型");
+    await openSection(wrapper, "辅助模型和服务");
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain("GLM 4.5 Air");
@@ -181,7 +181,7 @@ describe("PinePreferencesDialog", () => {
       ],
     };
 
-    await openSection(wrapper, "模型");
+    await openSection(wrapper, "辅助模型和服务");
 
     expect(wrapper.text()).toContain(imageModel.name);
     expect(wrapper.text()).not.toContain("尚未配置 OpenRouter");
@@ -215,15 +215,15 @@ describe("PinePreferencesDialog", () => {
       providers: [],
     };
 
-    await openSection(wrapper, "模型");
+    await openSection(wrapper, "辅助模型和服务");
 
     expect(wrapper.text()).toContain("尚未配置 OpenRouter");
   });
 
-  it("saves a TinyFish key and changes the action label", async () => {
+  it("saves a TinyFish key from the models and services section", async () => {
     installPineApi("linux");
     const { wrapper } = mountDialog();
-    await openSection(wrapper, "高级");
+    await openSection(wrapper, "辅助模型和服务");
 
     await wrapper
       .get('[data-testid="pine-tinyfish-credential-button"]')
@@ -241,7 +241,7 @@ describe("PinePreferencesDialog", () => {
 
   it("opens the shared model picker in utility mode", async () => {
     const { wrapper } = mountDialog();
-    await openSection(wrapper, "模型");
+    await openSection(wrapper, "辅助模型和服务");
     const picker = wrapper
       .findAll("[data-model-picker]")
       .find((candidate) => candidate.attributes("data-purpose") === "utility");
