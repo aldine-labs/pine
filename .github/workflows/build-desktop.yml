@@ -73,6 +73,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Backport the newest Pi model catalogs
+        run: bun run backport:models || echo "::warning::model backport failed; packaging the released catalogs"
+
       - name: Build computer-use runtime
         env:
           PINE_COMPUTER_USE_ARCH: ${{ matrix.arch }}
@@ -167,6 +170,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Backport the newest Pi model catalogs
+        run: bun run backport:models || echo "::warning::model backport failed; packaging the released catalogs"
 
       - name: Build computer-use runtime
         run: bun run --filter @pine/computer-use-runtime build

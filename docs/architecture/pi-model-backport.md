@@ -71,10 +71,12 @@ without network access. A `.pine-model-backport.json` marker inside the package
 records the upstream commit, so `--check` can tell a backported tree from a
 released one.
 
-Nothing runs automatically: `bun run dev` and `bun run build` use exactly what
-`bun.lock` resolved. A packaged build bakes in whatever is in `node_modules`, so
-run the backport before `bun run build` when a release should carry the newest
-model lists.
+Nothing runs on your machine unless you ask for it: `bun run dev` and
+`bun run build` use exactly what `bun.lock` resolved, which keeps a local
+experiment from silently changing what you build. The desktop CI builds are the
+exception — they refresh the catalogs themselves before packaging, because a
+released installer should advertise the newest models without anyone remembering
+to run this first.
 
 ```sh
 bun run backport:models          # take upstream main's catalogs
@@ -115,3 +117,16 @@ patching the package: see [Two OpenRouter transports](./pi-extension-boundary.md
 So when a freshly backported model fails, check the shape of the provider error
 before assuming the catalog is stale. Anything that reads like a routing or
 endpoint complaint belongs in Pine's transport code, not in this script.
+
+## Builds run this script
+
+Refreshing the catalog locally only helps local development: a packaged build installs
+`@earendil-works/pi-ai` from npm in a fresh checkout, so the 0.5.0 installers shipped
+without the local backport and without the two `gpt-image-2.5` models it had added.
+
+Every desktop build — push builds and releases alike — therefore runs
+`bun run backport:models` after `bun install` and before packaging. The step is
+best-effort: if the upstream clone or build fails, the job logs a warning and packages
+the released catalogs, because a model-list refresh should never be able to block a
+release. `bun run check` still runs on the commit alone, so a failed refresh cannot
+change what CI validates.

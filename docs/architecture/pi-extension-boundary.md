@@ -33,7 +33,7 @@ Image generation is a Pine-native tool pair: `activate_media_generation` is alwa
 
 Generation itself uses pi-ai's image surface (`ImagesModels`) rather than the chat/stream APIs, with OpenRouter as the aggregating provider. The OpenRouter credential comes from the same `auth.json` that authenticates chat models, so no separate key is stored. The selected image model is a Pine setting (`pine-settings.json`) chosen in the settings dialog's Harness section, where the shared model picker lists pi-ai's image catalog instead of Pine's chat models. That setting is also the only way to choose an image model: the tools take no model argument, so a call always runs on the user's selection, falling back to Pine's default when the user never picked one.
 
-That catalog is a generated snapshot inside `pi-ai`, so image models reach Pine when `pi-ai` commits them upstream, not when OpenRouter adds them. [Pi Model Backport](./pi-model-backport.md) is what keeps the gap to days instead of release cycles.
+That catalog is a generated snapshot inside `pi-ai`, so image models reach Pine when `pi-ai` commits them upstream, not when OpenRouter adds them. [Pi Model Backport](./pi-model-backport.md) closes most of that gap, and the desktop build now runs it before packaging so installers carry the same catalogs local development sees.
 
 ### Two OpenRouter transports
 

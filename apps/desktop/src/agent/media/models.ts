@@ -23,6 +23,10 @@ let cachedImagesModels: MutableImagesModels | undefined;
  * Pine's image-generation collection: pi-ai's built-in OpenRouter image
  * provider, which aggregates upstream image models behind one API. Credentials
  * are resolved by the caller and passed per request.
+ *
+ * The catalog is Pi's, refreshed ahead of Pi's releases by
+ * `bun run backport:models`, which CI runs before packaging so installers carry
+ * the newest models even though `node_modules` is installed fresh there.
  */
 export function pineImagesModels(): MutableImagesModels {
   cachedImagesModels ??= builtinImagesModels();
