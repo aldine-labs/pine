@@ -104,12 +104,13 @@ const customCatalog: PineModelCatalog = {
 };
 
 function mountPicker(
-  purpose: "session" | "utility" = "session",
+  purpose: "session" | "utility" | "image" = "session",
   catalog: PineModelCatalog = connectedCatalog,
 ) {
   const logoutProvider = vi.fn().mockResolvedValue({ disposed: true });
   const selectModel = vi.fn().mockResolvedValue(undefined);
   const selectUtilityModel = vi.fn().mockResolvedValue(undefined);
+  const selectImageModel = vi.fn().mockResolvedValue(undefined);
   const getModelCatalog = vi.fn().mockResolvedValue(catalog);
   Object.defineProperty(window, "pine", {
     configurable: true,
@@ -117,6 +118,7 @@ function mountPicker(
       getModelCatalog,
       logoutProvider,
       selectModel,
+      selectImageModel,
       selectUtilityModel,
       addCustomModel: vi.fn(),
     },
@@ -157,6 +159,7 @@ function mountPicker(
   return {
     getModelCatalog,
     logoutProvider,
+    selectImageModel,
     selectModel,
     selectUtilityModel,
     wrapper,
@@ -277,5 +280,74 @@ describe("ModelPickerDialog utility model selection", () => {
     });
     expect(selectModel).not.toHaveBeenCalled();
     expect(wrapper.emitted("update:open")).toContainEqual([false]);
+  });
+});
+
+describe("ModelPickerDialog image model selection", () => {
+  const imageModel = {
+    acceptsImageInput: true,
+    id: "google/gemini-3-pro-image",
+    name: "Google: Nano Banana Pro",
+    providerId: "openrouter",
+    providerName: "OpenRouter",
+    returnsText: true,
+  };
+  const imageCatalog: PineModelCatalog = {
+    imageModels: [imageModel],
+    imageSelection: {
+      modelId: imageModel.id,
+      providerId: imageModel.providerId,
+    },
+    models: [],
+    providers: [
+      {
+        authMethods: [{ label: "API key", type: "api_key" }],
+        configured: true,
+        id: "openrouter",
+        modelCount: 0,
+        name: "OpenRouter",
+      },
+    ],
+  };
+
+  it("lists image models and selects one without touching the chat model", async () => {
+    const { selectImageModel, selectModel, wrapper } = mountPicker(
+      "image",
+      imageCatalog,
+    );
+    const modelItem = wrapper
+      .findAll("[data-command-item]")
+      .find((item) => item.attributes("data-value")?.includes(imageModel.id));
+
+    expect(modelItem).toBeDefined();
+    expect(wrapper.text()).toContain("Google: Nano Banana Pro");
+    expect(modelItem?.text()).toContain(imageModel.id);
+
+    await modelItem?.trigger("click");
+    await flushPromises();
+
+    expect(selectImageModel).toHaveBeenCalledWith({
+      modelId: imageModel.id,
+      providerId: imageModel.providerId,
+    });
+    expect(selectModel).not.toHaveBeenCalled();
+    expect(wrapper.emitted("update:open")).toContainEqual([false]);
+  });
+
+  it("still offers provider management for the image provider", async () => {
+    const { wrapper } = mountPicker("image", imageCatalog);
+
+    await wrapper
+      .get(
+        '[data-command-item][data-value="manage configure provider service model"]',
+      )
+      .trigger("click");
+
+    expect(
+      wrapper
+        .findAll("[data-command-item]")
+        .map((item) => item.attributes("data-value")),
+    ).toContain("back models");
+    expect(wrapper.text()).toContain("OpenRouter");
   });
 });

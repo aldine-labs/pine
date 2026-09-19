@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APP_LOCALE_STORAGE_KEY, createAppI18n } from "@/app/i18n";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +77,7 @@ function mountDialog() {
       stubs: {
         Dialog: passthroughStub,
         DialogContent: passthroughStub,
+        DialogDescription: passthroughStub,
         DialogHeader: passthroughStub,
         DialogTitle: passthroughStub,
         DialogTrigger: passthroughStub,
@@ -87,6 +88,17 @@ function mountDialog() {
   });
 
   return { i18n, pinia, wrapper };
+}
+
+/** Switches the settings dialog to one of its left-rail categories. */
+async function openSection(wrapper: VueWrapper, label: string): Promise<void> {
+  const tab = wrapper
+    .findAll('[role="tab"]')
+    .find((candidate) => candidate.text().includes(label));
+  if (!tab) throw new Error(`Missing preferences section: ${label}`);
+  // Reka activates automatic tabs on mousedown, not click.
+  await tab.trigger("mousedown");
+  await flushPromises();
 }
 
 describe("PinePreferencesDialog", () => {
@@ -140,15 +152,84 @@ describe("PinePreferencesDialog", () => {
     };
 
     useModelsStore(pinia).catalog = catalog;
+    await openSection(wrapper, "模型");
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain("GLM 4.5 Air");
     expect(wrapper.text()).not.toContain("未选择任何模型");
   });
 
+  it("shows the configured image model and opens the image picker", async () => {
+    const { pinia, wrapper } = mountDialog();
+    const imageModel = {
+      acceptsImageInput: true,
+      id: "google/gemini-3-pro-image",
+      name: "Google: Nano Banana Pro",
+      providerId: "openrouter",
+      providerName: "OpenRouter",
+      returnsText: true,
+    };
+    useModelsStore(pinia).catalog = {
+      imageModels: [imageModel],
+      imageSelection: {
+        modelId: imageModel.id,
+        providerId: imageModel.providerId,
+      },
+      models: [],
+      providers: [
+        {
+          authMethods: [{ label: "API key", type: "api_key" }],
+          configured: true,
+          id: "openrouter",
+          modelCount: 0,
+          name: "OpenRouter",
+        },
+      ],
+    };
+
+    await openSection(wrapper, "模型");
+
+    expect(wrapper.text()).toContain(imageModel.name);
+    expect(wrapper.text()).not.toContain("尚未配置 OpenRouter");
+
+    const picker = wrapper
+      .findAll("[data-model-picker]")
+      .find((candidate) => candidate.attributes("data-purpose") === "image");
+    expect(picker?.attributes("data-open")).toBe("false");
+
+    await wrapper
+      .get('[data-testid="pine-image-model-button"]')
+      .trigger("click");
+
+    expect(picker?.attributes("data-open")).toBe("true");
+  });
+
+  it("points at OpenRouter when no image model can be picked yet", async () => {
+    const { pinia, wrapper } = mountDialog();
+    useModelsStore(pinia).catalog = {
+      imageModels: [
+        {
+          acceptsImageInput: false,
+          id: "black-forest-labs/flux.2-pro",
+          name: "FLUX.2 Pro",
+          providerId: "openrouter",
+          providerName: "OpenRouter",
+          returnsText: false,
+        },
+      ],
+      models: [],
+      providers: [],
+    };
+
+    await openSection(wrapper, "模型");
+
+    expect(wrapper.text()).toContain("尚未配置 OpenRouter");
+  });
+
   it("saves a TinyFish key and changes the action label", async () => {
     installPineApi("linux");
     const { wrapper } = mountDialog();
+    await openSection(wrapper, "高级");
 
     await wrapper
       .get('[data-testid="pine-tinyfish-credential-button"]')
@@ -166,21 +247,23 @@ describe("PinePreferencesDialog", () => {
 
   it("opens the shared model picker in utility mode", async () => {
     const { wrapper } = mountDialog();
-    const picker = wrapper.get("[data-model-picker]");
-    const selectButton = wrapper
-      .findAll("button")
-      .find((button) => button.text() === "选择模型");
+    await openSection(wrapper, "模型");
+    const picker = wrapper
+      .findAll("[data-model-picker]")
+      .find((candidate) => candidate.attributes("data-purpose") === "utility");
 
-    expect(picker.attributes("data-purpose")).toBe("utility");
-    expect(picker.attributes("data-open")).toBe("false");
+    expect(picker?.attributes("data-open")).toBe("false");
 
-    await selectButton?.trigger("click");
+    await wrapper
+      .get('[data-testid="pine-utility-model-button"]')
+      .trigger("click");
 
-    expect(picker.attributes("data-open")).toBe("true");
+    expect(picker?.attributes("data-open")).toBe("true");
   });
 
   it("opens the user profile editor", async () => {
     const { wrapper } = mountDialog();
+    await openSection(wrapper, "个性化");
     const editor = wrapper.get("[data-user-profile-dialog]");
 
     expect(editor.attributes("data-open")).toBe("false");
@@ -213,6 +296,7 @@ describe("PinePreferencesDialog", () => {
   it("loads the recommended compaction strategy and persists changes", async () => {
     installPineApi("linux");
     const { wrapper } = mountDialog();
+    await openSection(wrapper, "高级");
     await vi.waitFor(() =>
       expect(getContextCompactionStrategy).toHaveBeenCalled(),
     );
@@ -236,6 +320,7 @@ describe("PinePreferencesDialog", () => {
 
   it("shows the compaction description from a focusable help badge", async () => {
     const { wrapper } = mountDialog();
+    await openSection(wrapper, "高级");
     const helpBadge = wrapper.get('button[aria-label="关于上下文压缩策略"]');
     const description =
       "推荐设置会在上下文达到 80% 时压缩，并将触发上限限制在 400K Token。";

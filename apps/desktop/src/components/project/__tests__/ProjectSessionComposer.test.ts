@@ -7,10 +7,6 @@ import {
   type PineAttachment,
 } from "@/shared/attachments";
 import type { PineThinkingLevel } from "@/shared/models";
-import type {
-  PineImageModelDescriptor,
-  PineModelCatalog,
-} from "@/shared/models";
 import { useModelsStore } from "@/stores/models";
 import type { PinePendingApproval } from "@/stores/session";
 import ProjectSessionComposer from "../ProjectSessionComposer.vue";
@@ -26,14 +22,10 @@ function mountComposer(
   props: ComposerProps = {},
   thinkingLevel: PineThinkingLevel = "high",
   locale: AppLocale = "zh-CN",
-  catalogOverrides: Partial<
-    Pick<PineModelCatalog, "imageModels" | "imageSelection">
-  > = {},
 ) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  const catalog: PineModelCatalog = {
-    ...catalogOverrides,
+  const catalog = {
     providers: [
       {
         authMethods: [{ type: "api_key" as const, label: "API key" }],
@@ -576,48 +568,5 @@ describe("ProjectSessionComposer", () => {
       `before ${pastedText}after`,
     );
     expect(wrapper.emitted("update:attachments")).toBeUndefined();
-  });
-
-  it("offers the image model picker and shows the picked model", async () => {
-    const imageModel: PineImageModelDescriptor = {
-      acceptsImageInput: true,
-      id: "google/gemini-3-pro-image",
-      name: "Google: Nano Banana Pro",
-      providerId: "openrouter",
-      providerName: "OpenRouter",
-      returnsText: true,
-    };
-    const wrapper = mountComposer({}, "high", "zh-CN", {
-      imageModels: [imageModel],
-      imageSelection: {
-        modelId: imageModel.id,
-        providerId: imageModel.providerId,
-      },
-    });
-
-    await wrapper.get('[data-slot="model-selector-trigger"]').trigger("click");
-    await flushPromises();
-
-    const trigger = document.querySelector<HTMLElement>(
-      '[data-slot="image-model-trigger"]',
-    );
-    expect(trigger).not.toBeNull();
-    expect(trigger?.textContent).toContain("图像模型");
-    expect(trigger?.textContent).toContain(imageModel.name);
-
-    wrapper.unmount();
-  });
-
-  it("hides the image model picker without an image catalog", async () => {
-    const wrapper = mountComposer();
-
-    await wrapper.get('[data-slot="model-selector-trigger"]').trigger("click");
-    await flushPromises();
-
-    expect(
-      document.querySelector('[data-slot="image-model-trigger"]'),
-    ).toBeNull();
-
-    wrapper.unmount();
   });
 });

@@ -3,6 +3,7 @@ import {
   ArrowLeftIcon,
   CheckIcon,
   HeartIcon,
+  ImageIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
@@ -37,6 +38,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type {
+  PineImageModelDescriptor,
   PineModelDescriptor,
   PineProviderDescriptor,
 } from "@/shared/models";
@@ -52,7 +54,7 @@ type PickerView = "models" | "providers";
 const props = withDefaults(
   defineProps<{
     open: boolean;
-    purpose?: "session" | "utility";
+    purpose?: "session" | "utility" | "image";
     sessionId?: string;
   }>(),
   { purpose: "session" },
@@ -61,8 +63,15 @@ const emit = defineEmits<{ "update:open": [open: boolean] }>();
 
 const { t } = useI18n();
 const modelsStore = useModelsStore();
-const { isLoading, models, providers, utilitySelection } =
-  storeToRefs(modelsStore);
+const {
+  imageModels,
+  imageSelection,
+  isLoading,
+  models,
+  providers,
+  utilitySelection,
+} = storeToRefs(modelsStore);
+const isImagePurpose = computed(() => props.purpose === "image");
 const sessionSelection = computed(() =>
   modelsStore.selectionFor(props.sessionId),
 );
@@ -116,20 +125,41 @@ const modelGroups = computed(() =>
     ...providerModelGroups.value,
   ].filter((group) => group.models.length > 0),
 );
+/**
+ * Image models are a separate pi-ai catalog served by OpenRouter only, so the
+ * image purpose skips favorites, capabilities, and custom-model management.
+ */
+const imageModelGroups = computed(() =>
+  imageModels.value.length > 0
+    ? [
+        {
+          heading: imageModels.value[0]?.providerName ?? "",
+          id: "image-models",
+          models: imageModels.value,
+        },
+      ]
+    : [],
+);
 const title = computed(() =>
-  view.value === "models"
-    ? t("models.picker.title")
-    : t("providers.picker.title"),
+  view.value === "providers"
+    ? t("providers.picker.title")
+    : isImagePurpose.value
+      ? t("models.picker.imageTitle")
+      : t("models.picker.title"),
 );
 const description = computed(() =>
-  view.value === "models"
-    ? t("models.picker.description")
-    : t("providers.picker.description"),
+  view.value === "providers"
+    ? t("providers.picker.description")
+    : isImagePurpose.value
+      ? t("models.picker.imageDescription")
+      : t("models.picker.description"),
 );
 const searchPlaceholder = computed(() =>
-  view.value === "models"
-    ? t("models.picker.searchPlaceholder")
-    : t("providers.picker.searchPlaceholder"),
+  view.value === "providers"
+    ? t("providers.picker.searchPlaceholder")
+    : isImagePurpose.value
+      ? t("models.picker.imageSearchPlaceholder")
+      : t("models.picker.searchPlaceholder"),
 );
 
 watch(
@@ -144,11 +174,20 @@ watch(
 
 function isSelected(model: PineModelDescriptor): boolean {
   const selected =
-    props.purpose === "utility"
-      ? utilitySelection.value
-      : sessionSelection.value;
+    props.purpose === "image"
+      ? imageSelection.value
+      : props.purpose === "utility"
+        ? utilitySelection.value
+        : sessionSelection.value;
   return (
     selected?.providerId === model.providerId && selected.modelId === model.id
+  );
+}
+
+function isImageModelSelected(model: PineImageModelDescriptor): boolean {
+  return (
+    imageSelection.value?.providerId === model.providerId &&
+    imageSelection.value.modelId === model.id
   );
 }
 
@@ -240,6 +279,21 @@ async function selectModel(model: PineModelDescriptor): Promise<void> {
       id: "preferences.utility-model",
       title: t("errors.utilityModel.title"),
       description: t("errors.utilityModel.description"),
+    });
+  }
+}
+
+async function selectImageModel(
+  model: PineImageModelDescriptor,
+): Promise<void> {
+  try {
+    await modelsStore.selectImageModel(model);
+    emit("update:open", false);
+  } catch (error) {
+    handleError(error, {
+      id: "preferences.image-model",
+      title: t("errors.imageModel.title"),
+      description: t("errors.imageModel.description"),
     });
   }
 }
@@ -356,9 +410,11 @@ async function handleConnected(): Promise<void> {
         </span>
         <template v-else>
           {{
-            view === "models"
-              ? t("models.picker.empty")
-              : t("providers.picker.empty")
+            view === "providers"
+              ? t("providers.picker.empty")
+              : isImagePurpose
+                ? t("models.picker.imageEmpty")
+                : t("models.picker.empty")
           }}
         </template>
       </CommandEmpty>
@@ -375,8 +431,39 @@ async function handleConnected(): Promise<void> {
         </CommandGroup>
         <CommandSeparator />
 
+        <template v-if="isImagePurpose">
+          <CommandGroup
+            v-for="group in imageModelGroups"
+            :key="group.id"
+            :heading="group.heading"
+          >
+            <CommandItem
+              v-for="model in group.models"
+              :key="`${model.providerId}:${model.id}`"
+              :value="`${model.providerName} ${model.name} ${model.id}`"
+              class="[&>svg:last-child]:hidden"
+              @select="selectImageModel(model)"
+            >
+              <CheckIcon
+                v-if="isImageModelSelected(model)"
+                aria-hidden="true"
+              />
+              <ImageIcon v-else aria-hidden="true" />
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="truncate">{{ model.name }}</span>
+                <span
+                  class="truncate text-xs font-normal text-muted-foreground"
+                >
+                  {{ model.id }}
+                </span>
+              </span>
+            </CommandItem>
+          </CommandGroup>
+        </template>
+
         <CommandGroup
           v-for="group in modelGroups"
+          v-else
           :key="group.id"
           :heading="group.heading"
         >

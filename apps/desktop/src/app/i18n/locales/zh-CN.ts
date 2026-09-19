@@ -28,7 +28,19 @@ export default {
   },
   preferences: {
     title: "Pine 设置",
+    description: "管理 Pine 的外观、使用的模型，以及它与你的协作方式。",
     open: "打开 Pine 设置",
+    sections: {
+      general: "通用",
+      generalDescription: "语言、外观，以及 Pine 在这台设备上的呈现方式。",
+      models: "模型",
+      modelsDescription: "选择负责后台任务和图像生成的模型。",
+      personalization: "个性化",
+      personalizationDescription:
+        "告诉 Pine 如何称呼你，以及你希望它如何与你协作。",
+      advanced: "高级",
+      advancedDescription: "上下文处理与可选的网络工具。",
+    },
     language: "语言",
     languageChinese: "简体中文",
     languageEnglish: "English",
@@ -47,6 +59,11 @@ export default {
     utilityModel: "标题生成和自动批准模型",
     selectUtilityModel: "选择模型",
     noUtilityModelSelected: "未选择任何模型",
+    imageModel: "图像生成模型",
+    selectImageModel: "选择模型",
+    noImageModelSelected: "默认模型",
+    imageModelUnconfigured:
+      "尚未配置 OpenRouter。可在“管理服务或模型”中添加它的 API 密钥。",
     tinyFish: "TinyFish 网络工具",
     tinyFishDescription: "配置 API 密钥后，AI 才能使用网络搜索和网页抓取。",
     addTinyFishApiKey: "添加密钥",
@@ -90,10 +107,6 @@ export default {
   },
   models: {
     favorites: "收藏的模型",
-    imageModel: "图像模型",
-    imageModelDefault: "默认模型",
-    imageModelUnconfigured:
-      "尚未配置 OpenRouter。请在模型设置中添加它的 API Key 后再生成图片。",
     loading: "正在加载模型",
     recent: "最近使用",
     recommended: "推荐的模型",
@@ -109,6 +122,11 @@ export default {
       backToModels: "返回模型列表",
       browse: "浏览所有模型…",
       contextWindow: "上下文窗口：{tokens}",
+      imageTitle: "选择图像模型",
+      imageDescription:
+        "在 OpenRouter 的图像模型中搜索，并设定图像生成使用的默认模型。",
+      imageSearchPlaceholder: "搜索图像模型…",
+      imageEmpty: "没有匹配的图像模型",
       recommended: "推荐",
       removeFavorite: "取消收藏 {model}",
       vision: "视觉",
@@ -958,6 +976,10 @@ export default {
     utilityModel: {
       title: "无法更新专用模型",
       description: "请检查模型服务后重试",
+    },
+    imageModel: {
+      title: "无法更新图像模型",
+      description: "请检查 OpenRouter 凭据后重试",
     },
     providerDisconnect: {
       title: "无法解绑模型服务",

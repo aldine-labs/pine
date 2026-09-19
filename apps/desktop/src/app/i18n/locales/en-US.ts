@@ -30,7 +30,22 @@ export default {
   },
   preferences: {
     title: "Pine Settings",
+    description:
+      "Manage how Pine looks, which models it uses, and how it works with you.",
     open: "Open Pine settings",
+    sections: {
+      general: "General",
+      generalDescription:
+        "Language, appearance, and how Pine renders on this device.",
+      models: "Models",
+      modelsDescription:
+        "Choose which models handle background work and image generation.",
+      personalization: "Personalization",
+      personalizationDescription:
+        "Tell Pine what to call you and how you want it to work with you.",
+      advanced: "Advanced",
+      advancedDescription: "Context handling and optional web tools.",
+    },
     language: "Language",
     languageChinese: "简体中文",
     languageEnglish: "English",
@@ -50,6 +65,11 @@ export default {
     utilityModel: "Title generation and Auto Approve model",
     selectUtilityModel: "Choose model",
     noUtilityModelSelected: "No model selected",
+    imageModel: "Image generation model",
+    selectImageModel: "Choose model",
+    noImageModelSelected: "Default model",
+    imageModelUnconfigured:
+      "OpenRouter is not configured yet. Use “Manage providers and models” to add its API key.",
     tinyFish: "TinyFish web tools",
     tinyFishDescription:
       "Add an API key to let AI use web search and page fetching.",
@@ -100,10 +120,6 @@ export default {
   },
   models: {
     favorites: "Favorites",
-    imageModel: "Image model",
-    imageModelDefault: "Default model",
-    imageModelUnconfigured:
-      "OpenRouter is not configured. Add its API key in the model settings to generate images.",
     loading: "Loading models",
     recent: "Recently used",
     recommended: "Recommended models",
@@ -119,6 +135,11 @@ export default {
       backToModels: "Back to models",
       browse: "Browse all models…",
       contextWindow: "Context window: {tokens}",
+      imageTitle: "Choose an image model",
+      imageDescription:
+        "Search OpenRouter's image models and pick the default for image generation.",
+      imageSearchPlaceholder: "Search image models…",
+      imageEmpty: "No matching image models",
       recommended: "Recommended",
       removeFavorite: "Remove {model} from favorites",
       vision: "Vision",
@@ -991,6 +1012,10 @@ export default {
     utilityModel: {
       title: "Unable to update utility model",
       description: "Check the model provider and try again",
+    },
+    imageModel: {
+      title: "Unable to update image model",
+      description: "Check the OpenRouter credential and try again",
     },
     providerDisconnect: {
       title: "Unable to disconnect provider",

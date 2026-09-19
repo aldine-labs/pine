@@ -118,6 +118,7 @@ import {
 } from "./skills/tools";
 import { MEDIA_GENERATION_DYNAMIC_TOOL_NAMES } from "./media/tools";
 import {
+  DEFAULT_IMAGE_MODEL_ID,
   imageModel,
   imageModelDescriptors,
   IMAGE_MODEL_PROVIDER_ID,
@@ -1145,17 +1146,28 @@ export class PineAgentRuntime {
         : undefined;
 
     const imageSelection = (await readPineAgentSettings(agentDir)).imageModel;
-    const validImageSelection =
+    const storedImageSelection =
       imageSelection &&
       imageSelection.providerId === IMAGE_MODEL_PROVIDER_ID &&
-      runtime.hasConfiguredAuth(IMAGE_MODEL_PROVIDER_ID) &&
       imageModel(imageSelection.modelId)
         ? imageSelection
         : undefined;
+    // Report the model image generation will actually use, so the picker can
+    // mark the default before the user has chosen one explicitly.
+    const effectiveImageSelection = runtime.hasConfiguredAuth(
+      IMAGE_MODEL_PROVIDER_ID,
+    )
+      ? (storedImageSelection ?? {
+          modelId: DEFAULT_IMAGE_MODEL_ID,
+          providerId: IMAGE_MODEL_PROVIDER_ID,
+        })
+      : undefined;
 
     return {
       imageModels: imageModelDescriptors(),
-      ...(validImageSelection ? { imageSelection: validImageSelection } : {}),
+      ...(effectiveImageSelection
+        ? { imageSelection: effectiveImageSelection }
+        : {}),
       providers,
       models: models.map((model) =>
         this.describeModel(model, providers, customModelsFile),
