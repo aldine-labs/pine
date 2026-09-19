@@ -72,4 +72,43 @@ describe("ProjectSessionParallaxBackground", () => {
 
     wrapper.unmount();
   });
+
+  it("spreads icon opacity evenly across the depth ranking", async () => {
+    let reveal: FrameRequestCallback | undefined;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      reveal = callback;
+      return 1;
+    });
+    const wrapper = mount(ProjectSessionParallaxBackground, {
+      global: {
+        stubs: {
+          ParallaxFloat: { template: "<div><slot /></div>" },
+          ParallaxFloatElement: { template: "<div><slot /></div>" },
+        },
+      },
+    });
+
+    reveal?.(0);
+    await nextTick();
+
+    const opacities = wrapper
+      .findAll("[data-parallax-icon]")
+      .map((icon) =>
+        Number.parseFloat(
+          icon.attributes("style")!.match(/opacity: ([\d.]+)/)![1],
+        ),
+      )
+      .sort((first, second) => first - second);
+    const gaps = opacities
+      .slice(1)
+      .map((opacity, index) => opacity - opacities[index]);
+
+    expect(opacities).toHaveLength(16);
+    expect(opacities[0]).toBeCloseTo(0.1, 5);
+    expect(opacities.at(-1)).toBeCloseTo(0.55, 5);
+    expect(Math.min(...gaps)).toBeCloseTo(0.03, 5);
+    expect(Math.max(...gaps)).toBeCloseTo(0.03, 5);
+
+    wrapper.unmount();
+  });
 });

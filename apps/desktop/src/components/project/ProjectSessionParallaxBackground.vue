@@ -197,8 +197,8 @@ const depthValues = [
   2.4, 3.8,
 ];
 
-const MIN_ICON_OPACITY = 0.16;
-const MAX_ICON_OPACITY = 0.45;
+const MIN_ICON_OPACITY = 0.1;
+const MAX_ICON_OPACITY = 0.55;
 
 const iconScaleOptions: readonly Pick<ParallaxIcon, "size" | "iconSize">[] = [
   { size: "size-12", iconSize: "size-8" },
@@ -231,12 +231,13 @@ function shuffle<T>(values: readonly T[]): T[] {
   return shuffled;
 }
 
-function opacityForDepth(depth: number): number {
-  const minDepth = Math.min(...depthValues);
-  const maxDepth = Math.max(...depthValues);
-  const normalizedDepth = (depth - minDepth) / (maxDepth - minDepth);
+/** Spreads opacity evenly across the depth ranking, so icons whose depths sit
+ * close together still read at clearly different strengths. */
+function opacityForRank(rank: number, count: number): number {
+  if (count <= 1) return MAX_ICON_OPACITY;
   return (
-    MIN_ICON_OPACITY + normalizedDepth * (MAX_ICON_OPACITY - MIN_ICON_OPACITY)
+    MIN_ICON_OPACITY +
+    (rank / (count - 1)) * (MAX_ICON_OPACITY - MIN_ICON_OPACITY)
   );
 }
 
@@ -245,6 +246,11 @@ const selectedIcons = shuffle(parallaxIconDefinitions).slice(
   parallaxSlots.length,
 );
 const shuffledDepths = shuffle(depthValues);
+const depthRanks = new Map<number, number>(
+  [...shuffledDepths]
+    .sort((first, second) => first - second)
+    .map((depth, rank): [number, number] => [depth, rank]),
+);
 const shuffledScales = shuffle(iconScaleOptions);
 const parallaxIcons: readonly ParallaxIcon[] = parallaxSlots.map(
   (slot, index) => {
@@ -253,7 +259,10 @@ const parallaxIcons: readonly ParallaxIcon[] = parallaxSlots.map(
       ...selectedIcons[index],
       ...slot,
       depth,
-      opacity: opacityForDepth(depth),
+      opacity: opacityForRank(
+        depthRanks.get(depth) ?? 0,
+        shuffledDepths.length,
+      ),
       ...shuffledScales[index],
       fadeDelay: 0,
     };
