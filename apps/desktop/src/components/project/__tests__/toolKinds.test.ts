@@ -1,7 +1,7 @@
 import {
   BookOpenIcon,
+  ClapperboardIcon,
   EyeIcon,
-  ImageIcon,
   MonitorCogIcon,
   PanelTopIcon,
   PlusIcon,
@@ -50,8 +50,8 @@ describe("Computer Use tool kinds", () => {
   it("uses a dedicated kind and icons for media generation", () => {
     expect(toolKind("activate_media_generation")).toBe("media");
     expect(toolKind("generate_image")).toBe("media");
-    expect(TOOL_KIND_ICON.media).toBe(ImageIcon);
-    expect(MEDIA_OPERATION_ICON.activateMediaGeneration).toBe(ImageIcon);
+    expect(TOOL_KIND_ICON.media).toBe(ClapperboardIcon);
+    expect(MEDIA_OPERATION_ICON.activateMediaGeneration).toBe(ClapperboardIcon);
     expect(MEDIA_OPERATION_ICON.generateImage).toBe(WandSparklesIcon);
     expect(toolIconForName("generate_image")).toBe(WandSparklesIcon);
   });

@@ -43,7 +43,7 @@ const IMAGE_FILE_EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
 };
 
-const ACTIVATION_GUIDANCE = `Image generation is active for this session.
+const ACTIVATION_GUIDANCE = `Media generation is active for this session.
 
 Call ${GENERATE_IMAGE_TOOL_NAME} with a self-contained prompt: name the subject, its actions and setting, then the composition, medium or style, lighting, colour palette, and any text that must appear in the image. Write the prompt in the language the user is using unless the prompt itself benefits from another language. Prefer one clear image per call; ask for variants with separate calls instead of stacking contradictory instructions in one prompt.
 

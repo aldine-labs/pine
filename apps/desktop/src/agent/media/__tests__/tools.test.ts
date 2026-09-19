@@ -133,7 +133,7 @@ describe("createMediaGenerationToolDefinitions", () => {
     expect(activateMediaGeneration).toHaveBeenCalledOnce();
     expect(result.content[0]).toMatchObject({
       type: "text",
-      text: expect.stringContaining("Image generation is active"),
+      text: expect.stringContaining("Media generation is active"),
     });
     expect(result.details).toMatchObject({
       activatedToolNames: [GENERATE_IMAGE_TOOL_NAME],

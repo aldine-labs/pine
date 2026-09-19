@@ -688,10 +688,10 @@ export default {
         },
         mediaOperations: {
           activateMediaGeneration: {
-            label: "enable image generation",
-            complete: "Enabled image generation",
-            running: "Enabling image generation",
-            error: "Couldn’t enable image generation",
+            label: "enable media generation",
+            complete: "Enabled media generation",
+            running: "Enabling media generation",
+            error: "Couldn’t enable media generation",
           },
           generateImage: {
             label: "generate an image",

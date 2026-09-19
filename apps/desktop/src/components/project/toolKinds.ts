@@ -1,10 +1,10 @@
 import {
   BookOpenIcon,
+  ClapperboardIcon,
   EyeIcon,
   FilePlusIcon,
   FileTextIcon,
   GlobeIcon,
-  ImageIcon,
   MonitorCogIcon,
   PanelTopIcon,
   PlusIcon,
@@ -41,7 +41,7 @@ export const TOOL_KIND_ICON: Record<ToolKind, Component> = {
   edit: SquarePenIcon,
   fetch: GlobeIcon,
   generic: WrenchIcon,
-  media: ImageIcon,
+  media: ClapperboardIcon,
   presentFile: EyeIcon,
   read: FileTextIcon,
   search: SearchIcon,
@@ -65,7 +65,7 @@ export type MediaOperation = "activateMediaGeneration" | "generateImage";
 
 /** Icons shown for the dynamically activated media generation tools. */
 export const MEDIA_OPERATION_ICON: Record<MediaOperation, Component> = {
-  activateMediaGeneration: ImageIcon,
+  activateMediaGeneration: ClapperboardIcon,
   generateImage: WandSparklesIcon,
 };
 

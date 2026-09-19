@@ -658,10 +658,10 @@ export default {
         },
         mediaOperations: {
           activateMediaGeneration: {
-            label: "启用图像生成",
-            complete: "已启用图像生成",
-            running: "正在启用图像生成",
-            error: "启用图像生成失败",
+            label: "启用媒体生成",
+            complete: "已启用媒体生成",
+            running: "正在启用媒体生成",
+            error: "启用媒体生成失败",
           },
           generateImage: {
             label: "生成图片",
