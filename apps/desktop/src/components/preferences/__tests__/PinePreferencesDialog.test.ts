@@ -146,7 +146,7 @@ describe("PinePreferencesDialog", () => {
     };
 
     useModelsStore(pinia).catalog = catalog;
-    await openSection(wrapper, "辅助模型和服务");
+    await openSection(wrapper, "Harness");
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain("GLM 4.5 Air");
@@ -181,7 +181,7 @@ describe("PinePreferencesDialog", () => {
       ],
     };
 
-    await openSection(wrapper, "辅助模型和服务");
+    await openSection(wrapper, "Harness");
 
     expect(wrapper.text()).toContain(imageModel.name);
     expect(wrapper.text()).not.toContain("尚未配置 OpenRouter");
@@ -215,15 +215,15 @@ describe("PinePreferencesDialog", () => {
       providers: [],
     };
 
-    await openSection(wrapper, "辅助模型和服务");
+    await openSection(wrapper, "Harness");
 
     expect(wrapper.text()).toContain("尚未配置 OpenRouter");
   });
 
-  it("saves a TinyFish key from the models and services section", async () => {
+  it("saves a TinyFish key from the harness section", async () => {
     installPineApi("linux");
     const { wrapper } = mountDialog();
-    await openSection(wrapper, "辅助模型和服务");
+    await openSection(wrapper, "Harness");
 
     await wrapper
       .get('[data-testid="pine-tinyfish-credential-button"]')
@@ -241,7 +241,7 @@ describe("PinePreferencesDialog", () => {
 
   it("opens the shared model picker in utility mode", async () => {
     const { wrapper } = mountDialog();
-    await openSection(wrapper, "辅助模型和服务");
+    await openSection(wrapper, "Harness");
     const picker = wrapper
       .findAll("[data-model-picker]")
       .find((candidate) => candidate.attributes("data-purpose") === "utility");
@@ -262,7 +262,7 @@ describe("PinePreferencesDialog", () => {
       nickname: "Loaded nickname",
     });
     const { wrapper } = mountDialog();
-    await openSection(wrapper, "个性化");
+    await openSection(wrapper, "用户画像");
 
     const form = wrapper.get('[data-testid="pine-user-profile-form"]');
     const nickname = form.get("#pine-user-profile-nickname");
@@ -348,7 +348,7 @@ describe("PinePreferencesDialog", () => {
   it("loads the recommended compaction strategy and persists changes", async () => {
     installPineApi("linux");
     const { wrapper } = mountDialog();
-    await openSection(wrapper, "高级");
+    await openSection(wrapper, "Harness");
     await vi.waitFor(() =>
       expect(getContextCompactionStrategy).toHaveBeenCalled(),
     );
@@ -372,7 +372,7 @@ describe("PinePreferencesDialog", () => {
 
   it("shows the compaction description from a focusable help badge", async () => {
     const { wrapper } = mountDialog();
-    await openSection(wrapper, "高级");
+    await openSection(wrapper, "Harness");
     const helpBadge = wrapper.get('button[aria-label="关于上下文压缩策略"]');
     const description =
       "推荐设置会在上下文达到 80% 时压缩，并将触发上限限制在 400K Token。";

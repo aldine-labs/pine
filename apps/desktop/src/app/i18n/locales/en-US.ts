@@ -35,9 +35,8 @@ export default {
     open: "Open Pine settings",
     sections: {
       general: "General",
-      models: "Models & services",
-      personalization: "Personalization",
-      advanced: "Advanced",
+      models: "Harness",
+      personalization: "User profile",
     },
     sectionsLabel: "Settings sections",
     language: "Language",

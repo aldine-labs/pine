@@ -6,7 +6,6 @@ import {
   SlidersHorizontalIcon,
   SparklesIcon,
   UserRoundIcon,
-  WrenchIcon,
 } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import type { Component } from "vue";
@@ -62,7 +61,7 @@ import {
   type PineUserProfile,
 } from "@/shared/userProfile";
 
-type PreferenceSection = "general" | "models" | "personalization" | "advanced";
+type PreferenceSection = "general" | "models" | "personalization";
 
 const { locale, t } = useI18n();
 const appearanceStore = useAppearanceStore();
@@ -129,11 +128,6 @@ const sections = computed<
     icon: UserRoundIcon,
     id: "personalization",
     label: t("preferences.sections.personalization"),
-  },
-  {
-    icon: WrenchIcon,
-    id: "advanced",
-    label: t("preferences.sections.advanced"),
   },
 ]);
 
@@ -332,7 +326,7 @@ function updateSidebarVibrancy(value: boolean): void {
 
       <div class="flex min-h-0 flex-1">
         <nav
-          class="flex w-48 shrink-0 flex-col gap-1 border-r bg-muted/20 p-2"
+          class="flex w-44 shrink-0 flex-col gap-1 border-r bg-muted/20 p-2"
           :aria-label="t('preferences.sectionsLabel')"
         >
           <Item
@@ -634,11 +628,7 @@ function updateSidebarVibrancy(value: boolean): void {
                   }}
                 </Button>
               </Field>
-            </FieldGroup>
-          </div>
 
-          <div v-else-if="activeSection === 'advanced'" class="p-6">
-            <FieldGroup>
               <Field orientation="horizontal">
                 <div class="flex min-w-0 flex-1 items-baseline gap-2">
                   <FieldTitle id="pine-context-compaction-strategy-setting">

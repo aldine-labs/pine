@@ -32,9 +32,8 @@ export default {
     open: "打开 Pine 设置",
     sections: {
       general: "通用",
-      models: "辅助模型和服务",
-      personalization: "个性化",
-      advanced: "高级",
+      models: "Harness",
+      personalization: "用户画像",
     },
     sectionsLabel: "设置分类",
     language: "语言",
