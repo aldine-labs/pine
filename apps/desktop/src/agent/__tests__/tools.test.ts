@@ -198,6 +198,43 @@ describe("PineToolAccessPolicy", () => {
     );
   });
 
+  it("adds managed Skill directories only while authoring is active", async () => {
+    const { location, outside } = await createFixture();
+    const skillRoot = path.join(outside, "skills");
+    await mkdir(skillRoot);
+    let authoringActive = false;
+    const policy = await PineToolAccessPolicy.create(
+      location.cwd,
+      location.folders,
+      undefined,
+      () =>
+        authoringActive
+          ? [{ access: "read-write" as const, path: skillRoot }]
+          : [],
+    );
+
+    await expect(
+      policy.authorize(path.join(skillRoot, "review", "references"), "write", {
+        allowMissing: true,
+      }),
+    ).rejects.toThrow("outside the folders shared with Pine");
+
+    authoringActive = true;
+    await expect(
+      policy.authorize(path.join(skillRoot, "review", "references"), "write", {
+        allowMissing: true,
+      }),
+    ).resolves.toBe(path.join(skillRoot, "review", "references"));
+    expect(policy.writableFolders()).toContain(skillRoot);
+
+    authoringActive = false;
+    await expect(
+      policy.authorize(path.join(skillRoot, "review", "references"), "write", {
+        allowMissing: true,
+      }),
+    ).rejects.toThrow("outside the folders shared with Pine");
+  });
+
   it("requires the default folder to be writable", async () => {
     const { readOnly } = await createFixture();
 

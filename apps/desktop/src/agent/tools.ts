@@ -39,7 +39,7 @@ import {
   type AskUserQuestionParams,
   type AskUserQuestionSubmission,
 } from "@pine/rpiv-ask-user-question";
-import type { AgentSessionLocation } from "./protocol";
+import type { AgentFolderGrant, AgentSessionLocation } from "./protocol";
 import { UI_PRESENT_FILE_TOOL_NAME } from "../shared/agent";
 import {
   createNativeBashEnvironment,
@@ -236,6 +236,8 @@ export interface PineToolPermissionContext {
   mediaGeneration?: PineMediaGenerationContext;
   getApprovalMode(): PineApprovalMode;
   getGate(): ToolGate | null;
+  /** Managed Skill directories become writable only while Skill Authoring is active. */
+  getSkillAuthoringFolders?: () => readonly AgentFolderGrant[];
   getTinyFishApiKey?: () => string | undefined;
   requestQuestionnaire?: (
     toolCallId: string,
@@ -291,6 +293,7 @@ export async function createPineToolDefinitions(
       ...location.folders,
     ],
     attachedPaths,
+    permissions?.getSkillAuthoringFolders,
   );
   // Permissive twin used to re-run a call the gate approved beyond the grants.
   const permissivePolicy = PineToolAccessPolicy.permissive(location.cwd);

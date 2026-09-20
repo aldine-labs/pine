@@ -111,6 +111,7 @@ export class PineToolAccessPolicy {
     readonly cwd: string,
     readonly folders: CanonicalFolderGrant[],
     private readonly attachedPaths?: PineAttachedPathAccess,
+    private readonly dynamicFolders?: () => readonly AgentFolderGrant[],
     private readonly permissive = false,
   ) {}
 
@@ -118,6 +119,7 @@ export class PineToolAccessPolicy {
     cwd: string,
     folders: AgentFolderGrant[],
     attachedPaths?: PineAttachedPathAccess,
+    dynamicFolders?: () => readonly AgentFolderGrant[],
   ): Promise<PineToolAccessPolicy> {
     const canonicalFolders = await Promise.all(
       folders.map(async (folder) => ({
@@ -140,6 +142,7 @@ export class PineToolAccessPolicy {
       canonicalCwd,
       canonicalFolders,
       attachedPaths,
+      dynamicFolders,
       false,
     );
   }
@@ -149,7 +152,7 @@ export class PineToolAccessPolicy {
    * gate explicitly allows a denied file operation to cross folder grants.
    */
   static permissive(cwd: string): PineToolAccessPolicy {
-    return new PineToolAccessPolicy(cwd, [], undefined, true);
+    return new PineToolAccessPolicy(cwd, [], undefined, undefined, true);
   }
 
   async authorize(
@@ -167,6 +170,17 @@ export class PineToolAccessPolicy {
     }
     const containingGrants = this.folders.filter((folder) =>
       pathContains(folder.path, canonicalPath),
+    );
+    const dynamicGrants = await Promise.all(
+      (this.dynamicFolders?.() ?? []).map(async (folder) => ({
+        ...folder,
+        path: await canonicalizeTarget(folder.path, true),
+      })),
+    );
+    containingGrants.push(
+      ...dynamicGrants.filter((folder) =>
+        pathContains(folder.path, canonicalPath),
+      ),
     );
     const containingGrant = containingGrants[0];
     if (!containingGrant) {
@@ -189,12 +203,18 @@ export class PineToolAccessPolicy {
     if (this.permissive) return [];
     return this.folders
       .filter((folder) => folder.access === "read-write")
-      .map((folder) => folder.path);
+      .map((folder) => folder.path)
+      .concat(
+        (this.dynamicFolders?.() ?? [])
+          .filter((folder) => folder.access === "read-write")
+          .map((folder) => folder.path),
+      );
   }
 
   readablePaths(): string[] {
     return [
       ...this.folders.map((folder) => folder.path),
+      ...(this.dynamicFolders?.() ?? []).map((folder) => folder.path),
       ...(this.attachedPaths?.readablePaths() ?? []),
     ];
   }

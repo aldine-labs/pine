@@ -39,7 +39,11 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { PineSkillScope, PineSkillSummary } from "@/shared/skills";
+import type {
+  PineSkillResource,
+  PineSkillScope,
+  PineSkillSummary,
+} from "@/shared/skills";
 
 interface Props {
   projectId: string;
@@ -53,7 +57,11 @@ const activeScope = ref<PineSkillScope>("global");
 const skills = ref<PineSkillSummary[]>([]);
 const selectedName = ref("");
 const description = ref("");
+const license = ref("");
+const compatibility = ref("");
+const allowedTools = ref("");
 const body = ref("");
+const resources = ref<PineSkillResource[]>([]);
 const frontmatter = ref<Record<string, unknown>>({});
 const isCreating = ref(false);
 const isLoading = ref(false);
@@ -68,7 +76,7 @@ const canSave = computed(
     selectedName.value.length <= 64 &&
     description.value.trim().length > 0 &&
     description.value.trim().length <= 1_024 &&
-    body.value.trim().length > 0 &&
+    compatibility.value.trim().length <= 500 &&
     !isSaving.value,
 );
 
@@ -105,11 +113,19 @@ function parseSkillDocument(rawContent: string): ParsedSkillDocument {
 }
 
 function serializeSkillDocument(): string {
-  const metadata = {
+  const metadata: Record<string, unknown> = {
     ...frontmatter.value,
     name: selectedName.value,
     description: description.value.trim(),
   };
+  if (license.value.trim()) metadata.license = license.value.trim();
+  else delete metadata.license;
+  if (compatibility.value.trim()) {
+    metadata.compatibility = compatibility.value.trim();
+  } else delete metadata.compatibility;
+  if (allowedTools.value.trim()) {
+    metadata["allowed-tools"] = allowedTools.value.trim();
+  } else delete metadata["allowed-tools"];
   const header = stringifyYaml(metadata).trimEnd();
   const instructions = body.value.trim();
   return `---\n${header}\n---\n\n${instructions}\n`;
@@ -152,7 +168,20 @@ async function selectSkill(name: string): Promise<void> {
     typeof parsed.frontmatter.description === "string"
       ? parsed.frontmatter.description
       : result.skill.description;
+  license.value =
+    typeof parsed.frontmatter.license === "string"
+      ? parsed.frontmatter.license
+      : "";
+  compatibility.value =
+    typeof parsed.frontmatter.compatibility === "string"
+      ? parsed.frontmatter.compatibility
+      : "";
+  allowedTools.value =
+    typeof parsed.frontmatter["allowed-tools"] === "string"
+      ? parsed.frontmatter["allowed-tools"]
+      : "";
   body.value = parsed.body;
+  resources.value = result.resources ?? [];
   frontmatter.value = parsed.frontmatter;
   isCreating.value = false;
 }
@@ -168,7 +197,11 @@ async function selectSkillSafely(name: string): Promise<void> {
 function startCreating(): void {
   selectedName.value = "";
   description.value = "";
+  license.value = "";
+  compatibility.value = "";
+  allowedTools.value = "";
   body.value = "";
+  resources.value = [];
   frontmatter.value = {};
   isCreating.value = true;
 }
@@ -387,6 +420,45 @@ watch(activeScope, () => {
                   </Field>
                 </FieldGroup>
 
+                <FieldGroup class="mt-2 grid grid-cols-3 gap-2">
+                  <Field class="gap-0">
+                    <FieldLabel :for="`skill-${scope}-license`" class="sr-only">
+                      {{ t("skills.licenseLabel") }}
+                    </FieldLabel>
+                    <Input
+                      :id="`skill-${scope}-license`"
+                      v-model="license"
+                      :placeholder="t('skills.licensePlaceholder')"
+                    />
+                  </Field>
+                  <Field class="gap-0">
+                    <FieldLabel
+                      :for="`skill-${scope}-compatibility`"
+                      class="sr-only"
+                    >
+                      {{ t("skills.compatibilityLabel") }}
+                    </FieldLabel>
+                    <Input
+                      :id="`skill-${scope}-compatibility`"
+                      v-model="compatibility"
+                      :placeholder="t('skills.compatibilityPlaceholder')"
+                    />
+                  </Field>
+                  <Field class="gap-0">
+                    <FieldLabel
+                      :for="`skill-${scope}-allowed-tools`"
+                      class="sr-only"
+                    >
+                      {{ t("skills.allowedToolsLabel") }}
+                    </FieldLabel>
+                    <Input
+                      :id="`skill-${scope}-allowed-tools`"
+                      v-model="allowedTools"
+                      :placeholder="t('skills.allowedToolsPlaceholder')"
+                    />
+                  </Field>
+                </FieldGroup>
+
                 <Field class="mt-4 h-[26rem] min-h-0 gap-0">
                   <FieldLabel :for="`skill-${scope}-body`" class="sr-only">
                     {{ t("skills.instructionsLabel") }}
@@ -399,6 +471,16 @@ watch(activeScope, () => {
                     :placeholder="t('skills.contentPlaceholder')"
                   />
                 </Field>
+
+                <div
+                  v-if="!isCreating && resources.length > 0"
+                  class="mt-2 text-xs text-muted-foreground"
+                >
+                  {{ t("skills.resourcesLabel") }}
+                  <span class="ml-1">{{
+                    resources.map((resource) => resource.path).join(", ")
+                  }}</span>
+                </div>
 
                 <DialogFooter
                   class="mt-4 flex-row justify-between sm:justify-between"

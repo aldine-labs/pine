@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -144,6 +144,93 @@ describe("PineSkillRepository", () => {
     expect(repository.list("global").skills[0]?.enabled).toBe(true);
     await expect(repository.invoke("shared-review")).resolves.toContain(
       'name="shared-review"',
+    );
+  });
+
+  it("supports standard metadata and bundled resources", async () => {
+    const { project, repository } = await createRepository();
+    const skillRoot = path.join(project, "document-review");
+    await mkdir(path.join(skillRoot, "references"), { recursive: true });
+    await writeFile(
+      path.join(skillRoot, "SKILL.md"),
+      `---
+name: document-review
+description: Review documents and apply the project review checklist.
+license: Apache-2.0
+compatibility: Requires markdown tooling.
+allowed-tools: Read Bash(git:*)
+metadata:
+  author: pine
+  version: "1"
+---
+
+# Document review
+`,
+    );
+    await writeFile(
+      path.join(skillRoot, "references", "checklist.md"),
+      "# Checklist\n\n- Check headings\n",
+    );
+
+    const listed = repository.list("project");
+    expect(listed.skills[0]).toMatchObject({
+      allowedTools: "Read Bash(git:*)",
+      compatibility: "Requires markdown tooling.",
+      license: "Apache-2.0",
+      metadata: { author: "pine", version: "1" },
+      name: "document-review",
+    });
+    expect(repository.promptList()).toContain(
+      "Review documents and apply the project review checklist.",
+    );
+
+    const read = await repository.read("project", "document-review");
+    expect(read.skillDirectory).toBe(skillRoot);
+    expect(read.resources).toEqual([
+      { kind: "directory", path: "references" },
+      {
+        kind: "file",
+        path: "references/checklist.md",
+        size: expect.any(Number),
+      },
+    ]);
+    await expect(
+      repository.readResource("document-review", "references/checklist.md"),
+    ).resolves.toMatchObject({
+      content: "# Checklist\n\n- Check headings\n",
+      encoding: "utf8",
+    });
+    await expect(
+      repository.readResource("document-review", "../SKILL.md"),
+    ).rejects.toThrow("cannot escape");
+  });
+
+  it("requires a declared name that matches the skill directory", async () => {
+    const { project, repository } = await createRepository();
+    await mkdir(path.join(project, "directory-name"), { recursive: true });
+    await writeFile(
+      path.join(project, "directory-name", "SKILL.md"),
+      "---\ndescription: Missing the required name.\n---\n",
+    );
+    await mkdir(path.join(project, "wrong-directory"), { recursive: true });
+    await writeFile(
+      path.join(project, "wrong-directory", "SKILL.md"),
+      "---\nname: declared-name\ndescription: Directory does not match.\n---\n",
+    );
+
+    const result = repository.list("project");
+    expect(result.skills).toEqual([]);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "name is required",
+          name: "directory-name",
+        }),
+        expect.objectContaining({
+          message: "name must match the skill directory name (wrong-directory)",
+          name: "declared-name",
+        }),
+      ]),
     );
   });
 });

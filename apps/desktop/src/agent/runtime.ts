@@ -112,6 +112,8 @@ import {
 import {
   ACTIVATE_SKILL_AUTHORING_TOOL_NAME,
   INVOKE_SKILL_TOOL_NAME,
+  LIST_SKILL_RESOURCES_TOOL_NAME,
+  READ_SKILL_RESOURCE_TOOL_NAME,
   SKILL_AUTHORING_DYNAMIC_TOOL_NAMES,
   createSkillToolsExtension,
 } from "./skills/tools";
@@ -1498,6 +1500,7 @@ export class PineAgentRuntime {
           PINE_SKILL_AUTHORING_ACTIVE_ENTRY,
           { active: true },
         );
+        this.syncApprovalModeTools(live);
       },
     });
     const resourceLoader = new DefaultResourceLoader({
@@ -1551,6 +1554,13 @@ export class PineAgentRuntime {
       {
         getApprovalMode: () => live.approvalMode,
         getGate: () => live.gate,
+        getSkillAuthoringFolders: () =>
+          live.skillAuthoringActive
+            ? skillRepository.authoringDirectories().map((skillDirectory) => ({
+                access: "read-write" as const,
+                path: skillDirectory,
+              }))
+            : [],
         getTinyFishApiKey: () => live.tinyFishApiKey,
         mediaGeneration: {
           activate: () => {
@@ -1584,6 +1594,8 @@ export class PineAgentRuntime {
       ACTIVATE_COMPUTER_USE_TOOL_NAME,
       ...COMPUTER_USE_DYNAMIC_TOOL_NAMES,
       INVOKE_SKILL_TOOL_NAME,
+      LIST_SKILL_RESOURCES_TOOL_NAME,
+      READ_SKILL_RESOURCE_TOOL_NAME,
       ACTIVATE_SKILL_AUTHORING_TOOL_NAME,
       ...SKILL_AUTHORING_DYNAMIC_TOOL_NAMES,
     ];

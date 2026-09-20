@@ -12,6 +12,8 @@ import AUTHORING_SKILL from "./skill-authoring/SKILL.md?raw";
 import { PineSkillRepository } from "./repository";
 
 export const INVOKE_SKILL_TOOL_NAME = "invoke_skill";
+export const LIST_SKILL_RESOURCES_TOOL_NAME = "list_skill_resources";
+export const READ_SKILL_RESOURCE_TOOL_NAME = "read_skill_resource";
 export const ACTIVATE_SKILL_AUTHORING_TOOL_NAME = "activate_skill_authoring";
 export const CREATE_SKILL_TOOL_NAME = "create_skill";
 export const EDIT_SKILL_TOOL_NAME = "edit_skill";
@@ -96,6 +98,24 @@ function createDefinitions(
     },
     { additionalProperties: false },
   );
+  const listResourcesParams = Type.Object(
+    { name: skillNameSchema },
+    { additionalProperties: false },
+  );
+  const readResourceParams = Type.Object(
+    {
+      name: skillNameSchema,
+      path: Type.String({
+        description: "Relative path inside the activated skill directory.",
+        minLength: 1,
+        maxLength: 4_096,
+      }),
+      encoding: Type.Optional(
+        Type.Union([Type.Literal("utf8"), Type.Literal("base64")]),
+      ),
+    },
+    { additionalProperties: false },
+  );
   const writeParams = Type.Object(
     {
       scope: scopeSchema,
@@ -146,6 +166,48 @@ function createDefinitions(
       },
     }),
     defineTool({
+      name: LIST_SKILL_RESOURCES_TOOL_NAME,
+      label: "List Skill Resources",
+      description:
+        "List the files and directories bundled with an available skill. Use after invoke_skill when the skill references supporting files.",
+      promptSnippet:
+        "Inspect a skill's bundled scripts, references, and assets without loading them all into context",
+      parameters: listResourcesParams,
+      prepareArguments: (args) => args as Static<typeof listResourcesParams>,
+      execute: async (_toolCallId, params) => {
+        const result = await options.repository.listResources(params.name);
+        const lines = result.resources.map(
+          (resource) =>
+            `- ${resource.path} (${resource.kind}${resource.size === undefined ? "" : `, ${resource.size} bytes`})`,
+        );
+        return textResult(
+          `<skill_resources name="${params.name}">\n${lines.join("\n")}\n</skill_resources>`,
+          result as unknown as Record<string, unknown>,
+        );
+      },
+    }),
+    defineTool({
+      name: READ_SKILL_RESOURCE_TOOL_NAME,
+      label: "Read Skill Resource",
+      description:
+        "Read one UTF-8 text or base64-encoded file bundled with an available skill by relative path.",
+      promptSnippet:
+        "Load one referenced skill resource on demand instead of putting every bundled file into context",
+      parameters: readResourceParams,
+      prepareArguments: (args) => args as Static<typeof readResourceParams>,
+      execute: async (_toolCallId, params) => {
+        const result = await options.repository.readResource(
+          params.name,
+          params.path,
+          params.encoding,
+        );
+        return textResult(
+          `<skill_resource name="${params.name}" path="${params.path}" encoding="${result.encoding}">\n${result.content}\n</skill_resource>`,
+          result as unknown as Record<string, unknown>,
+        );
+      },
+    }),
+    defineTool({
       name: CREATE_SKILL_TOOL_NAME,
       label: "Create Skill",
       description:
@@ -168,8 +230,12 @@ function createDefinitions(
           params.content,
         );
         return textResult(
-          `Created ${params.scope} skill \"${result.skill.name}\". It is available immediately.`,
-          { scope: params.scope, skill: result.skill },
+          `Created ${params.scope} skill \"${result.skill.name}\". It is available immediately. Skill directory: ${result.skillDirectory ?? "unavailable"}. Use write, edit, or bash with this directory to add bundled resources under scripts/, references/, or assets/.`,
+          {
+            scope: params.scope,
+            skill: result.skill,
+            skillDirectory: result.skillDirectory,
+          },
         );
       },
     }),
@@ -196,8 +262,12 @@ function createDefinitions(
           params.content,
         );
         return textResult(
-          `Updated ${params.scope} skill \"${result.skill.name}\". The new instructions are available immediately.`,
-          { scope: params.scope, skill: result.skill },
+          `Updated ${params.scope} skill \"${result.skill.name}\". The new instructions are available immediately. Skill directory: ${result.skillDirectory ?? "unavailable"}. Existing bundled resources were preserved.`,
+          {
+            scope: params.scope,
+            skill: result.skill,
+            skillDirectory: result.skillDirectory,
+          },
         );
       },
     }),

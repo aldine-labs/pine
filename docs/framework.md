@@ -335,9 +335,9 @@ annotation:
 
 - Skill 采用兼容 [Agent Skills 规范](https://agentskills.io/specification) 的 Markdown 文件。
 - 格式：
-  - 顶部 YAML frontmatter：`name`、`description` 必填；可选 `license`、`compatibility`、`metadata`。
+  - 顶部 YAML frontmatter：`name`、`description` 必填；可选 `license`、`compatibility`、`metadata`、`allowed-tools`。
   - Markdown body：使用说明、步骤、示例。
-  - 可附带脚本/模板文件。
+  - 可附带 `scripts/`、`references/`、`assets/` 等脚本、参考资料和模板文件；Agent 通过资源工具按需读取，不在发现阶段全部注入上下文。
 - 存放位置：
   - 项目级：`<project>/.pine/skills/`
   - 用户级：`~/.pine/skills/`

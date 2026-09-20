@@ -8,9 +8,19 @@ export const SET_GLOBAL_SKILL_ENABLED_CHANNEL =
 
 export type PineSkillScope = "global" | "project";
 
+export interface PineSkillResource {
+  kind: "directory" | "file";
+  path: string;
+  size?: number;
+}
+
 export interface PineSkillSummary {
+  allowedTools?: string;
+  compatibility?: string;
   description: string;
   disableModelInvocation: boolean;
+  license?: string;
+  metadata?: Record<string, string>;
   name: string;
   scope: PineSkillScope;
   /** Project-specific effective state for a global skill. */
@@ -43,6 +53,21 @@ export interface ListSkillsResult {
 
 export interface ReadSkillResult {
   content: string;
+  resources?: PineSkillResource[];
+  skill: PineSkillSummary;
+  /** Absolute package directory for agent-side resource authoring. */
+  skillDirectory?: string;
+}
+
+export interface ListSkillResourcesResult {
+  resources: PineSkillResource[];
+  skill: PineSkillSummary;
+}
+
+export interface ReadSkillResourceResult {
+  content: string;
+  encoding: "base64" | "utf8";
+  resource: PineSkillResource;
   skill: PineSkillSummary;
 }
 
