@@ -156,10 +156,57 @@ describe("generate_image", () => {
       .parameters as { properties: Record<string, unknown> };
 
     expect(Object.keys(parameters.properties)).toEqual([
+      "input_references",
       "prompt",
       "parameters",
       "output_path",
     ]);
+  });
+
+  it("resolves local and OpenRouter-shaped references before generation", async () => {
+    const generateImages = vi.fn(() => Promise.resolve(pngOutput()));
+    const resolveImageReference = vi.fn((reference: string) =>
+      Promise.resolve({
+        type: "image" as const,
+        data: reference === "/tmp/reference.png" ? "AAA" : "BBB",
+        mimeType: "image/png",
+      }),
+    );
+    const options = createOptions({
+      generateImages,
+      resolveImageReference,
+    });
+
+    await execute(options, GENERATE_IMAGE_TOOL_NAME, {
+      input_references: [
+        "/tmp/reference.png",
+        {
+          type: "image_url",
+          image_url: { url: "https://example.com/ref.jpg" },
+        },
+      ],
+      prompt: "Make a variation",
+    });
+
+    expect(resolveImageReference).toHaveBeenNthCalledWith(
+      1,
+      "/tmp/reference.png",
+      undefined,
+    );
+    expect(resolveImageReference).toHaveBeenNthCalledWith(
+      2,
+      "https://example.com/ref.jpg",
+      undefined,
+    );
+    expect(generateImages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: [
+          { type: "text", text: "Make a variation" },
+          { type: "image", data: "AAA", mimeType: "image/png" },
+          { type: "image", data: "BBB", mimeType: "image/png" },
+        ],
+      }),
+    );
   });
 
   it("uses the image model picked in the model selector", async () => {

@@ -66,6 +66,7 @@ export {
 } from "./bash-execution";
 import type { ToolGate } from "./gate";
 import type { PineApprovalMode } from "../shared/agent";
+import { resolveImageReference } from "./media/image-input";
 import {
   createTinyFishToolDefinitions,
   type TinyFishToolFactoryOptions,
@@ -624,6 +625,13 @@ export async function createPineToolDefinitions(
     outputDirectory: path.join(canonicalBashTemporaryDirectory, "media"),
     resolveApiKey: () =>
       mediaGeneration?.resolveOpenRouterApiKey() ?? Promise.resolve(undefined),
+    resolveImageReference: (reference, signal) =>
+      resolveImageReference(reference, {
+        cwd: location.cwd,
+        readFile: async (targetPath) =>
+          readFile(await policy.authorize(targetPath, "read")),
+        ...(signal ? { signal } : {}),
+      }),
   });
 
   return [

@@ -48,6 +48,8 @@ Pine classifies with the catalog's declared modalities (`imageTransportFor` in `
 
 `generateImagesViaEndpoint` in `apps/desktop/src/agent/media/openrouter-images-endpoint.ts` speaks the documented image API and returns pi-ai's `AssistantImages` shape, so activation, approval, file writing, and result formatting stay transport-agnostic. Model options from the tool's `parameters` argument pass through unchanged, while `model`, `prompt`, `messages`, and `stream` stay under Pine's control.
 
+The tool accepts OpenRouter-style `input_references` as well as Pine's shorter string form. Each reference may be a path from the current `<pine_attachments>` block, an HTTP(S) URL, or a base64 data URL. Pine resolves local files through the existing folder policy and normalizes every reference to pi-ai image content; the chat transport sends mixed text/image content, while the dedicated endpoint emits `input_references` with data URLs. Multiple references retain their input order, and models whose catalog does not include `image` input are rejected before the provider call.
+
 This shim exists only because the released pi-ai has not caught up. If a future pi-ai release implements the image API — or `pi` itself starts marking the transport per model — delete the shim and route through `ImagesModels` again.
 
 Image generation leaves the project sandbox, so calls pass through the approval gate like other privileged actions, and generated files are written into the project's temporary directory unless the model names a path inside a folder shared with Pine.

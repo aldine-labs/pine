@@ -1,6 +1,7 @@
 import type {
   AssistantImages,
   ImagesApi,
+  ImagesInputContent,
   ImagesModel,
   Usage,
 } from "@earendil-works/pi-ai";
@@ -20,8 +21,10 @@ import type {
 
 /** Body fields Pine owns; `parameters` may not override them on either transport. */
 export const PROTECTED_BODY_FIELDS = new Set([
+  "input_references",
   "messages",
   "model",
+  "modalities",
   "prompt",
   "stream",
 ]);
@@ -31,6 +34,7 @@ export interface ImagesEndpointRequest {
   /** Injectable for tests; defaults to the global fetch. */
   fetch?: typeof globalThis.fetch;
   model: ImagesModel<ImagesApi>;
+  input?: readonly ImagesInputContent[];
   parameters?: Record<string, unknown>;
   prompt: string;
   signal?: AbortSignal;
@@ -74,6 +78,18 @@ export function imagesEndpointBody(
     model: request.model.id,
     prompt: request.prompt,
   };
+  const inputReferences = (request.input ?? []).filter(
+    (part): part is Extract<ImagesInputContent, { type: "image" }> =>
+      part.type === "image",
+  );
+  if (inputReferences.length > 0) {
+    body.input_references = inputReferences.map((image) => ({
+      image_url: {
+        url: `data:${image.mimeType};base64,${image.data}`,
+      },
+      type: "image_url",
+    }));
+  }
   for (const [key, value] of Object.entries(request.parameters ?? {})) {
     if (PROTECTED_BODY_FIELDS.has(key)) continue;
     body[key] = value;

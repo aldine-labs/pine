@@ -142,6 +142,38 @@ describe("generateImagesWithOpenRouter", () => {
     });
   });
 
+  it("maps multiple image inputs to the dedicated API reference format", async () => {
+    const fetchMock = stubFetch(() => response({ data: [] }));
+
+    await generateImagesWithOpenRouter({
+      ...request(imageModel()),
+      input: [
+        { type: "text", text: "Make a variation" },
+        { type: "image", data: "AAA", mimeType: "image/png" },
+        { type: "image", data: "BBB", mimeType: "image/jpeg" },
+      ],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      { body: string },
+    ];
+    expect(JSON.parse(init.body)).toEqual({
+      input_references: [
+        {
+          image_url: { url: "data:image/png;base64,AAA" },
+          type: "image_url",
+        },
+        {
+          image_url: { url: "data:image/jpeg;base64,BBB" },
+          type: "image_url",
+        },
+      ],
+      model: "openai/gpt-image-2.5-flare",
+      prompt: "A red circle on a plain white background",
+    });
+  });
+
   it("keeps text-emitting models on Pi's chat transport", async () => {
     mocks.generateImages.mockResolvedValue({
       api: "openrouter-images",
@@ -165,6 +197,39 @@ describe("generateImagesWithOpenRouter", () => {
     expect(mocks.generateImages).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.output).toHaveLength(1);
+  });
+
+  it("passes text and multiple images through Pi's chat context", async () => {
+    mocks.generateImages.mockResolvedValue({
+      api: "openrouter-images",
+      model: "google/gemini-3-pro-image",
+      output: [{ type: "image", data: "AAA", mimeType: "image/png" }],
+      provider: "openrouter",
+      stopReason: "stop",
+      timestamp: Date.now(),
+    });
+
+    await generateImagesWithOpenRouter({
+      ...request(
+        imageModel({
+          id: "google/gemini-3-pro-image",
+          output: ["image", "text"],
+        }),
+      ),
+      input: [
+        { type: "text", text: "Make a variation" },
+        { type: "image", data: "AAA", mimeType: "image/png" },
+        { type: "image", data: "BBB", mimeType: "image/jpeg" },
+      ],
+    });
+
+    expect(mocks.generateImages.mock.calls[0]?.[1]).toEqual({
+      input: [
+        { type: "text", text: "Make a variation" },
+        { type: "image", data: "AAA", mimeType: "image/png" },
+        { type: "image", data: "BBB", mimeType: "image/jpeg" },
+      ],
+    });
   });
 
   it("retries on the image endpoint when chat rejects the model", async () => {
@@ -241,6 +306,29 @@ describe("generateImagesWithOpenRouter", () => {
 describe("imagesEndpointBody", () => {
   it("omits protected fields even without extra parameters", () => {
     expect(imagesEndpointBody(request(imageModel()))).toEqual({
+      model: "openai/gpt-image-2.5-flare",
+      prompt: "A red circle on a plain white background",
+    });
+  });
+
+  it("does not allow parameters to replace generated references", () => {
+    expect(
+      imagesEndpointBody({
+        ...request(imageModel()),
+        input: [{ type: "image", data: "AAA", mimeType: "image/png" }],
+        parameters: {
+          input_references: [
+            { type: "image_url", image_url: { url: "hijack" } },
+          ],
+        },
+      }),
+    ).toEqual({
+      input_references: [
+        {
+          image_url: { url: "data:image/png;base64,AAA" },
+          type: "image_url",
+        },
+      ],
       model: "openai/gpt-image-2.5-flare",
       prompt: "A red circle on a plain white background",
     });

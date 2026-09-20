@@ -5,6 +5,8 @@ import type {
   AssistantImages,
   ImagesApi,
   ImagesContext,
+  ImagesInputContent,
+  ImageContent,
   ImagesModel,
 } from "@earendil-works/pi-ai";
 import {
@@ -23,6 +25,11 @@ import {
   generateImagesViaEndpoint,
   isImagesEndpointRedirect,
 } from "./openrouter-images-endpoint";
+import {
+  imageReferenceUrl,
+  resolveImageReference as resolveImageReferenceInput,
+  type ImageReferenceInput,
+} from "./image-input";
 
 export const ACTIVATE_MEDIA_GENERATION_TOOL_NAME =
   "activate_media_generation" as const;
@@ -41,15 +48,17 @@ const MAX_PROMPT_LENGTH = 8_000;
 
 const IMAGE_FILE_EXTENSIONS: Record<string, string> = {
   "image/avif": "avif",
+  "image/bmp": "bmp",
   "image/gif": "gif",
   "image/jpeg": "jpg",
   "image/png": "png",
+  "image/svg+xml": "svg",
   "image/webp": "webp",
 };
 
 const ACTIVATION_GUIDANCE = `Media generation is active for this session.
 
-Call ${GENERATE_IMAGE_TOOL_NAME} with a self-contained prompt: name the subject, its actions and setting, then the composition, medium or style, lighting, colour palette, and any text that must appear in the image. Write the prompt in the language the user is using unless the prompt itself benefits from another language. Prefer one clear image per call; ask for variants with separate calls instead of stacking contradictory instructions in one prompt.
+Call ${GENERATE_IMAGE_TOOL_NAME} with a self-contained prompt: name the subject, its actions and setting, then the composition, medium or style, lighting, colour palette, and any text that must appear in the image. Write the prompt in the language the user is using unless the prompt itself benefits from another language. Prefer one clear image per call; ask for variants with separate calls instead of stacking contradictory instructions in one prompt. When the user attached reference images, pass their local paths from the <pine_attachments> block in input_references.
 
 The image model itself is a user preference: every call runs on the model the user picked in Pine's settings, and the tool has no model argument. Use parameters only for model-specific options the user asked for (for example size, quality, aspect ratio, or style).
 
@@ -93,6 +102,7 @@ function withSequence(filePath: string, sequence: number): string {
 
 export interface GenerateImageRequest {
   apiKey: string;
+  input?: readonly ImagesInputContent[];
   model: ImagesModel<ImagesApi>;
   prompt: string;
   parameters?: Record<string, unknown>;
@@ -117,6 +127,11 @@ export interface MediaGenerationToolOptions {
   outputDirectory: string;
   /** Authorizes (and canonicalizes) a project write target. */
   authorizeWrite(targetPath: string): Promise<string>;
+  /** Resolves a local path, HTTP(S) URL, or data URL into image content. */
+  resolveImageReference?: (
+    reference: string,
+    signal?: AbortSignal,
+  ) => Promise<ImageContent>;
   /** Injectable image generation, used by tests. */
   generateImages?: (request: GenerateImageRequest) => Promise<AssistantImages>;
 }
@@ -137,12 +152,13 @@ export function imageTransportFor(
 export async function generateImagesWithOpenRouter(
   request: GenerateImageRequest,
 ): Promise<AssistantImages> {
+  const input = request.input ?? [{ type: "text", text: request.prompt }];
   if (imageTransportFor(request.model) === "images") {
-    return generateImagesViaEndpoint(request);
+    return generateImagesViaEndpoint({ ...request, input });
   }
 
   const context: ImagesContext = {
-    input: [{ type: "text", text: request.prompt }],
+    input: [...input],
   };
   const result = await pineImagesModels().generateImages(
     request.model,
@@ -157,7 +173,7 @@ export async function generateImagesWithOpenRouter(
   // Models can be reclassified upstream without a Pi release; when OpenRouter
   // answers that the model lives on the image API, retry there once.
   if (isImagesEndpointRedirect(result.errorMessage)) {
-    return generateImagesViaEndpoint(request);
+    return generateImagesViaEndpoint({ ...request, input });
   }
   return result;
 }
@@ -190,6 +206,33 @@ const emptyParams = Type.Object({}, { additionalProperties: false });
 
 const generateImageParams = Type.Object(
   {
+    input_references: Type.Optional(
+      Type.Array(
+        Type.Union([
+          Type.String({
+            description:
+              "A local image path from the current <pine_attachments> block, an HTTP(S) image URL, or a base64 data URL.",
+            maxLength: 4_096,
+          }),
+          Type.Object(
+            {
+              image_url: Type.Object(
+                {
+                  url: Type.String({ minLength: 1, maxLength: 16_777_216 }),
+                },
+                { additionalProperties: false },
+              ),
+              type: Type.Literal("image_url"),
+            },
+            { additionalProperties: false },
+          ),
+        ]),
+        {
+          description:
+            "Reference images for image-to-image generation. Multiple references are sent in order; the selected model must accept image input.",
+        },
+      ),
+    ),
     prompt: Type.String({
       description:
         "A complete, self-contained description of the image to create: subject, setting, composition, style or medium, lighting, palette, and any text that must appear.",
@@ -199,7 +242,7 @@ const generateImageParams = Type.Object(
     parameters: Type.Optional(
       Type.Record(Type.String(), Type.Unknown(), {
         description:
-          "Extra OpenRouter request-body fields for model-specific options, such as size, quality, aspect_ratio, n, background, or output_format. Passed through unchanged; models that do not support a field may ignore or reject it. model, prompt, messages, and stream cannot be overridden here.",
+          "Extra OpenRouter request-body fields for model-specific options, such as size, quality, aspect_ratio, n, background, or output_format. Passed through unchanged; models that do not support a field may ignore or reject it. model, prompt, messages, modalities, input_references, and stream cannot be overridden here.",
       }),
     ),
     output_path: Type.Optional(
@@ -244,13 +287,14 @@ function createGenerateImageTool(options: MediaGenerationToolOptions) {
     name: GENERATE_IMAGE_TOOL_NAME,
     label: "Generate Image",
     description:
-      "Generate an image from a text prompt with OpenRouter's aggregated image models and save the result as a file. The file is not opened for the user: keep it in a folder shared with Pine and call " +
+      "Generate an image from a text prompt and optional reference images with OpenRouter's aggregated image models, then save the result as a file. The file is not opened for the user: keep it in a folder shared with Pine and call " +
       UI_PRESENT_FILE_TOOL_NAME +
       " if the user should see it. Requires activate_media_generation first. This call reaches the network and may cost money, so it is reviewed like other privileged actions.",
     promptSnippet:
       "Generate images from a prompt with OpenRouter image models and save them as project files",
     promptGuidelines: [
       `Write ${GENERATE_IMAGE_TOOL_NAME} prompts that a reader could execute without seeing the conversation: describe the subject, setting, composition, style, lighting, and palette, and spell out text that must appear in the image.`,
+      `For image-to-image work, pass every intended reference in input_references. Use the exact local path from the current <pine_attachments> block, or an HTTP(S)/base64 data URL; do not describe an attached image and omit it from the request.`,
       `Prefer one image per call and iterate on the prompt instead of asking for many unrelated images at once.`,
       `Without output_path the image lands in this project's temporary directory, which never shows up in Pine's file tree and is not opened for the user.`,
       `When the user should look at the image, write or copy it into a folder shared with Pine and call ${UI_PRESENT_FILE_TOOL_NAME} on that path; opening the temporary copy needs an approval and is a poor default.`,
@@ -273,6 +317,14 @@ function createGenerateImageTool(options: MediaGenerationToolOptions) {
       if (!model) {
         throw new Error(
           `The image model "${selectedModelId}" from Pine's settings is not in OpenRouter's image catalog. Ask the user to pick another image model in Pine's settings, then try again.`,
+        );
+      }
+
+      const references = (params.input_references ??
+        []) as ImageReferenceInput[];
+      if (references.length > 0 && !model.input.includes("image")) {
+        throw new Error(
+          `${model.name} does not accept image input. Pick an image model that lists image input, or remove input_references.`,
         );
       }
 
@@ -299,10 +351,30 @@ function createGenerateImageTool(options: MediaGenerationToolOptions) {
       if (signal?.aborted) throw new Error("aborted");
 
       const generate = options.generateImages ?? generateImagesWithOpenRouter;
+      const resolveReference =
+        options.resolveImageReference ??
+        ((reference: string, referenceSignal?: AbortSignal) =>
+          resolveImageReferenceInput(reference, {
+            cwd: options.cwd,
+            ...(referenceSignal ? { signal: referenceSignal } : {}),
+          }));
       const result = await generate({
         apiKey,
         model,
         prompt: params.prompt,
+        ...(references.length > 0
+          ? {
+              input: [
+                { text: params.prompt, type: "text" as const },
+                ...(await Promise.all(
+                  references.map(async (reference) => {
+                    const value = imageReferenceUrl(reference);
+                    return resolveReference(value, signal);
+                  }),
+                )),
+              ],
+            }
+          : {}),
         ...(params.parameters
           ? { parameters: parameterRecord(params.parameters) }
           : {}),

@@ -9,6 +9,10 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- 图像生成现在支持文本加多张参考图：可直接使用会话附件、本地路径、HTTP(S) 图片 URL 或 base64 data URL，并按所选模型的输入能力发送到 OpenRouter。Image generation now supports text with multiple reference images: use session attachments, local paths, HTTP(S) image URLs, or base64 data URLs, with each request routed according to the selected model's input capabilities.
+
 ## [0.5.1] - 2026-09-19
 
 ### 修复 / Fixed
