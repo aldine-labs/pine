@@ -44,6 +44,9 @@ function createAgentHost(): AgentHost {
       .fn()
       .mockResolvedValue({ models: [], providers: [] }),
     getModelCatalog: vi.fn().mockResolvedValue({ models: [], providers: [] }),
+    refreshModelCatalog: vi
+      .fn()
+      .mockResolvedValue({ models: [], providers: [] }),
     loginProvider: vi.fn().mockResolvedValue({ credentialType: "api_key" }),
     respondToProviderAuth: vi.fn().mockResolvedValue({ accepted: true }),
     cancelProviderAuth: vi.fn().mockResolvedValue({ cancelled: true }),

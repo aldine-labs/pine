@@ -61,6 +61,9 @@ async function handleRequest(request: AgentWorkerRequest): Promise<void> {
     case "models:catalog":
       result = await runtime.getModelCatalog(request.agentDir);
       break;
+    case "models:refresh-catalog":
+      result = await runtime.refreshModelCatalog(request.agentDir);
+      break;
     case "models:add-custom":
       result = await runtime.addCustomModel(request.agentDir, request);
       break;

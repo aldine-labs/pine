@@ -1194,6 +1194,32 @@ export class PineAgentRuntime {
     };
   }
 
+  async refreshModelCatalog(agentDir: string): Promise<PineModelCatalog> {
+    const runtime = await this.getModelRuntime(agentDir);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const result = await runtime.refresh({
+        allowNetwork: true,
+        force: true,
+        signal: controller.signal,
+      });
+      if (result.aborted) {
+        throw new Error("Model catalog refresh timed out.");
+      }
+      if (result.errors.size > 0) {
+        const details = Array.from(
+          result.errors,
+          ([provider, error]) => `${provider}: ${error.message}`,
+        ).join("; ");
+        throw new Error(`Could not refresh model catalogs: ${details}`);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+    return this.getModelCatalog(agentDir);
+  }
+
   async addCustomModel(
     agentDir: string,
     input: AddCustomModelRequest,

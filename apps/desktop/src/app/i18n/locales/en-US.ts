@@ -55,6 +55,12 @@ export default {
     sidebarVibrancy: "Sidebar blur",
     sidebarVibrancyDescription:
       "Render the sidebar with the native macOS blur material",
+    modelCatalogRefresh: "Model catalogs",
+    modelCatalogRefreshDescription:
+      "Force Pi to fetch the latest chat models for configured providers.",
+    modelCatalogRefreshAction: "Refresh now",
+    modelCatalogRefreshing: "Refreshing…",
+    modelCatalogRefreshed: "Model catalogs refreshed",
     utilityModel: "Title generation and Auto Approve model",
     selectUtilityModel: "Choose model",
     noUtilityModelSelected: "No model selected",
@@ -105,6 +111,8 @@ export default {
       "System-level personalization; safety and approval rules still apply.",
     userProfileUnsavedChanges: "Unsaved changes",
     userProfileSaved: "User profile saved",
+    userProfileAutoSaved: "Changes saved automatically",
+    userProfileSaveFailed: "Autosave failed. Editing again will retry.",
   },
   models: {
     favorites: "Favorites",
@@ -1024,6 +1032,10 @@ export default {
     userProfile: {
       title: "Unable to save user profile",
       description: "Try again in a moment",
+    },
+    modelCatalogRefresh: {
+      title: "Unable to refresh model catalogs",
+      description: "Check your network connection and try again",
     },
     projectList: {
       title: "Unable to load Projects",

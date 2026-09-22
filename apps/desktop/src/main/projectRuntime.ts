@@ -464,6 +464,10 @@ export class ProjectRuntimeRegistry {
     return this.agentHost.getModelCatalog(this.agentDir);
   }
 
+  refreshModelCatalog(): Promise<PineModelCatalog> {
+    return this.agentHost.refreshModelCatalog(this.agentDir);
+  }
+
   addCustomModel(request: AddCustomModelRequest): Promise<PineModelCatalog> {
     return this.agentHost.addCustomModel(this.agentDir, request);
   }

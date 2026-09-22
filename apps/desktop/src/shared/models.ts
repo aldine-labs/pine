@@ -1,4 +1,5 @@
 export const GET_MODEL_CATALOG_CHANNEL = "models:catalog" as const;
+export const REFRESH_MODEL_CATALOG_CHANNEL = "models:refresh-catalog" as const;
 export const ADD_CUSTOM_MODEL_CHANNEL = "models:add-custom" as const;
 export const UPDATE_CUSTOM_MODEL_CHANNEL = "models:update-custom" as const;
 export const DELETE_CUSTOM_MODEL_CHANNEL = "models:delete-custom" as const;

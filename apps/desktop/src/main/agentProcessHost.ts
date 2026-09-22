@@ -65,6 +65,7 @@ export interface AgentHost {
     name: string,
   ): Promise<AgentWorkerSessionResult>;
   getModelCatalog(agentDir: string): Promise<PineModelCatalog>;
+  refreshModelCatalog(agentDir: string): Promise<PineModelCatalog>;
   addCustomModel(
     agentDir: string,
     request: AddCustomModelRequest,
@@ -229,6 +230,10 @@ export class AgentProcessHost implements AgentHost {
 
   getModelCatalog(agentDir: string): Promise<PineModelCatalog> {
     return this.request({ type: "models:catalog", agentDir });
+  }
+
+  refreshModelCatalog(agentDir: string): Promise<PineModelCatalog> {
+    return this.request({ type: "models:refresh-catalog", agentDir });
   }
 
   addCustomModel(

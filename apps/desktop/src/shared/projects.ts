@@ -232,6 +232,7 @@ export interface PineDesktopApi extends PineWindowApi {
     request: SetGlobalSkillEnabledRequest,
   ) => Promise<SetGlobalSkillEnabledResult>;
   getModelCatalog: () => Promise<PineModelCatalog>;
+  refreshModelCatalog: () => Promise<PineModelCatalog>;
   lookupModelMetadata: (
     request: LookupModelMetadataRequest,
   ) => Promise<PineModelMetadata>;

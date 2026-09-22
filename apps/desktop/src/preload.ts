@@ -49,6 +49,7 @@ import {
   DELETE_CUSTOM_MODEL_CHANNEL,
   DELETE_CUSTOM_PROVIDER_CHANNEL,
   GET_MODEL_CATALOG_CHANNEL,
+  REFRESH_MODEL_CATALOG_CHANNEL,
   LOGIN_PROVIDER_CHANNEL,
   LOOKUP_MODEL_METADATA_CHANNEL,
   LOGOUT_PROVIDER_CHANNEL,
@@ -278,6 +279,8 @@ const pineApi: PineDesktopApi = {
     ipcRenderer.invoke(SET_GLOBAL_SKILL_ENABLED_CHANNEL, request),
   getModelCatalog: (): Promise<PineModelCatalog> =>
     ipcRenderer.invoke(GET_MODEL_CATALOG_CHANNEL),
+  refreshModelCatalog: (): Promise<PineModelCatalog> =>
+    ipcRenderer.invoke(REFRESH_MODEL_CATALOG_CHANNEL),
   lookupModelMetadata: (
     request: LookupModelMetadataRequest,
   ): Promise<PineModelMetadata> =>

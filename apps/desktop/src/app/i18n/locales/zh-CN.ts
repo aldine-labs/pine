@@ -51,6 +51,12 @@ export default {
     contextCompactionRecommended: "使用推荐设置",
     sidebarVibrancy: "侧栏模糊效果",
     sidebarVibrancyDescription: "使用 macOS 原生模糊材质渲染侧栏",
+    modelCatalogRefresh: "模型目录",
+    modelCatalogRefreshDescription:
+      "从 Pi 强制获取已配置服务的最新聊天模型列表。",
+    modelCatalogRefreshAction: "立即刷新",
+    modelCatalogRefreshing: "正在刷新…",
+    modelCatalogRefreshed: "模型目录已刷新",
     utilityModel: "标题生成和自动批准模型",
     selectUtilityModel: "选择模型",
     noUtilityModelSelected: "未选择任何模型",
@@ -96,6 +102,8 @@ export default {
       "作为系统级个性化指令生效，但不能绕过安全和审批规则。",
     userProfileUnsavedChanges: "有未保存的更改",
     userProfileSaved: "用户画像已保存",
+    userProfileAutoSaved: "更改已自动保存",
+    userProfileSaveFailed: "自动保存失败；下次更改时会重试",
   },
   models: {
     favorites: "收藏的模型",
@@ -991,6 +999,10 @@ export default {
     userProfile: {
       title: "无法保存用户画像",
       description: "请稍后重试",
+    },
+    modelCatalogRefresh: {
+      title: "无法刷新模型目录",
+      description: "请检查网络连接后重试",
     },
     projectList: { title: "无法读取项目", description: "请稍后重试" },
     projectClose: { title: "无法关闭项目", description: "请稍后重试" },

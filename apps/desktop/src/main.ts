@@ -96,6 +96,7 @@ import {
   DELETE_CUSTOM_MODEL_CHANNEL,
   DELETE_CUSTOM_PROVIDER_CHANNEL,
   GET_MODEL_CATALOG_CHANNEL,
+  REFRESH_MODEL_CATALOG_CHANNEL,
   LOGIN_PROVIDER_CHANNEL,
   LOOKUP_MODEL_METADATA_CHANNEL,
   LOGOUT_PROVIDER_CHANNEL,
@@ -1193,6 +1194,21 @@ ipcMain.handle(
   async (): Promise<PineModelCatalog> => {
     const [catalog, recommendedIds] = await Promise.all([
       getProjectRuntimes().getModelCatalog(),
+      modelRecommendations.get(),
+    ]);
+    const availableIds = new Set(catalog.models.map((model) => model.id));
+    return {
+      ...catalog,
+      recommendedModelIds: recommendedIds.filter((id) => availableIds.has(id)),
+    };
+  },
+);
+
+ipcMain.handle(
+  REFRESH_MODEL_CATALOG_CHANNEL,
+  async (): Promise<PineModelCatalog> => {
+    const [catalog, recommendedIds] = await Promise.all([
+      getProjectRuntimes().refreshModelCatalog(),
       modelRecommendations.get(),
     ]);
     const availableIds = new Set(catalog.models.map((model) => model.id));

@@ -120,6 +120,11 @@ export type AgentWorkerRequest =
       type: "models:catalog";
       agentDir: string;
     }
+  | {
+      id: string;
+      type: "models:refresh-catalog";
+      agentDir: string;
+    }
   | ({
       id: string;
       type: "models:add-custom";

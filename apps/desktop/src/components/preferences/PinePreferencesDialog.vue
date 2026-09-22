@@ -9,7 +9,14 @@ import {
 } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import type { Component } from "vue";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { toast } from "vue-sonner";
 import { isAppLocale, persistAppLocale } from "@/app/i18n";
@@ -79,11 +86,20 @@ const isTinyFishCredentialDialogOpen = ref(false);
 const isTinyFishCredentialConfigured = ref(false);
 const tinyFishApiKey = ref("");
 const isSavingTinyFishApiKey = ref(false);
+const isRefreshingModelCatalog = ref(false);
 const profileDraft = reactive<PineUserProfile>(createDefaultPineUserProfile());
+const isHydratingProfile = ref(false);
+const hasHydratedProfile = ref(false);
+const profileSaveState = ref<"idle" | "pending" | "saving" | "saved" | "error">(
+  "idle",
+);
 const contextCompactionStrategy = ref<PineContextCompactionStrategy>(
   DEFAULT_CONTEXT_COMPACTION_STRATEGY,
 );
 const isSavingContextCompactionStrategy = ref(false);
+const PROFILE_AUTOSAVE_DELAY_MS = 500;
+let profileSaveTimer: ReturnType<typeof setTimeout> | undefined;
+let profileSaveQueue: Promise<void> = Promise.resolve();
 const canSaveTinyFishApiKey = computed(
   () => tinyFishApiKey.value.trim().length > 0 && !isSavingTinyFishApiKey.value,
 );
@@ -138,12 +154,39 @@ const imageModelSummary = computed(() =>
 );
 
 watch(isOpen, (open) => {
-  if (!open) return;
+  if (!open) {
+    void flushUserProfileSave();
+    return;
+  }
   activeSection.value = "general";
   void modelsStore.load();
   void loadUserProfile();
   void loadTinyFishCredentialStatus();
   void loadContextCompactionStrategy();
+});
+
+watch(
+  profileDraft,
+  () => {
+    if (!hasHydratedProfile.value || isHydratingProfile.value) return;
+    if (
+      !isProfileDirty.value &&
+      !userProfileStore.isSaving &&
+      profileSaveState.value === "idle"
+    ) {
+      return;
+    }
+    scheduleUserProfileSave();
+  },
+  { deep: true, flush: "sync" },
+);
+
+onBeforeUnmount(() => {
+  if (profileSaveTimer) {
+    clearTimeout(profileSaveTimer);
+    profileSaveTimer = undefined;
+    void enqueueUserProfileSave();
+  }
 });
 
 onMounted(() => {
@@ -165,7 +208,13 @@ function userProfilesEqual(a: PineUserProfile, b: PineUserProfile): boolean {
 async function loadUserProfile(): Promise<void> {
   try {
     await userProfileStore.load();
-    Object.assign(profileDraft, userProfileStore.profile);
+    if (!hasHydratedProfile.value || !isProfileDirty.value) {
+      isHydratingProfile.value = true;
+      Object.assign(profileDraft, userProfileStore.profile);
+      isHydratingProfile.value = false;
+      hasHydratedProfile.value = true;
+      profileSaveState.value = "idle";
+    }
   } catch (error) {
     handleError(error, {
       id: "user-profile.load",
@@ -175,19 +224,87 @@ async function loadUserProfile(): Promise<void> {
   }
 }
 
-async function saveUserProfile(): Promise<void> {
-  if (!isProfileDirty.value || userProfileStore.isSaving) return;
+function scheduleUserProfileSave(): void {
+  if (profileSaveTimer) clearTimeout(profileSaveTimer);
+  profileSaveState.value = "pending";
+  profileSaveTimer = setTimeout(() => {
+    profileSaveTimer = undefined;
+    void enqueueUserProfileSave();
+  }, PROFILE_AUTOSAVE_DELAY_MS);
+}
+
+function enqueueUserProfileSave(): Promise<void> {
+  const snapshot = normalizePineUserProfile({ ...profileDraft });
+  const operation = profileSaveQueue
+    .catch(() => {})
+    .then(async () => {
+      const savedProfile = normalizePineUserProfile(userProfileStore.profile);
+      if (userProfilesEqual(snapshot, savedProfile)) {
+        if (
+          userProfilesEqual(
+            snapshot,
+            normalizePineUserProfile({ ...profileDraft }),
+          )
+        ) {
+          isHydratingProfile.value = true;
+          Object.assign(profileDraft, snapshot);
+          isHydratingProfile.value = false;
+          profileSaveState.value = "saved";
+        }
+        return;
+      }
+
+      profileSaveState.value = "saving";
+      await userProfileStore.save(snapshot);
+      if (
+        userProfilesEqual(
+          snapshot,
+          normalizePineUserProfile({ ...profileDraft }),
+        )
+      ) {
+        isHydratingProfile.value = true;
+        Object.assign(profileDraft, snapshot);
+        isHydratingProfile.value = false;
+        profileSaveState.value = "saved";
+      } else {
+        profileSaveState.value = "pending";
+      }
+    })
+    .catch((error: unknown) => {
+      profileSaveState.value = "error";
+      handleError(error, {
+        id: "user-profile.save",
+        title: t("errors.userProfile.title"),
+        description: t("errors.userProfile.description"),
+      });
+    });
+  profileSaveQueue = operation;
+  return operation;
+}
+
+function flushUserProfileSave(): Promise<void> {
+  if (profileSaveTimer) {
+    clearTimeout(profileSaveTimer);
+    profileSaveTimer = undefined;
+  }
+  if (!hasHydratedProfile.value) return profileSaveQueue;
+  return enqueueUserProfileSave();
+}
+
+async function refreshModelCatalog(): Promise<void> {
+  if (isRefreshingModelCatalog.value) return;
+  isRefreshingModelCatalog.value = true;
   try {
-    const saved = normalizePineUserProfile({ ...profileDraft });
-    await userProfileStore.save(saved);
-    Object.assign(profileDraft, saved);
-    toast.success(t("preferences.userProfileSaved"));
+    modelsStore.catalog = await window.pine.refreshModelCatalog();
+    toast.success(t("preferences.modelCatalogRefreshed"));
   } catch (error) {
     handleError(error, {
-      id: "user-profile.save",
-      title: t("errors.userProfile.title"),
-      description: t("errors.userProfile.description"),
+      id: "model-catalog.refresh",
+      title: t("errors.modelCatalogRefresh.title"),
+      description: t("errors.modelCatalogRefresh.description"),
     });
+  } finally {
+    isRefreshingModelCatalog.value = false;
   }
 }
 
@@ -353,7 +470,7 @@ function updateSidebarVibrancy(value: boolean): void {
           v-if="activeSection === 'personalization'"
           data-testid="pine-user-profile-form"
           class="flex min-h-0 min-w-0 flex-1 flex-col"
-          @submit.prevent="saveUserProfile"
+          @submit.prevent="flushUserProfileSave"
         >
           <ScrollArea
             class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade"
@@ -467,28 +584,25 @@ function updateSidebarVibrancy(value: boolean): void {
           </ScrollArea>
 
           <div class="flex items-center gap-3 px-6 py-3">
-            <p
-              v-if="isProfileDirty"
-              class="mr-auto text-sm text-muted-foreground"
+            <div
+              class="mr-auto flex items-center gap-2 text-sm text-muted-foreground"
+              role="status"
+              aria-live="polite"
             >
-              {{ t("preferences.userProfileUnsavedChanges") }}
-            </p>
-            <Button
-              class="ml-auto"
-              type="submit"
-              size="sm"
-              :disabled="!isProfileDirty || userProfileStore.isSaving"
-            >
-              <Spinner
-                v-if="userProfileStore.isSaving"
-                data-icon="inline-start"
-              />
-              {{
-                userProfileStore.isSaving
-                  ? t("common.saving")
-                  : t("common.save")
-              }}
-            </Button>
+              <Spinner v-if="profileSaveState === 'saving'" />
+              <span v-if="profileSaveState === 'pending'">
+                {{ t("preferences.userProfileUnsavedChanges") }}
+              </span>
+              <span v-else-if="profileSaveState === 'saving'">
+                {{ t("common.saving") }}
+              </span>
+              <span v-else-if="profileSaveState === 'saved'">
+                {{ t("preferences.userProfileAutoSaved") }}
+              </span>
+              <span v-else-if="profileSaveState === 'error'">
+                {{ t("preferences.userProfileSaveFailed") }}
+              </span>
+            </div>
           </div>
         </form>
 
@@ -673,6 +787,36 @@ function updateSidebarVibrancy(value: boolean): void {
                     {{ t("preferences.contextCompactionRecommended") }}
                   </ToggleGroupItem>
                 </ToggleGroup>
+              </Field>
+
+              <Field orientation="horizontal">
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                  <FieldTitle id="pine-model-catalog-refresh-setting">
+                    {{ t("preferences.modelCatalogRefresh") }}
+                  </FieldTitle>
+                  <FieldDescription>
+                    {{ t("preferences.modelCatalogRefreshDescription") }}
+                  </FieldDescription>
+                </div>
+                <Button
+                  data-testid="pine-model-catalog-refresh-button"
+                  variant="outline"
+                  size="sm"
+                  :disabled="isRefreshingModelCatalog"
+                  :aria-busy="isRefreshingModelCatalog"
+                  aria-labelledby="pine-model-catalog-refresh-setting"
+                  @click="refreshModelCatalog"
+                >
+                  <Spinner
+                    v-if="isRefreshingModelCatalog"
+                    data-icon="inline-start"
+                  />
+                  {{
+                    isRefreshingModelCatalog
+                      ? t("preferences.modelCatalogRefreshing")
+                      : t("preferences.modelCatalogRefreshAction")
+                  }}
+                </Button>
               </Field>
             </FieldGroup>
           </div>
