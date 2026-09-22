@@ -282,6 +282,26 @@ describe("MarkdownContent", () => {
     wrapper.unmount();
   });
 
+  it("keeps inline code intact when a table distributes narrow columns", () => {
+    const wrapper = mountMarkdown({
+      source:
+        "| Translation | Coverage | Result |\n| --- | --- | --- |\n| `01 T Downey … ch17 … 中文译本.md` | §17.1–17.13 | Passed |",
+      final: true,
+    });
+
+    const tableContainer = wrapper.get('[data-slot="markdown-table"]');
+    expect(tableContainer.classes()).toEqual(
+      expect.arrayContaining([
+        "[&_code.inline-code]:break-normal",
+        "[&_code.inline-code]:whitespace-nowrap",
+      ]),
+    );
+    expect(wrapper.get("tbody code.inline-code").text()).toBe(
+      "01 T Downey … ch17 … 中文译本.md",
+    );
+    wrapper.unmount();
+  });
+
   it("appends streamed table rows without replacing existing content", async () => {
     const source = "| Name | Count |\n| --- | --- |\n| Pine | 1 |\n";
     const wrapper = mountMarkdown({ source, final: false });

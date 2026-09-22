@@ -28,7 +28,10 @@ function alignment(align?: "left" | "right" | "center"): string {
 </script>
 
 <template>
-  <div data-slot="markdown-table" class="my-6 overflow-hidden rounded-lg">
+  <div
+    data-slot="markdown-table"
+    class="my-6 overflow-hidden rounded-lg [&_code.inline-code]:break-normal [&_code.inline-code]:whitespace-nowrap"
+  >
     <Table>
       <TableHeader class="bg-muted">
         <TableRow>
