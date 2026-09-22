@@ -278,8 +278,7 @@ describe("PinePreferencesDialog", () => {
       ),
     );
 
-    const saveButton = form.get('button[type="submit"]');
-    expect(saveButton.attributes("disabled")).toBeDefined();
+    expect(form.find('button[type="submit"]').exists()).toBe(false);
     expect(wrapper.text()).toContain("冷静专业");
 
     const [styleGroup, backgroundGroup] = wrapper
@@ -305,10 +304,7 @@ describe("PinePreferencesDialog", () => {
     backgroundGroup?.vm.$emit("update:modelValue", "professional-user");
     await wrapper.vm.$nextTick();
 
-    expect(saveButton.attributes("disabled")).toBeUndefined();
     expect(wrapper.text()).toContain("有未保存的更改");
-
-    await form.trigger("submit");
 
     await vi.waitFor(() =>
       expect(setUserProfile).toHaveBeenCalledWith({
@@ -323,8 +319,7 @@ describe("PinePreferencesDialog", () => {
     await vi.waitFor(() =>
       expect((nickname.element as HTMLInputElement).value).toBe("小 Pine"),
     );
-    expect(saveButton.attributes("disabled")).toBeDefined();
-    expect(wrapper.text()).not.toContain("有未保存的更改");
+    await vi.waitFor(() => expect(wrapper.text()).toContain("已自动保存"));
   });
 
   it("applies and persists language and theme selections", async () => {
