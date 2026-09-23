@@ -76,6 +76,21 @@ function collectRuntimeDeps(
   return [...deps];
 }
 
+function injectAgentBuild(buildPath: string): void {
+  const sourceBuild = path.join(__dirname, ".vite", "build");
+  const agentEntry = path.join(sourceBuild, "agent.mjs");
+  if (!existsSync(agentEntry)) {
+    throw new Error(`Missing built agent process at ${agentEntry}`);
+  }
+
+  // The agent is a separate Vite entry with relative ESM chunks. Forge's
+  // packaged app can otherwise contain main.js and preload.js while silently
+  // omitting this worker and the chunks it imports.
+  cpSync(sourceBuild, path.join(buildPath, ".vite", "build"), {
+    recursive: true,
+  });
+}
+
 function injectAgentRuntimeDeps(buildPath: string): void {
   const workspaceNodeModules = locateWorkspaceNodeModules();
   const runtimeDeps = collectRuntimeDeps(
@@ -192,6 +207,7 @@ const config: ForgeConfig = {
         _arch: string,
         callback: (err?: Error | null) => void,
       ) => {
+        injectAgentBuild(buildPath);
         injectAgentRuntimeDeps(buildPath);
         callback();
       },
