@@ -24,10 +24,12 @@ export const SESSION_EVENT_CHANNEL = "sessions:event" as const;
  *
  * - `let-me-review`: ask the user to review operations that need approval.
  * - `auto-approve`: let AI assess and approve operations automatically.
- * - `yolo`: disable every Pine sandbox, folder restriction, and approval
+ * - `autonomous`: let AI review escalations without asking the user.
+ * - `YOLO`: disable every Pine sandbox, folder restriction, and approval
  *   gate; expose privileged bash instead of ordinary bash.
  */
-export type PineApprovalMode = "let-me-review" | "auto-approve" | "YOLO";
+export type PineApprovalMode =
+  "let-me-review" | "auto-approve" | "autonomous" | "YOLO";
 
 /** Why a tool call needed an approval decision before it could proceed. */
 export type PineApprovalTrigger =

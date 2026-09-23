@@ -88,6 +88,7 @@ const approvalModeColorClasses: Record<ApprovalMode, string> = {
   // between the neutral Auto Approve and the destructive YOLO mode.
   "let-me-review": "text-warning",
   "auto-approve": "text-foreground",
+  autonomous: "text-info",
   YOLO: "text-destructive",
 };
 interface ApprovalModeOption {
@@ -161,6 +162,12 @@ const approvalModes = computed<ApprovalModeOption[]>(() => [
     icon: ShieldCheckIcon,
   },
   {
+    value: "autonomous",
+    label: t("project.composer.approval.autonomousLabel"),
+    description: t("project.composer.approval.autonomous"),
+    icon: ShieldCheckIcon,
+  },
+  {
     value: "YOLO",
     label: t("project.composer.approval.yoloLabel"),
     description: t("project.composer.approval.yolo"),
@@ -201,7 +208,11 @@ function selectApprovalMode(value: unknown): void {
     isYoloConfirmationOpen.value = true;
     return;
   }
-  if (value === "let-me-review" || value === "auto-approve") {
+  if (
+    value === "let-me-review" ||
+    value === "auto-approve" ||
+    value === "autonomous"
+  ) {
     approvalMode.value = value;
   }
 }

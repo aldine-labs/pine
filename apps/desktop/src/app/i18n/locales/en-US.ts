@@ -453,6 +453,9 @@ export default {
           "Ask for confirmation for unauthorized operations outside the workspace.",
         agentDecidesLabel: "Auto Approve",
         agentDecides: "Let AI decide.",
+        autonomousLabel: "Autonomous Work",
+        autonomous:
+          "AI reviews permission requests without asking you; it can revise a rejected rationale and retry.",
         yoloLabel: "YOLO",
         yolo: "Remove all permission constraints. Not recommended.",
         yoloConfirmTitle: "Enable “YOLO”?",

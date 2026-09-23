@@ -158,12 +158,18 @@ YOLO mode is active. Ordinary bash is unavailable. For every shell command while
 
 privileged_bash runs natively outside Pine's project sandbox and without approval. All other tools also run without Pine's folder restrictions or approval gates. The backend, path, partial-effect, and implicit-resource rules above still apply; there is no ordinary-shell fallback in this mode. Act with extra care: inspect and validate every path and target before execution, keep every action's scope as narrow as possible, preserve user data and existing work, and avoid destructive or irreversible actions unless the user has explicitly requested them.`;
 
-export function systemPromptForApprovalMode(
-  systemPrompt: string,
+export function approvalModeSystemPrompt(
   approvalMode: PineApprovalMode,
-): string | undefined {
-  if (approvalMode !== "YOLO") return undefined;
-  return systemPromptForPlatform(
-    `${systemPrompt}\n\n${PINE_YOLO_SYSTEM_PROMPT}`,
-  );
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const details: Record<PineApprovalMode, string> = {
+    "let-me-review":
+      "Let Me Review is active. Pine asks the user to approve gated operations. Wait for approval decisions and respect rejections.",
+    "auto-approve":
+      "Auto Approve is active. An AI reviewer decides escalated operations. It may ask the user to decide when authority is unclear or review is unavailable.",
+    autonomous:
+      "Autonomous Work is active. An AI reviewer decides escalated operations without handing decisions to the user. Explain the exact need, target, scope, and user authorization in the tool description. If the reviewer denies a call, inspect its stated doubts and submit a better rationale only when the facts support it; do not blindly repeat the same call. The sandbox and folder boundaries still apply until a call is approved.",
+    YOLO: systemPromptForPlatform(PINE_YOLO_SYSTEM_PROMPT, platform),
+  };
+  return `## Permission modes\n\n- Let Me Review: the user approves gated operations.\n- Auto Approve: an AI reviewer decides escalations and can refer uncertain decisions to the user.\n- Autonomous Work: an AI reviewer decides escalations without user approval; explain native access clearly and revise insufficient rationales.\n- YOLO: Pine's sandbox, folder restrictions, and approval gates are disabled.\n\nCurrent mode: ${approvalMode}.\n\n${details[approvalMode]}`;
 }

@@ -425,6 +425,9 @@ export default {
         askForPermission: "对工作区外的未授权操作请求确认。",
         agentDecidesLabel: "自动审批",
         agentDecides: "由 AI 自动判断。",
+        autonomousLabel: "自主工作",
+        autonomous:
+          "由 AI 审核权限请求，不转交给你确认；拒绝后可补充理由重试。",
         yoloLabel: "干就完了",
         yolo: "关闭一切权限约束。不推荐该选项。",
         yoloConfirmTitle: "启用“干就完了”？",

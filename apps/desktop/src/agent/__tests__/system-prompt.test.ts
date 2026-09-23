@@ -4,7 +4,7 @@ import {
   PINE_SYSTEM_PROMPT,
   systemPromptWithUserProfile,
   systemPromptWithCurrentMonth,
-  systemPromptForApprovalMode,
+  approvalModeSystemPrompt,
   systemPromptForPlatform,
 } from "../system-prompt";
 import {
@@ -168,11 +168,11 @@ describe("systemPromptWithUserProfile", () => {
   });
 });
 
-describe("systemPromptForApprovalMode", () => {
+describe("approvalModeSystemPrompt", () => {
   it("adds privileged bash safety guidance in yolo mode", () => {
-    const prompt = systemPromptForApprovalMode("base prompt", "YOLO");
+    const prompt = approvalModeSystemPrompt("YOLO");
 
-    expect(prompt).toBe(`base prompt\n\n${PINE_YOLO_SYSTEM_PROMPT}`);
+    expect(prompt).toContain(PINE_YOLO_SYSTEM_PROMPT);
     expect(prompt).toContain("call privileged_bash directly");
     expect(prompt).toContain("outside Pine's project sandbox");
     expect(prompt).toContain("without approval");
@@ -183,12 +183,13 @@ describe("systemPromptForApprovalMode", () => {
     expect(prompt).toContain("avoid destructive or irreversible actions");
   });
 
-  it("does not override the system prompt outside yolo mode", () => {
-    expect(
-      systemPromptForApprovalMode("base prompt", "auto-approve"),
-    ).toBeUndefined();
-    expect(
-      systemPromptForApprovalMode("base prompt", "let-me-review"),
-    ).toBeUndefined();
+  it("describes every mode and identifies the active autonomous mode", () => {
+    const prompt = approvalModeSystemPrompt("autonomous");
+    expect(prompt).toContain("Let Me Review");
+    expect(prompt).toContain("Auto Approve");
+    expect(prompt).toContain("Autonomous Work");
+    expect(prompt).toContain("YOLO");
+    expect(prompt).toContain("Current mode: autonomous");
+    expect(prompt).toContain("better rationale");
   });
 });

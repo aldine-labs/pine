@@ -12,7 +12,7 @@ import type { PinePendingApproval } from "@/stores/session";
 import ProjectSessionComposer from "../ProjectSessionComposer.vue";
 
 interface ComposerProps {
-  approvalMode?: "let-me-review" | "auto-approve" | "YOLO";
+  approvalMode?: "let-me-review" | "auto-approve" | "autonomous" | "YOLO";
   isRunning?: boolean;
   pendingApproval?: PinePendingApproval | null;
   steeringMessages?: readonly string[];
@@ -96,6 +96,14 @@ function mountComposer(
 }
 
 describe("ProjectSessionComposer", () => {
+  it("shows Autonomous Work with the info semantic color", () => {
+    const wrapper = mountComposer({ approvalMode: "autonomous" });
+    const trigger = wrapper.get('[data-slot="approval-mode-trigger"]');
+    expect(trigger.text()).toContain("自主工作");
+    expect(trigger.find(".text-info").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("requires confirmation every time yolo mode is selected", async () => {
     const wrapper = mountComposer();
     const trigger = wrapper.get('[data-slot="approval-mode-trigger"]');

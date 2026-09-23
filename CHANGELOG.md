@@ -9,6 +9,14 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- 新增“自主工作”权限模式：AI 可自行审核工作区外的操作；理由不足时会指出疑点供助手补充，避免等待用户逐次批准。Added Autonomous Work mode: AI reviews operations outside the workspace and identifies gaps in the agent's rationale so work can continue without per-call user approval.
+
+### 变更 / Changed
+
+- 切换权限模式后，助手会在后续对话中收到当前模式的最新说明；按需启用的工具也会随对话恢复。After switching permission modes, the assistant receives the current mode's instructions in subsequent conversation, and tools activated on demand are restored with the conversation.
+
 ## [0.5.2] - 2026-09-20
 
 ### 新增 / Added

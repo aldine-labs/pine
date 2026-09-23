@@ -409,6 +409,32 @@ describe("AutoReviewGate", () => {
     await gate.reviewBashCommand({ toolCallId: "t-new", command });
     expect(mocks.judge).toHaveBeenCalledTimes(6);
   });
+
+  it("keeps autonomous reviews in the agent loop when the judge requests a user", async () => {
+    const { host, mocks } = createHost(() =>
+      Promise.resolve({ verdict: "needs_user", reason: "Explain the target." }),
+    );
+    const gate = new AutoReviewGate(host, true);
+
+    await expect(
+      gate.reviewBashCommand({ toolCallId: "t1", command: "rm -rf build" }),
+    ).resolves.toEqual({ kind: "deny", reason: "Explain the target." });
+    expect(mocks.requestUserApproval).not.toHaveBeenCalled();
+  });
+
+  it("denies autonomous calls locally when the reviewer fails", async () => {
+    const { host, mocks } = createHost();
+    mocks.judge.mockRejectedValue(new Error("provider down"));
+    const gate = new AutoReviewGate(host, true);
+
+    await expect(
+      gate.reviewBashCommand({ toolCallId: "t1", command: "rm -rf build" }),
+    ).resolves.toEqual({
+      kind: "deny",
+      reason: "Auto-review unavailable: provider down",
+    });
+    expect(mocks.requestUserApproval).not.toHaveBeenCalled();
+  });
 });
 
 describe("normalizeCommand", () => {

@@ -246,7 +246,10 @@ export class AutoReviewGate implements ToolGate {
   private consecutiveEscalations = 0;
   private sequence = 0;
 
-  constructor(private readonly host: GateHost) {}
+  constructor(
+    private readonly host: GateHost,
+    private readonly autonomous = false,
+  ) {}
 
   async reviewBashCommand(input: BashReviewInput): Promise<GateDecision> {
     if (this.isApprovedCommand(input.command)) return { kind: "allow" };
@@ -380,7 +383,12 @@ export class AutoReviewGate implements ToolGate {
       const sequence = ++this.sequence;
       if (this.consecutiveEscalations >= MAX_CONSECUTIVE_ESCALATIONS) {
         const reason =
-          "Too many escalations in this turn; the auto-reviewer stopped responding. Change your approach or ask the user directly.";
+          "Too many escalations in this turn; revise the requested action and its rationale before retrying.";
+        if (this.autonomous) {
+          this.emitDecided(sequence, review.input.toolCallId, "denied", reason);
+          decisions[index] = { kind: "deny", reason };
+          return;
+        }
         userFallbacks.push(
           this.host
             .requestUserApproval({
@@ -442,6 +450,13 @@ export class AutoReviewGate implements ToolGate {
       const reason = `Auto-review unavailable: ${
         error instanceof Error ? error.message : String(error)
       }`;
+      if (this.autonomous) {
+        for (const { index, input, sequence } of pending) {
+          this.emitDecided(sequence, input.toolCallId, "denied", reason);
+          decisions[index] = { kind: "deny", reason };
+        }
+        return decisions as GateDecision[];
+      }
       await Promise.all(
         pending.map(async ({ index, input, request }) => {
           const decision = await this.host.requestUserApproval({
@@ -476,6 +491,11 @@ export class AutoReviewGate implements ToolGate {
       if (!ruling) {
         const reason =
           "Auto-review unavailable: The reviewer omitted this tool call from its rulings.";
+        if (this.autonomous) {
+          this.emitDecided(sequence, input.toolCallId, "denied", reason);
+          decisions[index] = { kind: "deny", reason };
+          continue;
+        }
         const decision = await this.host.requestUserApproval({
           trigger: request.trigger,
           toolCallId: input.toolCallId,
@@ -510,6 +530,14 @@ export class AutoReviewGate implements ToolGate {
         continue;
       }
       if (ruling.verdict === "needs_user") {
+        if (this.autonomous) {
+          const reason =
+            ruling.reason ??
+            "The rationale does not yet establish authorization for this call. Explain the exact need and scope before retrying.";
+          this.emitDecided(sequence, input.toolCallId, "denied", reason);
+          decisions[index] = { kind: "deny", reason };
+          continue;
+        }
         const decision = await this.host.requestUserApproval({
           trigger: request.trigger,
           toolCallId: input.toolCallId,
@@ -597,6 +625,27 @@ export const RULING_TOOL: Tool = {
           "One ruling per reviewed tool call. Do not omit, duplicate, or invent toolCallIds.",
         minItems: 1,
       },
+    ),
+  }),
+};
+
+/** Autonomous reviews cannot delegate a decision to the user. */
+export const AUTONOMOUS_RULING_TOOL: Tool = {
+  ...RULING_TOOL,
+  parameters: Type.Object({
+    rulings: Type.Array(
+      Type.Object({
+        toolCallId: Type.String(),
+        verdict: Type.Union([Type.Literal("allow"), Type.Literal("deny")]),
+        reason: Type.String({
+          description:
+            "For denial, identify the specific doubt in the agent's rationale and what facts a revised rationale must establish. Do not propose an alternate operation.",
+        }),
+        scope: Type.Optional(
+          Type.Union([Type.Literal("once"), Type.Literal("session")]),
+        ),
+      }),
+      { minItems: 1 },
     ),
   }),
 };

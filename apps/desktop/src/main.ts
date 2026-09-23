@@ -575,7 +575,9 @@ const PromptSessionRequestSchema = z.object({
     z.object({ kind: z.literal("session"), sessionId: z.uuid() }),
   ]),
   streamingBehavior: z.enum(["follow-up", "steer"]).optional(),
-  approvalMode: z.enum(["let-me-review", "auto-approve", "YOLO"]).optional(),
+  approvalMode: z
+    .enum(["let-me-review", "auto-approve", "autonomous", "YOLO"])
+    .optional(),
 });
 const DequeueSteeringRequestSchema = z.object({
   message: z.string().min(1).max(100_000),
@@ -601,7 +603,7 @@ const RespondQuestionnaireRequestSchema = z.object({
   }),
 });
 const SetApprovalModeRequestSchema = z.object({
-  approvalMode: z.enum(["let-me-review", "auto-approve", "YOLO"]),
+  approvalMode: z.enum(["let-me-review", "auto-approve", "autonomous", "YOLO"]),
 });
 const SetContextCompactionStrategyRequestSchema = z.object({
   strategy: z.enum(["passive", "recommended"]),

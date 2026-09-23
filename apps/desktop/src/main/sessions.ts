@@ -324,7 +324,10 @@ function messageCursorIndex(
 
 function isPineApprovalMode(value: unknown): value is PineApprovalMode {
   return (
-    value === "let-me-review" || value === "auto-approve" || value === "YOLO"
+    value === "let-me-review" ||
+    value === "auto-approve" ||
+    value === "autonomous" ||
+    value === "YOLO"
   );
 }
 
