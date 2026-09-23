@@ -454,8 +454,7 @@ export default {
         agentDecidesLabel: "Auto Approve",
         agentDecides: "AI reviews actions; asks you when needed.",
         autonomousLabel: "Autonomous Work",
-        autonomous:
-          "AI makes decisions throughout and tries to resolve exceptions on its own, without requiring any external user action.",
+        autonomous: "AI decides and resolves issues on its own.",
         yoloLabel: "YOLO",
         yolo: "Remove all permission constraints. Not recommended.",
         yoloConfirmTitle: "Enable “YOLO”?",

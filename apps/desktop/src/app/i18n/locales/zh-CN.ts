@@ -426,8 +426,7 @@ export default {
         agentDecidesLabel: "自动审批",
         agentDecides: "AI 审核操作，必要时请你确认。",
         autonomousLabel: "自主工作",
-        autonomous:
-          "由 AI 全程自行决策并尝试解决遇到的异常，无需任何外部用户操作。",
+        autonomous: "AI 自主决策，遇事自行处理。",
         yoloLabel: "干就完了",
         yolo: "关闭一切权限约束。不推荐该选项。",
         yoloConfirmTitle: "启用“干就完了”？",
