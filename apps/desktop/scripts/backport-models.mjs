@@ -157,6 +157,14 @@ function git(args) {
   return run("git", ["-C", SOURCE_DIR, ...args]);
 }
 
+function npm(args, options = {}) {
+  // Windows exposes npm as a .cmd batch file, which must run through a shell.
+  return run("npm", args, {
+    ...options,
+    shell: process.platform === "win32",
+  });
+}
+
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf8"));
 }
@@ -270,12 +278,12 @@ function checkoutSource(ref) {
 function buildCatalogs() {
   if (!existsSync(path.join(SOURCE_DIR, "node_modules"))) {
     log("installing upstream build dependencies (npm, scripts disabled)");
-    run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], {
+    npm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], {
       cwd: SOURCE_DIR,
     });
   }
   log("building @earendil-works/pi-ai catalogs");
-  run("npm", ["run", "build"], {
+  npm(["run", "build"], {
     cwd: path.join(SOURCE_DIR, "packages", "ai"),
   });
 }
