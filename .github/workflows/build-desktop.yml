@@ -172,7 +172,13 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Backport the newest Pi model catalogs
-        run: bun run backport:models || echo "::warning::model backport failed; packaging the released catalogs"
+        shell: pwsh
+        run: |
+          bun run backport:models
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::warning::model backport failed; packaging the released catalogs"
+            exit 0
+          }
 
       - name: Build computer-use runtime
         run: bun run --filter @pine/computer-use-runtime build
