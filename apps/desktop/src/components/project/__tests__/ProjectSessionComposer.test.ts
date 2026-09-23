@@ -1,6 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it, vi } from "vitest";
+import { BrainCircuitIcon, ShieldCheckIcon } from "@lucide/vue";
 import { createAppI18n, type AppLocale } from "@/app/i18n";
 import {
   PASTED_TEXT_ATTACHMENT_THRESHOLD_BYTES,
@@ -101,6 +102,8 @@ describe("ProjectSessionComposer", () => {
     const trigger = wrapper.get('[data-slot="approval-mode-trigger"]');
     expect(trigger.text()).toContain("自主工作");
     expect(trigger.find(".text-info").exists()).toBe(true);
+    expect(trigger.findComponent(BrainCircuitIcon).exists()).toBe(true);
+    expect(trigger.findComponent(ShieldCheckIcon).exists()).toBe(false);
     wrapper.unmount();
   });
 

@@ -2,6 +2,7 @@
 import type { Component } from "vue";
 import {
   ArrowUpIcon,
+  BrainCircuitIcon,
   ChevronDownIcon,
   CornerDownRightIcon,
   FileIcon,
@@ -165,7 +166,7 @@ const approvalModes = computed<ApprovalModeOption[]>(() => [
     value: "autonomous",
     label: t("project.composer.approval.autonomousLabel"),
     description: t("project.composer.approval.autonomous"),
-    icon: ShieldCheckIcon,
+    icon: BrainCircuitIcon,
   },
   {
     value: "YOLO",

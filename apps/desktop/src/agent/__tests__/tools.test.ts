@@ -108,6 +108,71 @@ afterEach(async () => {
   );
 });
 
+describe("ask_user_question timeout", () => {
+  it("returns a timeout to the agent and aborts the pending question in Autonomous Work mode", async () => {
+    const { location } = await createFixture();
+    const requestQuestionnaire = vi.fn(
+      (_toolCallId: string, _params: unknown, signal?: AbortSignal) =>
+        new Promise<{ answers: []; cancelled: true }>((resolve) => {
+          signal?.addEventListener(
+            "abort",
+            () => resolve({ answers: [], cancelled: true }),
+            { once: true },
+          );
+        }),
+    );
+    const tools = await createPineToolDefinitions(
+      location,
+      createFakeGate(),
+      undefined,
+      {
+        getApprovalMode: () => "autonomous",
+        getGate: () => null,
+        requestQuestionnaire,
+      },
+    );
+    const tool = tools.find(
+      (candidate) => candidate.name === "ask_user_question",
+    );
+    expect(tool).toBeDefined();
+    vi.useFakeTimers();
+    try {
+      const resultPromise = tool!.execute(
+        "question-1",
+        {
+          questions: [
+            {
+              question: "Choose a path",
+              header: "Path",
+              options: [
+                { label: "A", description: "First path" },
+                { label: "B", description: "Second path" },
+              ],
+            },
+          ],
+          timeout: 2,
+        },
+        undefined,
+        undefined,
+        undefined as never,
+      );
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await resultPromise;
+      expect(result.content[0]).toMatchObject({
+        text: expect.stringContaining("timed out after 2 seconds"),
+      });
+      expect(result.details).toMatchObject({
+        cancelled: true,
+        timedOut: true,
+        timeoutSeconds: 2,
+      });
+      expect(requestQuestionnaire.mock.calls[0]?.[2]?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("PineToolAccessPolicy", () => {
   it("allows reads from every shared folder and writes only to writable folders", async () => {
     const { location, outside, readOnly, readWrite } = await createFixture();

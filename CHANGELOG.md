@@ -16,6 +16,7 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 ### 变更 / Changed
 
 - 切换权限模式后，助手会在后续对话中收到当前模式的最新说明；按需启用的工具也会随对话恢复。After switching permission modes, the assistant receives the current mode's instructions in subsequent conversation, and tools activated on demand are restored with the conversation.
+- “自主工作”模式下，助手等待问题回复达到设定时间后会收到超时提示并继续处理；模式选择器也改用独立图标和更明确的说明。In Autonomous Work mode, the assistant receives a timeout notice and can continue after the specified wait for a question reply; the mode selector now has a distinct icon and clearer descriptions.
 
 ## [0.5.2] - 2026-09-20
 

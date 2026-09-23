@@ -52,6 +52,14 @@ export const AskUserQuestionParamsSchema = Type.Object({
     maxItems: MAX_QUESTIONS,
     description: "One to four questions to ask in a single interruption.",
   }),
+  timeout: Type.Optional(
+    Type.Number({
+      minimum: 1,
+      maximum: 3600,
+      description:
+        "Seconds to wait for a reply in Autonomous Work mode (1-3600). If omitted, Pine waits 60 seconds. Other modes wait until the user responds.",
+    }),
+  ),
 });
 
 export type AskUserQuestionOption = Static<typeof AskUserQuestionOptionSchema>;
@@ -64,7 +72,8 @@ export type AskUserQuestionError =
   | "empty_options"
   | "duplicate_question"
   | "duplicate_option_label"
-  | "reserved_label";
+  | "reserved_label"
+  | "invalid_timeout";
 
 export interface AskUserQuestionAnswer {
   questionIndex: number;
@@ -78,6 +87,8 @@ export interface AskUserQuestionAnswer {
 export interface AskUserQuestionResult {
   answers: AskUserQuestionAnswer[];
   cancelled: boolean;
+  timedOut?: boolean;
+  timeoutSeconds?: number;
   error?: AskUserQuestionError;
 }
 
@@ -101,9 +112,10 @@ export const ASK_USER_QUESTION_PROMPT_GUIDELINES = [
   'Each question must have 2-4 authored options with concise labels and descriptions. A custom-answer field is added automatically; do not author "Other" or "Type something." options.',
   'Set multiSelect to true when multiple answers are valid. Put a recommended option first and append "(Recommended)" to its label.',
   "Use preview only when concrete markdown artifacts materially help compare single-select options.",
+  "In Autonomous Work mode, set timeout in seconds. If the user does not reply in time, decide how to continue from available information.",
 ] as const;
 
-export const ASK_USER_QUESTION_DESCRIPTION = `Ask the user one or more structured questions during execution when a preference, requirement, or implementation decision is needed. Ask 1-4 questions per call, with 2-4 options per question. Every option needs a concise label and a description of its meaning or trade-off. The user can always provide a custom answer. Use multiSelect for non-exclusive choices, and use markdown previews only for concrete single-select comparisons. Do not author reserved Other, Type something., or Next options.`;
+export const ASK_USER_QUESTION_DESCRIPTION = `Ask the user one or more structured questions during execution when a preference, requirement, or implementation decision is needed. Ask 1-4 questions per call, with 2-4 options per question. Every option needs a concise label and a description of its meaning or trade-off. The user can always provide a custom answer. Use multiSelect for non-exclusive choices, and use markdown previews only for concrete single-select comparisons. Do not author reserved Other, Type something., or Next options. In Autonomous Work mode, timeout sets how many seconds to wait before returning a user-response timeout; the default is 60 seconds.`;
 
 function normalizeLineTerminators(value: string): string {
   return value.replace(/\r\n/g, "\n").replace(/\r/g, "");
@@ -113,6 +125,7 @@ export function normalizeAskUserQuestionParams(
   params: AskUserQuestionParams,
 ): AskUserQuestionParams {
   return {
+    ...(params.timeout !== undefined ? { timeout: params.timeout } : {}),
     questions: params.questions.map((question) => ({
       ...question,
       question: normalizeLineTerminators(question.question),
@@ -132,6 +145,18 @@ export function normalizeAskUserQuestionParams(
 export function validateAskUserQuestion(
   params: AskUserQuestionParams,
 ): AskUserQuestionValidation {
+  if (
+    params.timeout !== undefined &&
+    (!Number.isFinite(params.timeout) ||
+      params.timeout < 1 ||
+      params.timeout > 3600)
+  ) {
+    return {
+      ok: false,
+      error: "invalid_timeout",
+      message: "Error: timeout must be between 1 and 3600 seconds",
+    };
+  }
   if (params.questions.length === 0) {
     return {
       ok: false,
@@ -267,7 +292,12 @@ export function buildAskUserQuestionToolResult(
   if (result.cancelled) {
     return {
       content: [
-        { type: "text" as const, text: "User declined to answer questions" },
+        {
+          type: "text" as const,
+          text: result.timedOut
+            ? `User response timed out after ${result.timeoutSeconds} seconds. Continue using the information already available.`
+            : "User declined to answer questions",
+        },
       ],
       details: result,
     };

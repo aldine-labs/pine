@@ -424,10 +424,11 @@ export default {
         askForPermissionLabel: "让我过目",
         askForPermission: "对工作区外的未授权操作请求确认。",
         agentDecidesLabel: "自动审批",
-        agentDecides: "由 AI 自动判断。",
+        agentDecides:
+          "由 AI 审核操作，必要时将权限决策交给你；遇到异常时可能需要你操作。",
         autonomousLabel: "自主工作",
         autonomous:
-          "由 AI 审核权限请求，不转交给你确认；拒绝后可补充理由重试。",
+          "由 AI 全程自行决策并尝试解决遇到的异常，无需任何外部用户操作。",
         yoloLabel: "干就完了",
         yolo: "关闭一切权限约束。不推荐该选项。",
         yoloConfirmTitle: "启用“干就完了”？",

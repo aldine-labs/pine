@@ -597,15 +597,40 @@ export async function createPineToolDefinitions(
               },
             };
           }
-          const submission = await requestQuestionnaire(
-            toolCallId,
-            params,
-            signal,
-          );
-          return buildAskUserQuestionToolResult(
-            resolveAskUserQuestionSubmission(params, submission),
-            params,
-          );
+          const autonomous = getApprovalMode() === "autonomous";
+          const timeoutSeconds = autonomous
+            ? (params.timeout ?? 60)
+            : undefined;
+          const timeoutController = autonomous ? new AbortController() : null;
+          const timer =
+            timeoutController && timeoutSeconds !== undefined
+              ? setTimeout(
+                  () => timeoutController.abort(),
+                  timeoutSeconds * 1000,
+                )
+              : undefined;
+          let submission: AskUserQuestionSubmission;
+          try {
+            submission = await requestQuestionnaire(
+              toolCallId,
+              params,
+              timeoutController
+                ? AbortSignal.any(
+                    signal
+                      ? [signal, timeoutController.signal]
+                      : [timeoutController.signal],
+                  )
+                : signal,
+            );
+          } finally {
+            if (timer) clearTimeout(timer);
+          }
+          const result = resolveAskUserQuestionSubmission(params, submission);
+          if (timeoutController?.signal.aborted && result.cancelled) {
+            result.timedOut = true;
+            result.timeoutSeconds = timeoutSeconds;
+          }
+          return buildAskUserQuestionToolResult(result, params);
         },
       })
     : null;
