@@ -452,8 +452,7 @@ export default {
         askForPermission:
           "Ask for confirmation for unauthorized operations outside the workspace.",
         agentDecidesLabel: "Auto Approve",
-        agentDecides:
-          "AI reviews operations and may ask you to decide on permissions; handling exceptions may require your input.",
+        agentDecides: "AI reviews actions; asks you when needed.",
         autonomousLabel: "Autonomous Work",
         autonomous:
           "AI makes decisions throughout and tries to resolve exceptions on its own, without requiring any external user action.",
