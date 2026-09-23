@@ -1,13 +1,18 @@
 <script lang="ts">
 // Register the shadcn-style code block once at module load (not per-instance,
 // which would re-register on every mount).
-import { enableKatex, setCustomComponents } from "markstream-vue";
+import {
+  enableKatex,
+  setCustomComponents,
+  setDefaultMathOptions,
+} from "markstream-vue";
 import CodeBlock from "./CodeBlock.vue";
 import MarkdownImage from "./MarkdownImage.vue";
 import MarkdownTable from "./MarkdownTable.vue";
 import "katex/dist/katex.min.css";
 
 enableKatex();
+setDefaultMathOptions({ strictDelimiters: true });
 
 setCustomComponents("pine-chat", {
   code_block: CodeBlock,
