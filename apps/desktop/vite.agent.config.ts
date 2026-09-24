@@ -3,8 +3,11 @@ import { defineConfig } from "vite";
 // Pi is ESM-only and relies on `import.meta.url`. Keep the isolated agent
 // process and all of its chunks in ESM instead of emitting runtime `require()`
 // calls or rewriting Pi's module metadata for CommonJS.
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   build: {
+    // Keep the production worker separate from Forge's concurrent main/preload
+    // builds; the packaging hook copies it into the final shared build folder.
+    outDir: mode === "production" ? ".vite/agent-build" : ".vite/build",
     lib: {
       entry: "src/agent.ts",
       fileName: () => "agent.mjs",
@@ -26,4 +29,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

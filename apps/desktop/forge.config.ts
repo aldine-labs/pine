@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerDMG } from "@electron-forge/maker-dmg";
@@ -77,7 +77,7 @@ function collectRuntimeDeps(
 }
 
 function injectAgentBuild(buildPath: string): void {
-  const sourceBuild = path.join(__dirname, ".vite", "build");
+  const sourceBuild = path.join(__dirname, ".vite", "agent-build");
   const agentEntry = path.join(sourceBuild, "agent.mjs");
   if (!existsSync(agentEntry)) {
     throw new Error(`Missing built agent process at ${agentEntry}`);
@@ -87,6 +87,10 @@ function injectAgentBuild(buildPath: string): void {
   // packaged app can otherwise contain main.js and preload.js while silently
   // omitting this worker and the chunks it imports.
   cpSync(sourceBuild, path.join(buildPath, ".vite", "build"), {
+    recursive: true,
+  });
+  rmSync(path.join(buildPath, ".vite", "agent-build"), {
+    force: true,
     recursive: true,
   });
 }
