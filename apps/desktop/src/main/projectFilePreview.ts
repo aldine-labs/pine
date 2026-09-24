@@ -1,11 +1,9 @@
 import { open } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import type {
-  OfficeDocumentFormat,
-  ProjectFilePreview,
-} from "../shared/projectFiles";
+import type { ProjectFilePreview } from "../shared/projectFiles";
 import { PROJECT_MEDIA_PROTOCOL } from "../shared/projectFiles";
+import { binaryPreviewFormats } from "./previewFormats";
 
 export const MAX_TEXT_PREVIEW_BYTES = 2 * 1024 * 1024;
 
@@ -35,45 +33,6 @@ export function projectMediaUrl(
   return url.href;
 }
 
-const mediaTypes: Record<string, string> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".bmp": "image/bmp",
-  ".ico": "image/x-icon",
-  ".svg": "image/svg+xml",
-  ".mp4": "video/mp4",
-  ".m4v": "video/mp4",
-  ".webm": "video/webm",
-  ".ogv": "video/ogg",
-  ".mov": "video/quicktime",
-  ".pdf": "application/pdf",
-};
-const officeTypes: Record<
-  string,
-  { format: OfficeDocumentFormat; mime: string }
-> = {
-  ".docx": {
-    format: "docx",
-    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  },
-  ".xlsx": {
-    format: "xlsx",
-    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  },
-  ".xls": {
-    format: "xls",
-    mime: "application/vnd.ms-excel",
-  },
-  ".pptx": {
-    format: "pptx",
-    mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  },
-};
-
 export async function readProjectFilePreview(
   filePath: string,
   mediaUrl: string,
@@ -87,20 +46,11 @@ export async function readProjectFilePreview(
       modifiedAt: metadata.mtime.toISOString(),
     };
     const extension = path.extname(filePath).toLowerCase();
-    const office = officeTypes[extension];
-    const mime = mediaTypes[extension] ?? office?.mime;
-    if (mime)
-      return office
-        ? { ...info, kind: "office", format: office.format, url: mediaUrl }
-        : {
-            ...info,
-            kind: mime.startsWith("image/")
-              ? "image"
-              : mime.startsWith("video/")
-                ? "video"
-                : "pdf",
-            url: mediaUrl,
-          };
+    const format = binaryPreviewFormats[extension];
+    if (format)
+      return format.kind === "office"
+        ? { ...info, kind: "office", format: format.format, url: mediaUrl }
+        : { ...info, kind: format.kind, url: mediaUrl };
     if (metadata.size > MAX_TEXT_PREVIEW_BYTES)
       return { ...info, kind: "unsupported", reason: "too-large" };
 
@@ -147,7 +97,7 @@ export async function serveProjectMedia(
   filePath: string,
 ): Promise<Response> {
   const extension = path.extname(filePath).toLowerCase();
-  const mime = mediaTypes[extension] ?? officeTypes[extension]?.mime;
+  const mime = binaryPreviewFormats[extension]?.mimeType;
   if (!mime) return new Response(null, { status: 415 });
   if (request.method !== "GET" && request.method !== "HEAD")
     return new Response(null, { status: 405 });

@@ -541,6 +541,9 @@ describe("ProjectFilePreview", () => {
     );
     useAppearanceStore().colorScheme = "dark";
     await flushPromises();
+    await vi.waitFor(() => {
+      expect(wrapper.findComponent(ProjectPdfPreview).exists()).toBe(true);
+    });
     const pdfPreview = wrapper.findComponent(ProjectPdfPreview);
     const pdf = pdfPreview.findComponent({ name: "VuePdfEmbed" });
     expect(pdf.exists()).toBe(true);
