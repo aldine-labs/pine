@@ -14,7 +14,6 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 ### 修复 / Fixed
 
 - 修复打包版无法打开会话的问题。Fixed an issue that prevented sessions from opening in the packaged desktop app.
-- Windows 桌面版现在也能使用最新的模型目录，模型选择器会显示近期新增的模型。The Windows desktop app now receives the latest model catalog, so the model picker can show recently added models.
 
 ## [0.5.3] - 2026-09-23
 

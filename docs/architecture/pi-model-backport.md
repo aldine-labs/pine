@@ -54,6 +54,14 @@ only the per-provider `*.models.js` files, those import only `./data/*.json` and
 `../model-catalog.js`, and npm 0.85.1's `model-catalog.js` is byte-identical to
 the one on `main`.
 
+The backport script currently supports only the released `pi-ai` 0.85.1 layout.
+Pine now installs 0.87.1, whose `model-catalog.js` does not export
+`flattenImageModelCatalog`, which the current upstream-generated image catalog
+imports. The script stops before modifying the installed package when its
+version differs from the supported baseline. Desktop builds then keep the
+published catalogs until the generated files are compatible with the pinned
+runtime again.
+
 ## Commands
 
 | Command                               | Behavior                                                                                                   |

@@ -250,8 +250,8 @@ function assertReleasedPackage() {
   }
   const version = readJson(manifestPath).version;
   if (version !== PACKAGE_VERSION) {
-    warn(
-      `pi-ai ${version} is installed, but this script was written for the released ${PACKAGE_VERSION} layout; verify the file list before trusting the result`,
+    throw new Error(
+      `pi-ai ${version} is installed, but model backporting only supports the released ${PACKAGE_VERSION} layout`,
     );
   }
 }
@@ -350,48 +350,55 @@ async function backport() {
 
   const files = generatedCatalogFiles();
   backUpReleasedFiles(files);
-  for (const relativePath of files) {
-    const from = path.join(SOURCE_DIR, "packages", "ai", relativePath);
-    if (!existsSync(from)) continue;
-    const to = path.join(PACKAGE_DIR, relativePath);
-    mkdirSync(path.dirname(to), { recursive: true });
-    cpSync(from, to, { recursive: true });
-  }
+  try {
+    for (const relativePath of files) {
+      const from = path.join(SOURCE_DIR, "packages", "ai", relativePath);
+      if (!existsSync(from)) continue;
+      const to = path.join(PACKAGE_DIR, relativePath);
+      mkdirSync(path.dirname(to), { recursive: true });
+      cpSync(from, to, { recursive: true });
+    }
 
-  const appliedAt = new Date().toISOString();
-  writeFileSync(
-    path.join(PACKAGE_DIR, MARKER_FILE),
-    `${JSON.stringify(
-      { appliedAt, files, ref: options.ref, repository, sha: source.head },
-      null,
-      2,
-    )}\n`,
-  );
-  writeFileSync(
-    STATE_FILE,
-    `${JSON.stringify(
-      { appliedAt, ref: options.ref, repository, sha: source.head },
-      null,
-      2,
-    )}\n`,
-  );
-
-  // Import the patched catalog before reporting success: a roster that no
-  // longer loads is worse than a stale one.
-  const after = await catalogCountsInProcess();
-  log(
-    `backported ${source.head.slice(0, 8)} (${options.ref}, ${source.committedAt})`,
-  );
-  log(`  subject: ${source.subject}`);
-  log(
-    `  image models: ${before.image} -> ${after.image}, chat models: ${before.chat} -> ${after.chat}`,
-  );
-  if (after.chat === 0 || after.image === 0) {
-    throw new Error(
-      "the backported catalogs are empty; restore with `--restore` and report this",
+    const appliedAt = new Date().toISOString();
+    writeFileSync(
+      path.join(PACKAGE_DIR, MARKER_FILE),
+      `${JSON.stringify(
+        { appliedAt, files, ref: options.ref, repository, sha: source.head },
+        null,
+        2,
+      )}\n`,
     );
+    writeFileSync(
+      STATE_FILE,
+      `${JSON.stringify(
+        { appliedAt, ref: options.ref, repository, sha: source.head },
+        null,
+        2,
+      )}\n`,
+    );
+
+    // Import the patched catalog before reporting success: a roster that no
+    // longer loads is worse than a stale one.
+    const after = await catalogCountsInProcess();
+    if (after.chat === 0 || after.image === 0) {
+      throw new Error("the backported catalogs are empty");
+    }
+
+    log(
+      `backported ${source.head.slice(0, 8)} (${options.ref}, ${source.committedAt})`,
+    );
+    log(`  subject: ${source.subject}`);
+    log(
+      `  image models: ${before.image} -> ${after.image}, chat models: ${before.chat} -> ${after.chat}`,
+    );
+    log("  restore with `bun run backport:models --restore`");
+  } catch (error) {
+    if (restoreReleasedFiles()) {
+      rmSync(STATE_FILE, { force: true });
+      warn("restored the released catalogs after backport validation failed");
+    }
+    throw error;
   }
-  log("  restore with `bun run backport:models --restore`");
 }
 
 function restore() {
