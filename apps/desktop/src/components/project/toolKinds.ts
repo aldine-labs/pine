@@ -10,7 +10,7 @@ import {
   PlusIcon,
   SearchIcon,
   SquarePenIcon,
-  TerminalIcon,
+  SquareTerminal,
   Trash2Icon,
   WandSparklesIcon,
   WrenchIcon,
@@ -35,7 +35,7 @@ export type ToolKind =
 
 /** Icon shown for each tool call, keyed by its kind. */
 export const TOOL_KIND_ICON: Record<ToolKind, Component> = {
-  bash: TerminalIcon,
+  bash: SquareTerminal,
   browser: PanelTopIcon,
   computer: MonitorCogIcon,
   edit: SquarePenIcon,
