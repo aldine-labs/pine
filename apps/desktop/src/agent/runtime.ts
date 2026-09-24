@@ -402,10 +402,10 @@ interface LiveAgentSession {
   tinyFishApiKey?: string;
   locale: "en-US" | "zh-CN";
   contextCompactionStrategy: PineContextCompactionStrategy;
-  /** Pi's resolved compaction settings: `enabled`, `reserveTokens`, and
-   * `keepRecentTokens`. Per-model `modelOverrides` stay inside Pi and are
-   * resolved when the settings manager is asked for the session's model. */
+  /** Pi's base compaction settings before Pine applies its strategy. */
   baseCompactionSettings: ReturnType<SettingsManager["getCompactionSettings"]>;
+  /** Original Pi reserve values, captured before Pine overrides each model. */
+  baseModelCompactionReserveTokens: Map<string, number>;
 }
 
 export interface PineAgentRuntimeOptions {
@@ -1501,6 +1501,7 @@ export class PineAgentRuntime {
       locale: "en-US",
       contextCompactionStrategy,
       baseCompactionSettings,
+      baseModelCompactionReserveTokens: new Map(),
     };
     const computerUse = createComputerUseExtension({
       getApprovalMode: () => live.approvalMode,
@@ -1696,20 +1697,46 @@ export class PineAgentRuntime {
     strategy: PineContextCompactionStrategy,
   ): void {
     live.contextCompactionStrategy = strategy;
-    if (strategy === "passive") {
+    const model = live.session.model;
+    const modelKey = model ? `${model.provider}/${model.id}` : undefined;
+    let baseModelReserveTokens = modelKey
+      ? live.baseModelCompactionReserveTokens.get(modelKey)
+      : undefined;
+
+    if (model && modelKey && baseModelReserveTokens === undefined) {
+      // Resolve unseen models from Pi's original ordinary settings, not from
+      // the recommendation that may have been applied to the previous model.
       live.session.settingsManager.applyOverrides({
         compaction: live.baseCompactionSettings,
       });
-      return;
+      baseModelReserveTokens =
+        live.session.settingsManager.getCompactionSettings(model).reserveTokens;
+      live.baseModelCompactionReserveTokens.set(
+        modelKey,
+        baseModelReserveTokens,
+      );
     }
 
-    const contextWindow = live.session.model?.contextWindow;
+    const recommendedReserveTokens =
+      strategy === "recommended" && model?.contextWindow
+        ? recommendedCompactionReserveTokens(model.contextWindow)
+        : undefined;
+    const modelReserveTokens =
+      recommendedReserveTokens ?? baseModelReserveTokens;
+
     live.session.settingsManager.applyOverrides({
       compaction: {
         ...live.baseCompactionSettings,
-        enabled: true,
-        ...(contextWindow
-          ? { reserveTokens: recommendedCompactionReserveTokens(contextWindow) }
+        ...(strategy === "recommended" ? { enabled: true } : {}),
+        ...(recommendedReserveTokens !== undefined
+          ? { reserveTokens: recommendedReserveTokens }
+          : {}),
+        ...(modelKey && modelReserveTokens !== undefined
+          ? {
+              modelOverrides: {
+                [modelKey]: { reserveTokens: modelReserveTokens },
+              },
+            }
           : {}),
       },
     });
