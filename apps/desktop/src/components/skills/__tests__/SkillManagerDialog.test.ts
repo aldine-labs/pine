@@ -230,6 +230,7 @@ describe("SkillManagerDialog", () => {
     await flushPromises();
 
     expect(removeSkill).toHaveBeenCalledWith({
+      managedBy: "pine",
       name: "release-notes",
       projectId: "project-1",
       scope: "global",
