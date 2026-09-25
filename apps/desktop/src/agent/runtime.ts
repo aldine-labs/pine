@@ -939,14 +939,21 @@ export class PineAgentRuntime {
         resolve(result(true));
       };
 
-      void live.session
-        .prompt(message, {
-          ...(streamingBehavior ? { streamingBehavior } : {}),
-          preflightResult: (success) => {
-            if (success) settleAccepted();
-          },
-          source: "interactive",
-        })
+      // AgentSession.prompt rejects during compaction before it can queue a
+      // steering message, so stage it through the session queue instead.
+      const prompt =
+        streamingBehavior === "steer" && live.session.isCompacting
+          ? live.session.steer(message).then(() => {
+              this.resumeQueuedMessagesWhenIdle(live);
+            })
+          : live.session.prompt(message, {
+              ...(streamingBehavior ? { streamingBehavior } : {}),
+              preflightResult: (success) => {
+                if (success) settleAccepted();
+              },
+              source: "interactive",
+            });
+      void prompt
         .then(settleAccepted)
         .catch((error: unknown) => {
           const errorMessage = toErrorMessage(error);
@@ -972,6 +979,36 @@ export class PineAgentRuntime {
             this.options.emit({ type: "run-state", sessionId, state: "idle" });
           }
         });
+    });
+  }
+
+  private resumeQueuedMessagesWhenIdle(live: LiveAgentSession): void {
+    void live.session.waitForIdle().then(async () => {
+      if (!live.session.isIdle || live.session.pendingMessageCount === 0) return;
+
+      const sessionId = live.session.sessionId;
+      this.options.emit({ type: "run-state", sessionId, state: "running" });
+      try {
+        await live.session.continue();
+      } catch (error) {
+        const errorMessage = toErrorMessage(error);
+        this.options.emit({
+          type: "session-error",
+          sessionId,
+          errorId: randomUUID(),
+          message: errorMessage,
+        });
+        this.options.emit({
+          type: "run-state",
+          sessionId,
+          state: "failed",
+          error: errorMessage,
+        });
+      } finally {
+        if (live.session.isIdle) {
+          this.options.emit({ type: "run-state", sessionId, state: "idle" });
+        }
+      }
     });
   }
 
