@@ -21,6 +21,7 @@ import { useI18n } from "vue-i18n";
 import { isValidProjectEntryName } from "@/shared/fileNames";
 import { handleError } from "@/app/errors/errorHandler";
 import { fileIcon } from "@/lib/fileIcon";
+import { projectFileDirectory } from "@/lib/filePreviewTarget";
 import { Badge } from "@/components/ui/badge";
 import {
   Empty,
@@ -62,6 +63,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useProjectSidebarStore } from "@/stores/projectSidebar";
 import { useProjectStore } from "@/stores/project";
+import { useContentTabsStore } from "@/stores/contentTabs";
 import { useContentTabNavigation } from "@/composables/useContentTabNavigation";
 import { useProjectFileChanges } from "@/composables/useProjectFileChanges";
 
@@ -75,6 +77,7 @@ interface ProjectTreeNode extends ProjectEntry {
 
 const { t } = useI18n();
 const projectStore = useProjectStore();
+const contentTabsStore = useContentTabsStore();
 const tabNavigation = useContentTabNavigation();
 const { activeProject } = storeToRefs(projectStore);
 const { onProjectFilesChanged } = useProjectFileChanges();
@@ -643,12 +646,31 @@ async function drop(event: DragEvent, node: ProjectTreeNode): Promise<void> {
   }
 }
 
-// The main process owns the filesystem handles. The renderer only describes
-// directories whose contents are visible and applies the resulting batches.
+// The main process owns the filesystem handles. The renderer describes visible
+// directories plus parent directories of open project-file previews.
 let pendingWatchedChanges = new Map<string, Set<string>>();
 let isApplyingWatchedChanges = false;
 let isUnmounted = false;
 let syncWatchTimer: ReturnType<typeof setTimeout> | undefined;
+
+const openFileDirectories = computed(() => {
+  const projectId = activeProject.value?.id;
+  if (!projectId) return [];
+  return contentTabsStore.tabs.flatMap((tab) => {
+    if (
+      tab.kind !== "file" ||
+      tab.source !== "project" ||
+      tab.projectId !== projectId
+    )
+      return [];
+    return [
+      {
+        folderId: tab.folderId,
+        relativePath: projectFileDirectory(tab.relativePath),
+      },
+    ];
+  });
+});
 
 function watchTargets(folderId: string): string[] {
   const directories = new Set<string>([""]);
@@ -672,6 +694,14 @@ function watchTargets(folderId: string): string[] {
   return [...directories];
 }
 
+function watchedDirectories(folderId: string): string[] {
+  const directories = new Set(watchTargets(folderId));
+  for (const target of openFileDirectories.value) {
+    if (target.folderId === folderId) directories.add(target.relativePath);
+  }
+  return [...directories];
+}
+
 function syncWatchSet(): void {
   if (isUnmounted) return;
   const folders =
@@ -679,7 +709,7 @@ function syncWatchSet(): void {
       .filter((folder) => folder.isAvailable)
       .map((folder) => ({
         folderId: folder.id,
-        directories: watchTargets(folder.id),
+        directories: watchedDirectories(folder.id),
       })) ?? [];
   void window.pine.setWatchedProjectDirectories({ folders }).catch(() => {
     // Watcher failures never break the tree; manual refresh still works.
@@ -769,10 +799,14 @@ async function applyWatchedChanges(
 
 const unsubscribeWatcher = window.pine.onProjectFilesChanged(onWatcherEvent);
 watch(activeProject, resetRoots, { immediate: true });
-watch([() => activeProject.value, expanded], () => scheduleWatchSync(), {
-  immediate: true,
-  flush: "post",
-});
+watch(
+  [() => activeProject.value, expanded, openFileDirectories],
+  () => scheduleWatchSync(),
+  {
+    immediate: true,
+    flush: "post",
+  },
+);
 onUnmounted(() => {
   isUnmounted = true;
   generation += 1;

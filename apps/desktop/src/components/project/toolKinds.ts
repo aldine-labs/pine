@@ -7,6 +7,7 @@ import {
   GlobeIcon,
   MonitorCogIcon,
   PanelTopIcon,
+  PlugIcon,
   PlusIcon,
   SearchIcon,
   SquarePenIcon,
@@ -27,6 +28,7 @@ export type ToolKind =
   | "fetch"
   | "generic"
   | "media"
+  | "mcp"
   | "presentFile"
   | "read"
   | "search"
@@ -42,6 +44,7 @@ export const TOOL_KIND_ICON: Record<ToolKind, Component> = {
   fetch: GlobeIcon,
   generic: WrenchIcon,
   media: ClapperboardIcon,
+  mcp: PlugIcon,
   presentFile: EyeIcon,
   read: FileTextIcon,
   search: SearchIcon,
@@ -79,6 +82,7 @@ export const TOOL_KIND_ORDER: readonly ToolKind[] = [
   "fetch",
   "presentFile",
   "media",
+  "mcp",
   "computer",
   "browser",
   "bash",
@@ -118,6 +122,12 @@ export function toolIconForName(name: string): Component {
 
 export function toolKind(name: string): ToolKind {
   const normalized = name.toLowerCase().split(/[.:/]/).at(-1) ?? name;
+  if (
+    normalized === "mcp" ||
+    normalized === "mcpscript" ||
+    normalized.startsWith("mcp__")
+  )
+    return "mcp";
   if (normalized === UI_PRESENT_FILE_TOOL_NAME) return "presentFile";
   if (normalized.startsWith("browser_")) return "browser";
   if (

@@ -12,6 +12,11 @@ import { ref } from "vue";
  */
 export const useAttentionFlashStore = defineStore("attention-flash", () => {
   const flashingIds = ref<ReadonlySet<string>>(new Set());
+  const oneShotFlashingIds = ref<ReadonlySet<string>>(new Set());
+  const oneShotTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  // Keep this duration aligned with the one-shot CSS animation.
+  const oneShotDurationMs = 1_800;
 
   function flash(id: string): void {
     if (!id || flashingIds.value.has(id)) return;
@@ -26,25 +31,61 @@ export const useAttentionFlashStore = defineStore("attention-flash", () => {
     flashingIds.value = next;
   }
 
+  function stopOnce(id: string): void {
+    const timer = oneShotTimers.get(id);
+    if (timer) clearTimeout(timer);
+    oneShotTimers.delete(id);
+    if (!oneShotFlashingIds.value.has(id)) return;
+    const next = new Set(oneShotFlashingIds.value);
+    next.delete(id);
+    oneShotFlashingIds.value = next;
+  }
+
+  /** Show a brief semantic-info pulse that clears itself after one animation. */
+  function flashOnce(id: string): void {
+    if (!id || oneShotFlashingIds.value.has(id)) return;
+    oneShotFlashingIds.value = new Set([...oneShotFlashingIds.value, id]);
+    oneShotTimers.set(id, setTimeout(() => stopOnce(id), oneShotDurationMs));
+  }
+
   function stopAll(): void {
-    if (!flashingIds.value.size) return;
-    flashingIds.value = new Set();
+    for (const timer of oneShotTimers.values()) clearTimeout(timer);
+    oneShotTimers.clear();
+    if (flashingIds.value.size) flashingIds.value = new Set();
+    if (oneShotFlashingIds.value.size) oneShotFlashingIds.value = new Set();
   }
 
   /** Drop ids that no longer exist, such as tabs the user just closed. */
   function retain(ids: Iterable<string>): void {
     const keep = new Set(ids);
-    if ([...flashingIds.value].every((id) => keep.has(id))) return;
-    flashingIds.value = new Set(
-      [...flashingIds.value].filter((id) => keep.has(id)),
-    );
+    if ([...flashingIds.value].some((id) => !keep.has(id)))
+      flashingIds.value = new Set(
+        [...flashingIds.value].filter((id) => keep.has(id)),
+      );
+    for (const id of oneShotFlashingIds.value) {
+      if (!keep.has(id)) stopOnce(id);
+    }
   }
 
   function isFlashing(id: string): boolean {
     return flashingIds.value.has(id);
   }
 
-  return { flash, flashingIds, isFlashing, retain, stop, stopAll };
+  function isFlashingOnce(id: string): boolean {
+    return oneShotFlashingIds.value.has(id);
+  }
+
+  return {
+    flash,
+    flashOnce,
+    flashingIds,
+    oneShotFlashingIds,
+    isFlashing,
+    isFlashingOnce,
+    retain,
+    stop,
+    stopAll,
+  };
 });
 
 if (import.meta.hot) {

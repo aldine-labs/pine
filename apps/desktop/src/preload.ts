@@ -2,6 +2,11 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import {
+  LIST_MCP_SERVERS_CHANNEL,
+  SAVE_MCP_SERVER_CHANNEL,
+  REMOVE_MCP_SERVER_CHANNEL,
+} from "./shared/mcp";
+import {
   ABORT_SESSION_CHANNEL,
   COMPACT_SESSION_CHANNEL,
   APPROVAL_RESPONSE_CHANNEL,
@@ -271,6 +276,12 @@ const pineApi: PineDesktopApi = {
   listProjects: (): Promise<ListProjectsResult> =>
     ipcRenderer.invoke(LIST_PROJECTS_CHANNEL),
   listSkills: (request) => ipcRenderer.invoke(LIST_SKILLS_CHANNEL, request),
+  listMcpServers: (request) =>
+    ipcRenderer.invoke(LIST_MCP_SERVERS_CHANNEL, request),
+  saveMcpServer: (request) =>
+    ipcRenderer.invoke(SAVE_MCP_SERVER_CHANNEL, request),
+  removeMcpServer: (request) =>
+    ipcRenderer.invoke(REMOVE_MCP_SERVER_CHANNEL, request),
   readSkill: (request) => ipcRenderer.invoke(READ_SKILL_CHANNEL, request),
   createSkill: (request) => ipcRenderer.invoke(CREATE_SKILL_CHANNEL, request),
   editSkill: (request) => ipcRenderer.invoke(EDIT_SKILL_CHANNEL, request),

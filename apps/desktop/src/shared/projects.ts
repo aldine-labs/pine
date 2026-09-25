@@ -87,6 +87,12 @@ import type {
   SetTinyFishApiKeyResult,
   TinyFishCredentialStatus,
 } from "./tinyfish";
+import type {
+  PineMcpCatalog,
+  PineMcpMutation,
+  PineMcpRequest,
+  PineMcpSaveRequest,
+} from "./mcp";
 
 export const PROJECTS_DIRECTORY = "projects" as const;
 export const PROJECT_METADATA_FILE = "project.json" as const;
@@ -185,6 +191,9 @@ export interface PickProjectFoldersRequest {
 }
 
 export interface PineDesktopApi extends PineWindowApi {
+  listMcpServers: (request: PineMcpRequest) => Promise<PineMcpCatalog>;
+  saveMcpServer: (request: PineMcpSaveRequest) => Promise<PineMcpCatalog>;
+  removeMcpServer: (request: PineMcpMutation) => Promise<PineMcpCatalog>;
   readProjectFilePreview: (
     request: ProjectFilePreviewRequest,
   ) => Promise<ProjectFilePreview>;

@@ -4,6 +4,7 @@ import {
   EyeIcon,
   MonitorCogIcon,
   PanelTopIcon,
+  PlugIcon,
   PlusIcon,
   SquarePenIcon,
   Trash2Icon,
@@ -30,6 +31,14 @@ describe("Computer Use tool kinds", () => {
   it("uses a dedicated kind for presented files", () => {
     expect(toolKind("ui_present_file")).toBe("presentFile");
     expect(TOOL_KIND_ICON.presentFile).toBe(EyeIcon);
+  });
+
+  it("recognizes adapter proxy, script, and namespaced MCP tools", () => {
+    expect(toolKind("mcp")).toBe("mcp");
+    expect(toolKind("mcpScript")).toBe("mcp");
+    expect(toolKind("mcp__github")).toBe("mcp");
+    expect(toolKind("mcp__github_search_repositories")).toBe("mcp");
+    expect(TOOL_KIND_ICON.mcp).toBe(PlugIcon);
   });
 
   it("uses dedicated kinds and icons for Skill operations", () => {

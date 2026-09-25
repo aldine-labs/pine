@@ -22,6 +22,17 @@ import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { ProjectRuntimeRegistry } from "./main/projectRuntime";
+import {
+  listMcpServers,
+  saveMcpServer,
+  removeMcpServer,
+} from "./main/mcpConfig";
+import {
+  LIST_MCP_SERVERS_CHANNEL,
+  SAVE_MCP_SERVER_CHANNEL,
+  REMOVE_MCP_SERVER_CHANNEL,
+  type PineMcpCatalog,
+} from "./shared/mcp";
 import { PresentedFileRegistry } from "./main/presentedFiles";
 import { TinyFishCredentialStore } from "./main/tinyfishCredentials";
 import {
@@ -1508,6 +1519,79 @@ ipcMain.handle(
   async (_event, request: unknown): Promise<ProjectResult> => {
     const input = ProjectMutationSchema.parse(request);
     return { project: await getProjectRepository().create(input) };
+  },
+);
+
+const McpIdentitySchema = z.object({
+  projectId: z.uuid(),
+  scope: z.enum(["global", "project"]),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+});
+
+async function mcpProjectCwd(projectId: string): Promise<string> {
+  const project = await getProjectRepository().get(projectId);
+  const folder = project.folders.find(
+    (entry) => entry.id === project.defaultFolderId,
+  );
+  if (!folder?.isAvailable)
+    throw new Error("The project's default folder is unavailable.");
+  return folder.path;
+}
+
+async function mcpCatalog(
+  event: Electron.IpcMainInvokeEvent,
+  projectId: string,
+): Promise<PineMcpCatalog> {
+  const catalog = await listMcpServers(await mcpProjectCwd(projectId));
+  if (getProjectRuntimes().isOpen(event.sender.id, projectId)) {
+    const status = await getProjectRuntimes().getMcpStatus(event.sender.id);
+    if (status) catalog.status = status;
+  }
+  return catalog;
+}
+
+ipcMain.handle(
+  LIST_MCP_SERVERS_CHANNEL,
+  async (event, request: unknown): Promise<PineMcpCatalog> => {
+    const { projectId } = z.object({ projectId: z.uuid() }).parse(request);
+    return mcpCatalog(event, projectId);
+  },
+);
+
+ipcMain.handle(
+  SAVE_MCP_SERVER_CHANNEL,
+  async (event, request: unknown): Promise<PineMcpCatalog> => {
+    const parsed = McpIdentitySchema.extend({
+      previousName: McpIdentitySchema.shape.name.optional(),
+      definition: z.record(z.string(), z.unknown()),
+    }).parse(request);
+    if (
+      typeof parsed.definition.command !== "string" &&
+      typeof parsed.definition.url !== "string"
+    )
+      throw new Error("An MCP server needs a command or URL.");
+    const cwd = await mcpProjectCwd(parsed.projectId);
+    await saveMcpServer(cwd, parsed);
+    if (getProjectRuntimes().isOpen(event.sender.id, parsed.projectId))
+      await getProjectRuntimes().reloadMcp(event.sender.id);
+    return mcpCatalog(event, parsed.projectId);
+  },
+);
+
+ipcMain.handle(
+  REMOVE_MCP_SERVER_CHANNEL,
+  async (event, request: unknown): Promise<PineMcpCatalog> => {
+    const parsed = McpIdentitySchema.parse(request);
+    const cwd = await mcpProjectCwd(parsed.projectId);
+    await removeMcpServer(cwd, parsed);
+    if (getProjectRuntimes().isOpen(event.sender.id, parsed.projectId))
+      await getProjectRuntimes().reloadMcp(event.sender.id);
+    return mcpCatalog(event, parsed.projectId);
   },
 );
 

@@ -443,9 +443,13 @@ watch(activeSession, (session) => {
               :class="
                 cn(
                   'window-no-drag group/tab relative flex h-8 w-40 min-w-40 items-center rounded-2xl',
-                  // Reusable attention signal: a tab the agent presented keeps
-                  // pulsing until the user hovers, opens, or closes it.
+                  // Presented tabs keep a warning pulse until acknowledged;
+                  // file changes use a one-shot info pulse.
                   attentionFlash.isFlashing(tab.id) && 'attention-flash',
+                  attentionFlash.isFlashingOnce(tab.id) && [
+                    'attention-flash',
+                    'attention-flash-once',
+                  ],
                 )
               "
               :data-tab-id="tab.id"

@@ -21,6 +21,7 @@ import type {
 import type { PineContextUsage, PineSessionSummary } from "../shared/sessions";
 import type { PineContextCompactionStrategy } from "../shared/preferences";
 import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
+import type { McpStatusSnapshot } from "pi-mcp-adapter";
 
 export interface AgentFolderGrant {
   access: "read-only" | "read-write";
@@ -113,6 +114,16 @@ export type AgentWorkerRequest =
   | {
       id: string;
       type: "session:dispose";
+      sessionId: string;
+    }
+  | {
+      id: string;
+      type: "mcp:reload";
+      sessionId: string;
+    }
+  | {
+      id: string;
+      type: "mcp:status";
       sessionId: string;
     }
   | {
@@ -227,6 +238,7 @@ export interface AgentWorkerPromptResult extends AgentWorkerSessionResult {
 }
 
 export type AgentWorkerResult =
+  | McpStatusSnapshot
   | AgentWorkerSessionResult
   | AgentWorkerPromptResult
   | PineModelCatalog

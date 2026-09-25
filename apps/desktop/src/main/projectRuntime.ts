@@ -106,6 +106,18 @@ interface ProjectRuntime {
 }
 
 export class ProjectRuntimeRegistry {
+  async reloadMcp(webContentsId: number): Promise<void> {
+    const session = this.runtimes.get(webContentsId)?.session;
+    if (session?.status === "active")
+      await this.agentHost.reloadMcp?.(session.summary.id);
+  }
+
+  async getMcpStatus(webContentsId: number) {
+    const session = this.runtimes.get(webContentsId)?.session;
+    return session?.status === "active"
+      ? this.agentHost.getMcpStatus?.(session.summary.id)
+      : undefined;
+  }
   private readonly runtimes = new Map<number, ProjectRuntime>();
   /** approval requestId → owning webContentsId, for response validation. */
   private readonly pendingApprovals = new Map<string, number>();

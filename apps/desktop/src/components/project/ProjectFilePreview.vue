@@ -39,14 +39,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useContentTabsStore } from "@/stores/contentTabs";
 import { useAppearanceStore } from "@/stores/appearance";
+import { useAttentionFlashStore } from "@/stores/attentionFlash";
 import { useFileToSession } from "@/composables/useFileToSession";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   fileName as pathBaseName,
   fileTargetPath,
+  projectFileDirectory,
 } from "@/lib/filePreviewTarget";
 import type { AttachmentSelection } from "@/shared/attachments";
-import type { ProjectFilePreview } from "@/shared/projectFiles";
+import type {
+  ProjectFilePreview,
+  ProjectFilesChangedEvent,
+} from "@/shared/projectFiles";
 import type { FileContentTab } from "@/stores/contentTabs";
 import { resolvePreviewRenderer } from "./file-preview/previewRenderer";
 import type {
@@ -128,12 +133,14 @@ watch(viewMode, () => {
 });
 const tabsStore = useContentTabsStore();
 const appearanceStore = useAppearanceStore();
+const attentionFlash = useAttentionFlashStore();
 const sessionTabs = computed(() =>
   tabsStore.tabs.filter((tab) => tab.kind === "session"),
 );
 const { isSending, sendFile, sendFileToNewSession } = useFileToSession();
 const failed = ref(false);
 const revision = ref(0);
+const stale = ref(false);
 const fileName = computed(() => pathBaseName(filePath.value));
 const contentMetadata = ref<PreviewRendererMetadata>();
 const previewInverted = ref(false);
@@ -264,7 +271,30 @@ watch(
   () => props.active,
   (active) => {
     if (!active) selectedRange.value = undefined;
+    else if (stale.value) {
+      stale.value = false;
+      revision.value += 1;
+    }
   },
+);
+
+function handleProjectFilesChanged(event: ProjectFilesChangedEvent): void {
+  const file = props.file;
+  if (file.source !== "project") return;
+  const directory = projectFileDirectory(file.relativePath);
+  const changed = event.folders.some(
+    (folder) =>
+      folder.folderId === file.folderId &&
+      folder.changedDirs.includes(directory),
+  );
+  if (!changed) return;
+  attentionFlash.flashOnce(file.id);
+  if (props.active) revision.value += 1;
+  else stale.value = true;
+}
+
+const unsubscribeFileWatcher = window.pine.onProjectFilesChanged?.(
+  handleProjectFilesChanged,
 );
 watch(
   () => appearanceStore.colorScheme,
@@ -275,6 +305,7 @@ watch(
 );
 watch(zoom, scheduleZoom);
 onBeforeUnmount(() => {
+  unsubscribeFileWatcher?.();
   if (zoomFrame !== undefined) cancelAnimationFrame(zoomFrame);
   if (zoomCommitTimer) clearTimeout(zoomCommitTimer);
 });

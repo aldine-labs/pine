@@ -3,6 +3,7 @@ import {
   Files,
   Info,
   LibraryIcon,
+  BlocksIcon,
   MessagesSquare,
   Settings2,
 } from "@lucide/vue";
@@ -31,6 +32,7 @@ import ProjectFileTree from "./ProjectFileTree.vue";
 import ProjectSessionList from "./ProjectSessionList.vue";
 import RetainedPanel from "./RetainedPanel.vue";
 import SkillManagerDialog from "@/components/skills/SkillManagerDialog.vue";
+import McpManagerDialog from "@/components/mcp/McpManagerDialog.vue";
 
 const { t } = useI18n();
 const emit = defineEmits<{
@@ -45,6 +47,7 @@ const sidebarStore = useProjectSidebarStore();
 const route = useRoute();
 const router = useRouter();
 const isSkillManagerOpen = ref(false);
+const isMcpManagerOpen = ref(false);
 const activeTab = computed<ProjectSidebarTab>({
   get() {
     const requested = route.query.sidebar;
@@ -127,6 +130,15 @@ watch(
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
+            data-testid="project-mcp-button"
+            @click="isMcpManagerOpen = true"
+          >
+            <BlocksIcon aria-hidden="true" />
+            <span>{{ t("mcp.title") }}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
             data-testid="project-skills-button"
             @click="isSkillManagerOpen = true"
           >
@@ -148,6 +160,11 @@ watch(
     <SkillManagerDialog
       v-if="activeProject"
       v-model:open="isSkillManagerOpen"
+      :project-id="activeProject.id"
+    />
+    <McpManagerDialog
+      v-if="activeProject"
+      v-model:open="isMcpManagerOpen"
       :project-id="activeProject.id"
     />
   </Sidebar>

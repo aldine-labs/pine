@@ -19,6 +19,7 @@ const AGENT_RUNTIME_ENTRYPOINTS = [
   "@anthropic-ai/sandbox-runtime",
   "@earendil-works/pi-coding-agent",
   "@earendil-works/pi-ai",
+  "pi-mcp-adapter",
 ] as const;
 
 function locateWorkspaceNodeModules(): string {

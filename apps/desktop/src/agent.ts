@@ -58,6 +58,12 @@ async function handleRequest(request: AgentWorkerRequest): Promise<void> {
     case "session:dispose":
       result = await runtime.disposeSession(request.sessionId);
       break;
+    case "mcp:reload":
+      result = await runtime.reloadMcp(request.sessionId);
+      break;
+    case "mcp:status":
+      result = runtime.getMcpStatus(request.sessionId);
+      break;
     case "models:catalog":
       result = await runtime.getModelCatalog(request.agentDir);
       break;

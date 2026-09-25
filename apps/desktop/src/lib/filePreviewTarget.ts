@@ -13,6 +13,11 @@ export function fileName(filePath: string): string {
   return filePath.split(/[\\/]/).filter(Boolean).at(-1) ?? filePath;
 }
 
+/** Parent directory for a portable project-relative file path. */
+export function projectFileDirectory(relativePath: string): string {
+  return relativePath.split("/").slice(0, -1).join("/");
+}
+
 /** Identity that makes one tab per file, and drops restored duplicates. */
 export function fileTargetKey(target: FilePreviewTarget): string {
   return target.source === "project"

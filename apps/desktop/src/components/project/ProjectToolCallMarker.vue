@@ -56,6 +56,41 @@ function isComputerUseActivationTool(name: string): boolean {
   return normalizedToolName(name) === "activate_computer_use";
 }
 
+function mcpOperation(name: string, input: Record<string, unknown>): string {
+  if (normalizedToolName(name) === "mcpscript") return "script";
+  if (
+    typeof input.tool === "string" ||
+    normalizedToolName(name).startsWith("mcp__")
+  )
+    return "call";
+  if (typeof input.search === "string") return "search";
+  if (typeof input.connect === "string") return "connect";
+  if (typeof input.describe === "string") return "describe";
+  if (typeof input.instructions === "string") return "instructions";
+  if (typeof input.action === "string") return "action";
+  return "status";
+}
+
+function mcpTarget(name: string, input: Record<string, unknown>): string {
+  const normalizedName = normalizedToolName(name);
+  const server =
+    firstString(input, ["server"]) ??
+    (normalizedName.startsWith("mcp__")
+      ? normalizedName.slice("mcp__".length)
+      : undefined);
+  const tool = firstString(input, ["tool"]);
+  if (tool) return server ? `${server}.${tool}` : tool;
+  const target = firstString(input, [
+    "search",
+    "connect",
+    "describe",
+    "instructions",
+    "action",
+  ]);
+  if (target) return target;
+  return server ?? "";
+}
+
 /** First generated image path reported by generate_image, as a file name. */
 function generatedImageFileName(output: unknown): string | undefined {
   const details = inputRecord(inputRecord(output).details);
@@ -675,29 +710,31 @@ const presentation = computed(() => {
         ? t("project.transcript.tools.skillScopes.project")
         : "";
   const target =
-    kind === "bash" && command
-      ? compactInline(command)
-      : kind === "search" && query
-        ? (webSearchTarget(input) ?? compactInline(query))
-        : kind === "fetch"
-          ? (webFetchTarget(input, props.toolCall.output) ??
-            props.toolCall.name)
-          : kind === "computer" || kind === "browser"
-            ? computerUseTarget(
-                props.toolCall.name,
-                input,
-                props.contextToolCalls ?? [],
-                props.toolCall.id,
-              )
-            : kind === "skill"
-              ? skillName
-              : kind === "media"
-                ? (generatedImageFileName(props.toolCall.output) ??
-                  mediaPrompt(input) ??
-                  "")
-                : path
-                  ? `${filename(path)}${suffix}`
-                  : props.toolCall.name;
+    kind === "mcp"
+      ? mcpTarget(props.toolCall.name, input)
+      : kind === "bash" && command
+        ? compactInline(command)
+        : kind === "search" && query
+          ? (webSearchTarget(input) ?? compactInline(query))
+          : kind === "fetch"
+            ? (webFetchTarget(input, props.toolCall.output) ??
+              props.toolCall.name)
+            : kind === "computer" || kind === "browser"
+              ? computerUseTarget(
+                  props.toolCall.name,
+                  input,
+                  props.contextToolCalls ?? [],
+                  props.toolCall.id,
+                )
+              : kind === "skill"
+                ? skillName
+                : kind === "media"
+                  ? (generatedImageFileName(props.toolCall.output) ??
+                    mediaPrompt(input) ??
+                    "")
+                  : path
+                    ? `${filename(path)}${suffix}`
+                    : props.toolCall.name;
   const targetMono =
     kind === "bash" ||
     kind === "read" ||
@@ -800,6 +837,22 @@ const presentation = computed(() => {
       before: t(`project.transcript.tools.presentFile.${state}`),
       operation: undefined,
       separator: "",
+      target,
+      targetMono: true,
+      purpose: undefined,
+      faviconDataUrl: undefined,
+      after: "",
+    };
+  }
+  if (kind === "mcp") {
+    return {
+      before: t(`project.transcript.tools.mcp.${state}`, {
+        operation: t(
+          `project.transcript.tools.mcp.operations.${mcpOperation(props.toolCall.name, input)}`,
+        ),
+      }),
+      operation: undefined,
+      separator: target ? " " : "",
       target,
       targetMono: true,
       purpose: undefined,

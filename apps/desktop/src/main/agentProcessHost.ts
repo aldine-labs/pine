@@ -1,6 +1,7 @@
 import { utilityProcess } from "electron";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import type { McpStatusSnapshot } from "pi-mcp-adapter";
 import type { PineApprovalMode } from "../shared/agent";
 import type { PineContextCompactionStrategy } from "../shared/preferences";
 import type { AskUserQuestionSubmission } from "@pine/rpiv-ask-user-question";
@@ -38,6 +39,8 @@ interface AgentProcess {
 }
 
 export interface AgentHost {
+  reloadMcp?(sessionId: string): Promise<{ updated: boolean }>;
+  getMcpStatus?(sessionId: string): Promise<McpStatusSnapshot>;
   abort(sessionId: string): Promise<{ aborted: boolean }>;
   compact(sessionId: string): Promise<{ compacted: boolean }>;
   dequeueSteering(
@@ -141,6 +144,13 @@ interface PendingRequest {
 }
 
 export class AgentProcessHost implements AgentHost {
+  reloadMcp(sessionId: string): Promise<{ updated: boolean }> {
+    return this.request({ type: "mcp:reload", sessionId });
+  }
+
+  getMcpStatus(sessionId: string): Promise<McpStatusSnapshot> {
+    return this.request({ type: "mcp:status", sessionId });
+  }
   private process: AgentProcess | null = null;
   private ready: Promise<void> | null = null;
   private resolveReady: (() => void) | null = null;

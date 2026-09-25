@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -559,6 +559,39 @@ describe("parseJudgeRulings", () => {
 });
 
 describe("PineAgentRuntime", () => {
+  it("loads project MCP configuration and reports a disabled server", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "pine-mcp-runtime-"));
+    temporaryDirectories.push(root);
+    const cwd = path.join(root, "source");
+    await mkdir(cwd, { recursive: true });
+    await writeFile(
+      path.join(cwd, ".mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          example: { command: "node", args: ["server.js"], disabled: true },
+        },
+      }),
+    );
+    const runtime = new PineAgentRuntime({ emit: () => undefined });
+    try {
+      const created = await runtime.createSession({
+        agentDir: path.join(root, "agent"),
+        cwd,
+        folders: [{ access: "read-write", path: cwd }],
+        sessionsRoot: path.join(root, "sessions"),
+      });
+      await vi.waitFor(() => {
+        expect(runtime.getMcpStatus(created.session.id).servers).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ name: "example", status: "disabled" }),
+          ]),
+        );
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("registers hidden Computer Use tools without exposing them initially", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "pine-agent-runtime-"));
     temporaryDirectories.push(root);
@@ -591,6 +624,7 @@ describe("PineAgentRuntime", () => {
       expect(agentSession?.getActiveToolNames()).toContain(
         ACTIVATE_COMPUTER_USE_TOOL_NAME,
       );
+      expect(agentSession?.getActiveToolNames()).toContain("mcp");
       expect(agentSession?.getActiveToolNames()).not.toContain("list_apps");
     } finally {
       await runtime.dispose();

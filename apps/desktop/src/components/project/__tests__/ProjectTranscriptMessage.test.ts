@@ -123,6 +123,31 @@ describe("ProjectTranscriptMessage", () => {
     expect(wrapper.findComponent(ProjectToolCallMarker).exists()).toBe(true);
   });
 
+  it("shows a dedicated MCP call marker with its tool target", () => {
+    const wrapper = mountMessage({
+      createdAt: "2026-09-25T00:00:00.000Z",
+      id: "assistant-mcp-tool",
+      role: "assistant",
+      status: "complete",
+      blocks: [
+        {
+          type: "toolCall",
+          toolCall: {
+            id: "call-mcp",
+            name: "mcp",
+            status: "complete",
+            input: { server: "github", tool: "search_repositories", args: {} },
+          },
+        },
+      ],
+    });
+
+    expect(wrapper.findComponent(ProjectToolCallMarker).exists()).toBe(true);
+    expect(wrapper.text()).toContain(
+      "已执行 MCP 工具调用 github.search_repositories",
+    );
+  });
+
   it("renders session errors as destructive markers", () => {
     const wrapper = mountMessage({
       createdAt: "2026-08-26T00:00:00.000Z",

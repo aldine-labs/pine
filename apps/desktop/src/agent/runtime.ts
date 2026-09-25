@@ -22,6 +22,14 @@ import { Type } from "typebox";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import {
+  createMcpAdapter,
+  MCP_STATUS_EVENT,
+  MCP_TOOL_APPROVAL_REQUEST_EVENT,
+  type McpStatusSnapshot,
+  type McpToolApprovalRequest,
+} from "pi-mcp-adapter";
+import { loadMcpConfig } from "pi-mcp-adapter/config";
+import {
   isSandboxDeniedPayload,
   type PineAgentEvent,
   type PineAssistantMessageUpdate,
@@ -385,6 +393,8 @@ export function parseJudgeRulings(
 
 interface LiveAgentSession {
   session: AgentSession;
+  cwd: string;
+  mcpStatus?: McpStatusSnapshot;
   unsubscribe: () => void;
   agentDir: string;
   approvalMode: PineApprovalMode;
@@ -1479,6 +1489,7 @@ export class PineAgentRuntime {
       session: undefined as never,
       unsubscribe: () => undefined,
       agentDir: location.agentDir,
+      cwd: location.cwd,
       approvalMode: location.approvalMode ?? "auto-approve",
       gate: undefined as never,
       authorizationGrants: authorizationGrantsFromSessionEntries(
@@ -1567,6 +1578,36 @@ export class PineAgentRuntime {
         },
         computerUse.extension,
         skillTools.extension,
+        {
+          name: "pine-mcp-approval",
+          factory: (pi) => {
+            pi.events.on(MCP_STATUS_EVENT, (snapshot) => {
+              live.mcpStatus = snapshot as McpStatusSnapshot;
+              if (live.session) this.syncApprovalModeTools(live);
+            });
+            pi.events.on(MCP_TOOL_APPROVAL_REQUEST_EVENT, (value) => {
+              const request = value as McpToolApprovalRequest;
+              request.claim(async () => {
+                if (live.approvalMode === "YOLO") return "allow_once";
+                const decision = await live.gate.reviewPrivilegedCall({
+                  toolCallId: request.requestId,
+                  toolName: request.prefixedToolName,
+                  subject: `${request.serverName}.${request.originalToolName} ${JSON.stringify(request.args)}`,
+                  evidence:
+                    "MCP tools execute in an external server outside Pine's project sandbox.",
+                  signal: request.signal,
+                });
+                return decision.kind === "allow" ? "allow_once" : "deny";
+              });
+            });
+          },
+        },
+        {
+          name: "pi-mcp-adapter",
+          factory: createMcpAdapter({
+            configPath: path.join(location.agentDir, "mcp.json"),
+          }),
+        },
       ],
       noSkills: true,
       noThemes: true,
@@ -1641,6 +1682,7 @@ export class PineAgentRuntime {
       customTools,
     });
     live.session = session;
+    await session.bindExtensions({ mode: "rpc" });
     this.persistApprovalMode(live);
     this.applyContextCompactionStrategy(live, contextCompactionStrategy);
     // Pine presents every staged steering message together, so inject the
@@ -1781,11 +1823,15 @@ export class PineAgentRuntime {
 
   private syncApprovalModeTools(live: LiveAgentSession): void {
     const activeToolNames = live.session.getActiveToolNames();
+    const mcpToolNames = live.session
+      .getAllTools()
+      .filter((tool) => tool.sourceInfo.path === "<inline:pi-mcp-adapter>")
+      .map((tool) => tool.name);
     const nextToolNames = toolNamesForApprovalMode(
       toolNamesForMediaGenerationState(
         toolNamesForComputerUseState(
           toolNamesForSkillAuthoringState(
-            live.availableToolNames,
+            [...live.availableToolNames, ...mcpToolNames],
             live.skillAuthoringActive,
           ),
           live.computerUseActive,
@@ -1802,6 +1848,54 @@ export class PineAgentRuntime {
       return;
     }
     live.session.setActiveToolsByName(nextToolNames);
+  }
+
+  async reloadMcp(sessionId: string): Promise<{ updated: boolean }> {
+    const live = this.liveSessions.get(sessionId);
+    if (!live) return { updated: false };
+    if (!live.session.isIdle)
+      throw new Error(
+        "Finish the current response before reloading MCP servers.",
+      );
+    await live.session.reload();
+    this.syncApprovalModeTools(live);
+    return { updated: true };
+  }
+
+  getMcpStatus(sessionId: string): McpStatusSnapshot {
+    const live = this.liveSessions.get(sessionId);
+    const reported = live?.mcpStatus;
+    const configured = live
+      ? Object.entries(
+          loadMcpConfig(path.join(live.agentDir, "mcp.json"), live.cwd)
+            .mcpServers,
+        ).map(([name, definition]) => ({
+          name,
+          status:
+            definition.disabled === true
+              ? ("disabled" as const)
+              : ("not-connected" as const),
+          listenState: "disconnected" as const,
+          toolCount: 0,
+          directToolCount: 0,
+          disabled: definition.disabled === true,
+        }))
+      : [];
+    const servers = [
+      ...(reported?.servers ?? []),
+      ...configured.filter(
+        (server) =>
+          !reported?.servers.some((entry) => entry.name === server.name),
+      ),
+    ];
+    return {
+      version: reported?.version ?? 1,
+      servers,
+      totalTools: reported?.totalTools ?? 0,
+      totalResources: reported?.totalResources ?? 0,
+      connectedCount: reported?.connectedCount ?? 0,
+      disabledCount: servers.filter((server) => server.disabled).length,
+    };
   }
 
   setTinyFishApiKey(apiKey: string | undefined): { updated: boolean } {
