@@ -71,6 +71,9 @@ export default defineConfig(({ mode }) => ({
         "@earendil-works/pi-ai",
         "@earendil-works/pi-coding-agent",
         "@napi-rs/keyring",
+        // cross-spawn is CommonJS and calls require("child_process") at runtime.
+        // Leave it to Node's CJS loader instead of wrapping it in ESM chunks.
+        "cross-spawn",
         "yaml",
         // Optional native MCP Apps viewer. The adapter falls back to a browser
         // when glimpseui is not installed.
@@ -82,6 +85,10 @@ export default defineConfig(({ mode }) => ({
         /^node:/,
       ],
       output: {
+        // Rolldown's CommonJS bridge still needs require() for some bundled
+        // Node dependencies. ESM utility-process chunks have no global require.
+        banner:
+          'import { createRequire as __pineCreateRequire } from "node:module";\nglobalThis.require ??= __pineCreateRequire(import.meta.url);',
         chunkFileNames: "[name]-[hash].mjs",
       },
     },
