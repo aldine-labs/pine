@@ -9,6 +9,12 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-25
+
+### 修复 / Fixed
+
+- 修复打包版中 MCP 服务器无法正常使用的问题。Fixed MCP servers failing to run in the packaged app.
+
 ## [0.6.0] - 2026-09-25
 
 ### 新增 / Added
@@ -278,7 +284,8 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/phosphoros-works/pine/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/phosphoros-works/pine/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/phosphoros-works/pine/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/phosphoros-works/pine/compare/v0.5.2...v0.5.3
