@@ -9,6 +9,22 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-09-25
+
+### 新增 / Added
+
+- 项目现在可以单独选择强调色，提供八种配色。Projects can now have their own accent color, with eight themes to choose from.
+- 技能管理器现在可发现 Pi 提供的全局和项目 Skill；本地 Skill 可编辑，包内 Skill 以只读方式显示。The Skills manager now discovers global and project Pi skills; local skills can be edited, while package-provided skills are shown as read-only.
+
+### 变更 / Changed
+
+- 个人资料仍会自动保存，但编辑时不再显示未保存或已自动保存状态。Profiles continue to save automatically, without unsaved or automatically saved status messages while editing.
+
+### 修复 / Fixed
+
+- 上下文压缩期间发送的消息现在会排队，并在压缩完成后继续处理。Messages sent while context is being compacted are now queued and processed after compaction completes.
+- 修复 MCP 服务器编辑窗口标题缺失，并调整删除按钮的位置。Restored the MCP server editor title and corrected the delete button alignment.
+
 ## [0.6.1] - 2026-09-25
 
 ### 修复 / Fixed
@@ -284,7 +300,8 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/phosphoros-works/pine/compare/v0.6.1...v0.6.3
 [0.6.1]: https://github.com/phosphoros-works/pine/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/phosphoros-works/pine/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/phosphoros-works/pine/compare/v0.5.3...v0.5.4
