@@ -23,6 +23,10 @@ export interface PineSkillSummary {
   metadata?: Record<string, string>;
   name: string;
   scope: PineSkillScope;
+  /** Whether the skill is managed by Pine or discovered by Pi. */
+  managedBy?: "pine" | "pi";
+  /** Pi package Skills are visible but cannot be edited in place. */
+  readOnly?: boolean;
   /** Project-specific effective state for a global skill. */
   enabled?: boolean;
 }
@@ -39,6 +43,7 @@ export interface SkillScopeRequest {
 }
 
 export interface SkillIdentityRequest extends SkillScopeRequest {
+  managedBy?: "pine" | "pi";
   name: string;
 }
 

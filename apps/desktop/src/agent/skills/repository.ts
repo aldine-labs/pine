@@ -371,6 +371,7 @@ function summary(
     disableModelInvocation: skill.disableModelInvocation,
     ...(skill.license === undefined ? {} : { license: skill.license }),
     metadata: { ...skill.metadata },
+    managedBy: "pine",
     name: skill.name,
     scope,
     ...(enabled === undefined ? {} : { enabled }),
@@ -421,7 +422,7 @@ function normalizeResourcePath(resourcePath: string): string {
   return normalized;
 }
 
-async function collectSkillResources(
+export async function collectSkillResources(
   baseDir: string,
   relativeDirectory = "",
 ): Promise<PineSkillResource[]> {
@@ -467,6 +468,16 @@ export interface ResolvedPineSkill {
 
 export class PineSkillRepository {
   constructor(private readonly roots: PineSkillRoots) {}
+
+  /** Names stored in Pine-managed roots, including project-disabled globals. */
+  managedSkillNames(): Set<string> {
+    return new Set(
+      [
+        ...loadSkillsFromDir(this.roots.project).skills,
+        ...loadSkillsFromDir(this.roots.global).skills,
+      ].map((skill) => skill.name),
+    );
+  }
 
   /** Directories of valid packages that Skill Authoring may extend with resources. */
   authoringDirectories(): string[] {

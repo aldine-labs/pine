@@ -283,6 +283,8 @@ export default {
     title: "Skills",
     description: "管理全局和项目空间指令。全局 Skill 开关仅对当前项目生效。",
     scope: { global: "全局", project: "项目" },
+    piPackageReadOnly:
+      "此 Skill 来自已安装的 Pi 包。请修改包的源文件来更新它。",
     globalEnabledLabel: "在当前项目中使用 {name}",
     new: "新建 Skill",
     create: "新建",

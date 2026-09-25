@@ -303,6 +303,8 @@ export default {
     description:
       "Manage global and project instructions. Global switches apply only to this project.",
     scope: { global: "Global", project: "Project" },
+    piPackageReadOnly:
+      "Provided by an installed Pi package. Edit the package source to change this Skill.",
     globalEnabledLabel: "Use {name} in this project",
     new: "New Skill",
     create: "Create",

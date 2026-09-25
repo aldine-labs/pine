@@ -135,6 +135,10 @@ import {
 } from "./media/models";
 import { PineSkillRepository } from "./skills/repository";
 import {
+  filterPineManagedSkills,
+  piProjectSkillPaths,
+} from "./skills/piDiscovery";
+import {
   readPineAgentSettings,
   writeImageModelSelection,
   writeUtilityModelSelection,
@@ -393,6 +397,12 @@ export function parseJudgeRulings(
 
 interface LiveAgentSession {
   session: AgentSession;
+  queuedCompactionPrompts: Array<{
+    message: string;
+    approvalMode: PineApprovalMode;
+    locale: "en-US" | "zh-CN";
+  }>;
+  resumingCompactionPrompts: boolean;
   cwd: string;
   mcpStatus?: McpStatusSnapshot;
   unsubscribe: () => void;
@@ -939,11 +949,17 @@ export class PineAgentRuntime {
         resolve(result(true));
       };
 
-      // AgentSession.prompt rejects during compaction before it can queue a
-      // steering message, so stage it through the session queue instead.
+      // AgentSession.prompt rejects during compaction, so stage steering
+      // messages in the runtime and submit them after compaction completes.
       const prompt =
-        streamingBehavior === "steer" && live.session.isCompacting
-          ? live.session.steer(message).then(() => {
+        streamingBehavior === "steer" &&
+        (live.session.isCompacting || live.resumingCompactionPrompts)
+          ? Promise.resolve().then(() => {
+              live.queuedCompactionPrompts.push({
+                message,
+                approvalMode,
+                locale,
+              });
               this.resumeQueuedMessagesWhenIdle(live);
             })
           : live.session.prompt(message, {
@@ -983,13 +999,41 @@ export class PineAgentRuntime {
   }
 
   private resumeQueuedMessagesWhenIdle(live: LiveAgentSession): void {
-    void live.session.waitForIdle().then(async () => {
-      if (!live.session.isIdle || live.session.pendingMessageCount === 0) return;
-
+    if (live.resumingCompactionPrompts) return;
+    live.resumingCompactionPrompts = true;
+    void (async () => {
       const sessionId = live.session.sessionId;
-      this.options.emit({ type: "run-state", sessionId, state: "running" });
       try {
-        await live.session.continue();
+        await live.session.waitForIdle();
+        while (live.queuedCompactionPrompts.length > 0) {
+          const queued = live.queuedCompactionPrompts.shift();
+          if (!queued) continue;
+
+          live.locale = queued.locale;
+          live.latestUserPrompt = queued.message;
+          this.setApprovalMode(live, queued.approvalMode);
+          live.gate?.resetTurn();
+          this.options.emit({ type: "run-state", sessionId, state: "running" });
+          try {
+            await live.session.prompt(queued.message, {
+              source: "interactive",
+            });
+          } catch (error) {
+            const errorMessage = toErrorMessage(error);
+            this.options.emit({
+              type: "session-error",
+              sessionId,
+              errorId: randomUUID(),
+              message: errorMessage,
+            });
+            this.options.emit({
+              type: "run-state",
+              sessionId,
+              state: "failed",
+              error: errorMessage,
+            });
+          }
+        }
       } catch (error) {
         const errorMessage = toErrorMessage(error);
         this.options.emit({
@@ -1005,11 +1049,15 @@ export class PineAgentRuntime {
           error: errorMessage,
         });
       } finally {
+        live.resumingCompactionPrompts = false;
         if (live.session.isIdle) {
           this.options.emit({ type: "run-state", sessionId, state: "idle" });
         }
+        if (live.queuedCompactionPrompts.length > 0) {
+          this.resumeQueuedMessagesWhenIdle(live);
+        }
       }
-    });
+    })();
   }
 
   /** Remove one still-queued steering message without disturbing its siblings. */
@@ -1524,6 +1572,8 @@ export class PineAgentRuntime {
     );
     const live: LiveAgentSession = {
       session: undefined as never,
+      queuedCompactionPrompts: [],
+      resumingCompactionPrompts: false,
       unsubscribe: () => undefined,
       agentDir: location.agentDir,
       cwd: location.cwd,
@@ -1592,6 +1642,7 @@ export class PineAgentRuntime {
       agentDir: location.agentDir,
       settingsManager,
       noExtensions: true,
+      additionalSkillPaths: piProjectSkillPaths(location.cwd),
       extensionFactories: [
         {
           name: "pine-approval-mode",
@@ -1646,8 +1697,12 @@ export class PineAgentRuntime {
           }),
         },
       ],
-      noSkills: true,
       noThemes: true,
+      skillsOverride: filterPineManagedSkills(
+        skillRepository,
+        location.cwd,
+        location.agentDir,
+      ),
       systemPromptOverride: () => systemPromptForPlatform(PINE_SYSTEM_PROMPT),
     });
     await resourceLoader.reload();

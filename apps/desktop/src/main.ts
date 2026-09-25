@@ -16,9 +16,23 @@ import {
   type IpcMainEvent,
   type OpenDialogOptions,
 } from "electron";
+import {
+  DefaultResourceLoader,
+  loadSkillsFromDir,
+  SettingsManager,
+  type Skill as PiSkill,
+} from "@earendil-works/pi-coding-agent";
 import started from "electron-squirrel-startup";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { ProjectRuntimeRegistry } from "./main/projectRuntime";
@@ -52,7 +66,16 @@ import {
 } from "./main/windowsSandbox";
 import { ModelMetadataService } from "./main/modelMetadata";
 import { ProjectRepository } from "./main/projects/projectRepository";
-import { PineSkillRepository } from "./agent/skills/repository";
+import {
+  collectSkillResources,
+  PineSkillRepository,
+} from "./agent/skills/repository";
+import {
+  filterPineManagedSkills,
+  piProjectSkillPaths,
+  pineScopeForPiSkill,
+  summarizePiSkill,
+} from "./agent/skills/piDiscovery";
 import {
   readPineAgentSettings,
   writeContextCompactionStrategy,
@@ -414,6 +437,16 @@ const SkillNameSchema = z
   .min(1)
   .max(64)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const PiSkillNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9-]+$/)
+  .refine(
+    (name) =>
+      !name.startsWith("-") && !name.endsWith("-") && !name.includes("--"),
+  );
 const ProjectMutationSchema = z
   .object({
     defaultFolderId: z.uuid(),
@@ -461,7 +494,8 @@ const SkillScopeRequestSchema = z
     }
   });
 const SkillIdentityRequestSchema = SkillScopeRequestSchema.safeExtend({
-  name: SkillNameSchema,
+  managedBy: z.enum(["pine", "pi"]).optional(),
+  name: PiSkillNameSchema,
 });
 const WriteSkillRequestSchema = SkillIdentityRequestSchema.safeExtend({
   content: z.string().trim().min(1).max(1_000_000),
@@ -1543,6 +1577,153 @@ async function mcpProjectCwd(projectId: string): Promise<string> {
   return folder.path;
 }
 
+async function piSkillResourceLoader(
+  projectId: string | undefined,
+  repository: PineSkillRepository,
+): Promise<DefaultResourceLoader> {
+  const agentDir = getPineAgentDirectory();
+  const cwd = projectId ? await mcpProjectCwd(projectId) : agentDir;
+  const settingsManager = SettingsManager.create(cwd, agentDir, {
+    projectTrusted: false,
+  });
+  const loader = new DefaultResourceLoader({
+    cwd,
+    agentDir,
+    settingsManager,
+    noExtensions: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+    additionalSkillPaths: projectId ? piProjectSkillPaths(cwd) : [],
+    skillsOverride: filterPineManagedSkills(repository, cwd, agentDir),
+  });
+  await loader.reload();
+  return loader;
+}
+
+async function readPiSkill(
+  projectId: string | undefined,
+  repository: PineSkillRepository,
+  scope: PineSkillScope,
+  name: string,
+): Promise<ReadSkillResult> {
+  const loader = await piSkillResourceLoader(projectId, repository);
+  const skill = loader
+    .getSkills()
+    .skills.find(
+      (candidate) =>
+        candidate.name === name && pineScopeForPiSkill(candidate) === scope,
+    );
+  if (!skill) throw new Error(`Pi skill "${name}" was not found.`);
+
+  return piSkillReadResult(skill);
+}
+
+async function piSkillReadResult(skill: PiSkill): Promise<ReadSkillResult> {
+  return {
+    content: await readFile(skill.filePath, "utf8"),
+    resources: await collectSkillResources(skill.baseDir),
+    skill: summarizePiSkill(skill),
+    skillDirectory: skill.baseDir,
+  };
+}
+
+async function editPiSkill(
+  projectId: string | undefined,
+  repository: PineSkillRepository,
+  scope: PineSkillScope,
+  name: string,
+  content: string,
+): Promise<ReadSkillResult> {
+  const loader = await piSkillResourceLoader(projectId, repository);
+  const skill = loader
+    .getSkills()
+    .skills.find(
+      (candidate) =>
+        candidate.name === name && pineScopeForPiSkill(candidate) === scope,
+    );
+  if (!skill) throw new Error(`Pi skill "${name}" was not found.`);
+  if (summarizePiSkill(skill).readOnly) {
+    throw new Error("This Pi Skill is package-managed and cannot be edited.");
+  }
+
+  const normalizedContent = `${content.trim()}\n`;
+  if (
+    normalizedContent.trim().length === 0 ||
+    Buffer.byteLength(normalizedContent, "utf8") > 1_000_000
+  ) {
+    throw new Error("SKILL.md must contain 1-1,000,000 bytes of content.");
+  }
+
+  const validationDirectory = path.join(
+    skill.baseDir,
+    `.pine-skill-validation-${randomUUID()}`,
+  );
+  const stagedFile = `${skill.filePath}.${randomUUID()}.tmp`;
+  await mkdir(validationDirectory, { recursive: false });
+  try {
+    await writeFile(
+      path.join(validationDirectory, "SKILL.md"),
+      normalizedContent,
+      {
+        encoding: "utf8",
+        flag: "wx",
+      },
+    );
+    const validation = loadSkillsFromDir({
+      dir: validationDirectory,
+      source: "temporary",
+    });
+    if (validation.skills.length !== 1 || validation.skills[0]?.name !== name) {
+      throw new Error(
+        validation.diagnostics[0]?.message ??
+          "The edited Skill is not valid Pi Skill content.",
+      );
+    }
+    await writeFile(stagedFile, normalizedContent, {
+      encoding: "utf8",
+      flag: "wx",
+    });
+    await rename(stagedFile, skill.filePath);
+  } finally {
+    await rm(stagedFile, { force: true });
+    await rm(validationDirectory, { recursive: true, force: true });
+  }
+
+  return readPiSkill(projectId, repository, scope, name);
+}
+
+async function removePiSkill(
+  projectId: string | undefined,
+  repository: PineSkillRepository,
+  scope: PineSkillScope,
+  name: string,
+): Promise<boolean> {
+  const loader = await piSkillResourceLoader(projectId, repository);
+  const skill = loader
+    .getSkills()
+    .skills.find(
+      (candidate) =>
+        candidate.name === name && pineScopeForPiSkill(candidate) === scope,
+    );
+  if (!skill) throw new Error(`Pi skill "${name}" was not found.`);
+  if (summarizePiSkill(skill).readOnly) {
+    throw new Error("This Pi Skill is package-managed and cannot be deleted.");
+  }
+
+  const trashDirectory = path.join(
+    skill.baseDir,
+    ".trash",
+    `${name}-${Date.now()}-${randomUUID()}`,
+  );
+  await mkdir(trashDirectory, { recursive: true });
+  await rename(
+    skill.filePath,
+    path.join(trashDirectory, path.basename(skill.filePath)),
+  );
+  return true;
+}
+
 async function mcpCatalog(
   event: Electron.IpcMainInvokeEvent,
   projectId: string,
@@ -1599,9 +1780,30 @@ ipcMain.handle(
   LIST_SKILLS_CHANNEL,
   async (_event, request: unknown): Promise<ListSkillsResult> => {
     const parsed = SkillScopeRequestSchema.parse(request);
-    return (await skillRepositoryFor(parsed.scope, parsed.projectId)).list(
-      parsed.scope,
-    );
+    const repository = await skillRepositoryFor(parsed.scope, parsed.projectId);
+    const managed = repository.list(parsed.scope);
+    const piSkills = await piSkillResourceLoader(parsed.projectId, repository);
+    const discovered = piSkills.getSkills();
+    return {
+      diagnostics: [
+        ...managed.diagnostics,
+        ...discovered.diagnostics.map((entry) => ({
+          message: entry.message,
+          type:
+            entry.type === "collision"
+              ? ("collision" as const)
+              : entry.type === "error"
+                ? ("error" as const)
+                : ("warning" as const),
+        })),
+      ],
+      skills: [
+        ...managed.skills,
+        ...discovered.skills
+          .filter((skill) => pineScopeForPiSkill(skill) === parsed.scope)
+          .map(summarizePiSkill),
+      ],
+    };
   },
 );
 
@@ -1609,10 +1811,16 @@ ipcMain.handle(
   READ_SKILL_CHANNEL,
   async (_event, request: unknown): Promise<ReadSkillResult> => {
     const parsed = SkillIdentityRequestSchema.parse(request);
-    return (await skillRepositoryFor(parsed.scope, parsed.projectId)).read(
-      parsed.scope,
-      parsed.name,
-    );
+    const repository = await skillRepositoryFor(parsed.scope, parsed.projectId);
+    if (parsed.managedBy === "pi") {
+      return readPiSkill(
+        parsed.projectId,
+        repository,
+        parsed.scope,
+        parsed.name,
+      );
+    }
+    return repository.read(parsed.scope, parsed.name);
   },
 );
 
@@ -1620,6 +1828,9 @@ ipcMain.handle(
   CREATE_SKILL_CHANNEL,
   async (_event, request: unknown): Promise<ReadSkillResult> => {
     const parsed = WriteSkillRequestSchema.parse(request);
+    if (parsed.managedBy === "pi") {
+      throw new Error("New Skills must use Pine-managed storage.");
+    }
     return (await skillRepositoryFor(parsed.scope, parsed.projectId)).create(
       parsed.scope,
       parsed.name,
@@ -1632,11 +1843,17 @@ ipcMain.handle(
   EDIT_SKILL_CHANNEL,
   async (_event, request: unknown): Promise<ReadSkillResult> => {
     const parsed = WriteSkillRequestSchema.parse(request);
-    return (await skillRepositoryFor(parsed.scope, parsed.projectId)).edit(
-      parsed.scope,
-      parsed.name,
-      parsed.content,
-    );
+    const repository = await skillRepositoryFor(parsed.scope, parsed.projectId);
+    if (parsed.managedBy === "pi") {
+      return editPiSkill(
+        parsed.projectId,
+        repository,
+        parsed.scope,
+        parsed.name,
+        parsed.content,
+      );
+    }
+    return repository.edit(parsed.scope, parsed.name, parsed.content);
   },
 );
 
@@ -1644,10 +1861,17 @@ ipcMain.handle(
   REMOVE_SKILL_CHANNEL,
   async (_event, request: unknown): Promise<RemoveSkillResult> => {
     const parsed = SkillIdentityRequestSchema.parse(request);
+    const repository = await skillRepositoryFor(parsed.scope, parsed.projectId);
     return {
-      removed: await (
-        await skillRepositoryFor(parsed.scope, parsed.projectId)
-      ).remove(parsed.scope, parsed.name),
+      removed:
+        parsed.managedBy === "pi"
+          ? await removePiSkill(
+              parsed.projectId,
+              repository,
+              parsed.scope,
+              parsed.name,
+            )
+          : await repository.remove(parsed.scope, parsed.name),
     };
   },
 );

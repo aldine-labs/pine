@@ -56,6 +56,8 @@ const skillScopes = ["global", "project"] as const;
 const activeScope = ref<PineSkillScope>("global");
 const skills = ref<PineSkillSummary[]>([]);
 const selectedName = ref("");
+const selectedManagedBy = ref<"pine" | "pi">("pine");
+const selectedReadOnly = ref(false);
 const description = ref("");
 const license = ref("");
 const compatibility = ref("");
@@ -70,15 +72,26 @@ const isDeleteConfirmOpen = ref(false);
 const isRemoving = ref(false);
 const deleteName = ref("");
 const togglingNames = ref(new Set<string>());
-const canSave = computed(
-  () =>
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(selectedName.value) &&
+const isReadOnly = computed(() => !isCreating.value && selectedReadOnly.value);
+const canSave = computed(() => {
+  const isValidName =
+    selectedManagedBy.value === "pi"
+      ? /^[a-z0-9-]+$/.test(selectedName.value) &&
+        !selectedName.value.startsWith("-") &&
+        !selectedName.value.endsWith("-") &&
+        !selectedName.value.includes("--")
+      : /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(selectedName.value);
+  return (
+    isValidName &&
     selectedName.value.length <= 64 &&
     description.value.trim().length > 0 &&
     description.value.trim().length <= 1_024 &&
-    compatibility.value.trim().length <= 500 &&
-    !isSaving.value,
-);
+    (selectedManagedBy.value === "pi" ||
+      compatibility.value.trim().length <= 500) &&
+    !isReadOnly.value &&
+    !isSaving.value
+  );
+});
 
 interface ParsedSkillDocument {
   body: string;
@@ -143,7 +156,10 @@ function reportError(error: unknown, operation: "load" | "save" | "remove") {
   });
 }
 
-async function load(nameToSelect?: string): Promise<void> {
+async function load(
+  nameToSelect?: string,
+  managedByToSelect: "pine" | "pi" = "pine",
+): Promise<void> {
   isLoading.value = true;
   try {
     skills.value = (await window.pine.listSkills(scopeRequest())).skills;
@@ -151,7 +167,7 @@ async function load(nameToSelect?: string): Promise<void> {
       nameToSelect &&
       skills.value.some((skill) => skill.name === nameToSelect)
     ) {
-      await selectSkill(nameToSelect);
+      await selectSkill(nameToSelect, managedByToSelect);
     }
   } catch (error) {
     reportError(error, "load");
@@ -160,10 +176,19 @@ async function load(nameToSelect?: string): Promise<void> {
   }
 }
 
-async function selectSkill(name: string): Promise<void> {
-  const result = await window.pine.readSkill({ ...scopeRequest(), name });
+async function selectSkill(
+  name: string,
+  managedBy: "pine" | "pi" = "pine",
+): Promise<void> {
+  const result = await window.pine.readSkill({
+    ...scopeRequest(),
+    managedBy,
+    name,
+  });
   const parsed = parseSkillDocument(result.content);
   selectedName.value = result.skill.name;
+  selectedManagedBy.value = result.skill.managedBy ?? managedBy;
+  selectedReadOnly.value = result.skill.readOnly === true;
   description.value =
     typeof parsed.frontmatter.description === "string"
       ? parsed.frontmatter.description
@@ -186,9 +211,12 @@ async function selectSkill(name: string): Promise<void> {
   isCreating.value = false;
 }
 
-async function selectSkillSafely(name: string): Promise<void> {
+async function selectSkillSafely(
+  name: string,
+  managedBy: "pine" | "pi" = "pine",
+): Promise<void> {
   try {
-    await selectSkill(name);
+    await selectSkill(name, managedBy);
   } catch (error) {
     reportError(error, "load");
   }
@@ -196,6 +224,8 @@ async function selectSkillSafely(name: string): Promise<void> {
 
 function startCreating(): void {
   selectedName.value = "";
+  selectedManagedBy.value = "pine";
+  selectedReadOnly.value = false;
   description.value = "";
   license.value = "";
   compatibility.value = "";
@@ -211,19 +241,21 @@ function updateName(name: string | number): void {
 }
 
 async function save(): Promise<void> {
-  if (!canSave.value) return;
+  if (!canSave.value || isReadOnly.value) return;
   isSaving.value = true;
   try {
     const request = {
       ...scopeRequest(),
+      managedBy: selectedManagedBy.value,
       name: selectedName.value,
       content: serializeSkillDocument(),
     };
     if (isCreating.value) await window.pine.createSkill(request);
     else await window.pine.editSkill(request);
     const savedName = selectedName.value;
+    const savedManagedBy = selectedManagedBy.value;
     isCreating.value = false;
-    await load(savedName);
+    await load(savedName, savedManagedBy);
   } catch (error) {
     reportError(error, "save");
   } finally {
@@ -232,7 +264,7 @@ async function save(): Promise<void> {
 }
 
 function removeSelected(): void {
-  if (!selectedName.value || isCreating.value) return;
+  if (!selectedName.value || isCreating.value || isReadOnly.value) return;
   deleteName.value = selectedName.value;
   isDeleteConfirmOpen.value = true;
 }
@@ -244,6 +276,7 @@ async function confirmRemoveSelected(): Promise<void> {
   try {
     await window.pine.removeSkill({
       ...scopeRequest(),
+      managedBy: selectedManagedBy.value,
       name,
     });
     isDeleteConfirmOpen.value = false;
@@ -347,7 +380,7 @@ watch(activeScope, () => {
                     </Item>
                     <Item
                       v-for="skill in skills"
-                      :key="skill.name"
+                      :key="`${skill.managedBy ?? 'pine'}:${skill.name}`"
                       :variant="
                         skill.name === selectedName && !isCreating
                           ? 'muted'
@@ -361,7 +394,12 @@ watch(activeScope, () => {
                         <button
                           type="button"
                           class="min-w-0 text-left"
-                          @click="selectSkillSafely(skill.name)"
+                          @click="
+                            selectSkillSafely(
+                              skill.name,
+                              skill.managedBy ?? 'pine',
+                            )
+                          "
                         >
                           <ItemTitle class="w-full">{{ skill.name }}</ItemTitle>
                           <ItemDescription>
@@ -370,7 +408,7 @@ watch(activeScope, () => {
                         </button>
                       </ItemContent>
                       <ItemActions
-                        v-if="scope === 'global'"
+                        v-if="scope === 'global' && skill.managedBy !== 'pi'"
                         class="mr-1 shrink-0"
                       >
                         <Switch
@@ -392,6 +430,9 @@ watch(activeScope, () => {
               <Separator orientation="vertical" />
 
               <form class="flex flex-col p-5" @submit.prevent="save">
+                <p v-if="isReadOnly" class="mb-3 text-xs text-muted-foreground">
+                  {{ t("skills.piPackageReadOnly") }}
+                </p>
                 <FieldGroup class="grid grid-cols-2 gap-2">
                   <Field class="gap-0">
                     <FieldLabel :for="`skill-${scope}-name`" class="sr-only">
@@ -415,6 +456,7 @@ watch(activeScope, () => {
                     <Input
                       :id="`skill-${scope}-description`"
                       v-model="description"
+                      :disabled="isReadOnly"
                       :placeholder="t('skills.descriptionPlaceholder')"
                     />
                   </Field>
@@ -428,6 +470,7 @@ watch(activeScope, () => {
                     <Input
                       :id="`skill-${scope}-license`"
                       v-model="license"
+                      :disabled="isReadOnly"
                       :placeholder="t('skills.licensePlaceholder')"
                     />
                   </Field>
@@ -441,6 +484,7 @@ watch(activeScope, () => {
                     <Input
                       :id="`skill-${scope}-compatibility`"
                       v-model="compatibility"
+                      :disabled="isReadOnly"
                       :placeholder="t('skills.compatibilityPlaceholder')"
                     />
                   </Field>
@@ -454,6 +498,7 @@ watch(activeScope, () => {
                     <Input
                       :id="`skill-${scope}-allowed-tools`"
                       v-model="allowedTools"
+                      :disabled="isReadOnly"
                       :placeholder="t('skills.allowedToolsPlaceholder')"
                     />
                   </Field>
@@ -466,6 +511,7 @@ watch(activeScope, () => {
                   <Textarea
                     :id="`skill-${scope}-body`"
                     v-model="body"
+                    :disabled="isReadOnly"
                     class="h-full min-h-0 overflow-y-auto [field-sizing:fixed] font-mono text-xs"
                     spellcheck="false"
                     :placeholder="t('skills.contentPlaceholder')"
@@ -489,13 +535,17 @@ watch(activeScope, () => {
                     type="button"
                     variant="destructive"
                     size="sm"
-                    :disabled="isCreating || !selectedName"
+                    :disabled="isCreating || !selectedName || isReadOnly"
                     @click="removeSelected"
                   >
                     <Trash2Icon data-icon="inline-start" />
                     {{ t("common.delete") }}
                   </Button>
-                  <Button type="submit" size="sm" :disabled="!canSave">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    :disabled="!canSave || isReadOnly"
+                  >
                     {{
                       isSaving
                         ? t("common.saving")
