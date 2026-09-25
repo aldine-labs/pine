@@ -105,8 +105,8 @@
     background-color: var(--attention-flash-color);
     opacity: 0;
     pointer-events: none;
-    animation: attention-flash-fill
-      1.8s var(--attention-flash-iteration-count, infinite);
+    animation: attention-flash-fill 1.8s
+      var(--attention-flash-iteration-count, infinite);
   }
 
   @media (prefers-reduced-motion: reduce) {

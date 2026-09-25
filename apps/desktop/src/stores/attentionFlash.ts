@@ -45,7 +45,10 @@ export const useAttentionFlashStore = defineStore("attention-flash", () => {
   function flashOnce(id: string): void {
     if (!id || oneShotFlashingIds.value.has(id)) return;
     oneShotFlashingIds.value = new Set([...oneShotFlashingIds.value, id]);
-    oneShotTimers.set(id, setTimeout(() => stopOnce(id), oneShotDurationMs));
+    oneShotTimers.set(
+      id,
+      setTimeout(() => stopOnce(id), oneShotDurationMs),
+    );
   }
 
   function stopAll(): void {
