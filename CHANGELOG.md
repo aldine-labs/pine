@@ -9,6 +9,20 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-25
+
+### 新增 / Added
+
+- 新增 MCP 服务器管理，可配置项目级或全局服务器，让 AI 在会话中使用外部工具。Added MCP server management for project-level or global servers, making external tools available to the AI during sessions.
+
+### 变更 / Changed
+
+- 切换模型时保留各模型原有的上下文压缩设置。Model-specific context compaction settings are now preserved when switching models.
+
+### 修复 / Fixed
+
+- 恢复侧栏顶部拖动窗口的功能。Restored window dragging from the top of the sidebar.
+
 ## [0.5.4] - 2026-09-23
 
 ### 修复 / Fixed
@@ -264,7 +278,13 @@ Starting with 0.4.4, release notes are written in both Chinese and English.
 - Reproducible main-branch artifacts and a manually gated production release workflow.
 - R2-backed update discovery, verified downloads, and in-app macOS replacement updates.
 
-[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.4.8...HEAD
+[Unreleased]: https://github.com/phosphoros-works/pine/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/phosphoros-works/pine/compare/v0.5.4...v0.6.0
+[0.5.4]: https://github.com/phosphoros-works/pine/compare/v0.5.3...v0.5.4
+[0.5.3]: https://github.com/phosphoros-works/pine/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/phosphoros-works/pine/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/phosphoros-works/pine/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/phosphoros-works/pine/compare/v0.4.8...v0.5.0
 [0.4.8]: https://github.com/phosphoros-works/pine/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/phosphoros-works/pine/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/phosphoros-works/pine/compare/v0.4.5...v0.4.6
