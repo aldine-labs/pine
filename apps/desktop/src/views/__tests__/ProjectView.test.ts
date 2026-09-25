@@ -88,6 +88,10 @@ it("renders the home action beside the sidebar toggle", async () => {
   const leading = wrapper.get('[data-slot="window-titlebar-leading"]');
   const home = leading.get('[aria-label="关闭项目"]');
 
+  expect(
+    wrapper.get('[data-slot="window-titlebar-sidebar-drag-region"]').classes(),
+  ).toContain("window-drag");
+
   expect(leading.element.children).toHaveLength(2);
   expect(leading.element.firstElementChild?.getAttribute("data-slot")).toBe(
     "sidebar-trigger",

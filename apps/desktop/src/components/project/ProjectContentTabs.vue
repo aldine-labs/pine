@@ -404,17 +404,6 @@ watch(activeSession, (session) => {
         )
       "
     >
-      <!-- Keep a fixed drag target even when tabs fill the scrollable row. -->
-      <div
-        data-slot="project-content-tabs-drag-edge-top"
-        aria-hidden="true"
-        class="window-drag absolute inset-x-0 top-0 z-10 h-2.5"
-      />
-      <div
-        data-slot="project-content-tabs-drag-edge-bottom"
-        aria-hidden="true"
-        class="window-drag absolute inset-x-0 bottom-0 z-10 h-2.5"
-      />
       <div
         ref="tabList"
         data-slot="project-content-tab-list"
@@ -443,7 +432,7 @@ watch(activeSession, (session) => {
               orientation="vertical"
               :class="
                 cn(
-                  'project-content-tab-separator window-drag h-7 self-center transition-opacity',
+                  'project-content-tab-separator window-no-drag h-7 self-center transition-opacity',
                   shouldShowSeparator(index) ? 'opacity-100' : 'opacity-0',
                 )
               "
