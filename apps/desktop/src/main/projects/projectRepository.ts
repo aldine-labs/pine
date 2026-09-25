@@ -18,6 +18,7 @@ import {
   PROJECT_SESSIONS_DIRECTORY,
   PROJECT_SKILLS_DIRECTORY,
   PROJECT_SKILLS_SETTINGS_FILE,
+  PROJECT_COLOR_THEMES,
   type PineProject,
   type PineSessionGroup,
   type ProjectFolderInput,
@@ -46,6 +47,10 @@ const StoredProjectSchema = z.object({
   id: z.uuid(),
   lastOpenedAt: z.iso.datetime().optional(),
   name: z.string().trim().min(1).max(100),
+  projectColorTheme: z
+    .union([z.enum(PROJECT_COLOR_THEMES), z.literal("neutral")])
+    .transform((theme) => (theme === "neutral" ? "olive" : theme))
+    .default("olive"),
   schemaVersion: z.literal(PROJECT_SCHEMA_VERSION),
   sessionGroups: z.array(ProjectSessionGroupSchema).default([]),
   updatedAt: z.iso.datetime(),
@@ -174,6 +179,7 @@ export class ProjectRepository {
       folders,
       id: randomUUID(),
       name: input.name,
+      projectColorTheme: input.projectColorTheme ?? "olive",
       schemaVersion: PROJECT_SCHEMA_VERSION,
       sessionGroups: [],
       updatedAt: now,
@@ -210,6 +216,7 @@ export class ProjectRepository {
       defaultFolderId: input.defaultFolderId,
       folders,
       name: input.name,
+      projectColorTheme: input.projectColorTheme ?? current.projectColorTheme,
       sessionGroups: current.sessionGroups,
       updatedAt: new Date().toISOString(),
     });

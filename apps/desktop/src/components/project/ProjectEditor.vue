@@ -32,9 +32,12 @@ import {
 } from "@/components/ui/table";
 import type {
   PineProject,
+  ProjectColorTheme,
   ProjectFolderInput,
   ProjectMutationInput,
 } from "@/shared/projects";
+import { PROJECT_COLOR_THEMES } from "@/shared/projects";
+import { PROJECT_COLOR_THEME_OPTIONS } from "@/lib/projectColorThemes";
 
 interface Props {
   isSaving?: boolean;
@@ -55,6 +58,7 @@ const emit = defineEmits<{
 }>();
 const { t } = useI18n();
 const name = ref("");
+const projectColorTheme = ref<ProjectColorTheme>("olive");
 const folders = ref<EditorProjectFolder[]>([]);
 const defaultFolderId = ref("");
 const originalFolderNames = new Map<string, string>();
@@ -82,6 +86,7 @@ const canSubmit = computed(
 function reset(): void {
   originalFolderNames.clear();
   name.value = props.project?.name ?? "";
+  projectColorTheme.value = props.project?.projectColorTheme ?? "olive";
   folders.value = props.project?.folders.map((folder) => ({ ...folder })) ?? [];
   defaultFolderId.value = props.project?.defaultFolderId ?? "";
   const selectedDefaultFolder = folders.value.find(
@@ -163,6 +168,15 @@ function updateFolderAccess(
   }
 }
 
+function updateProjectColorTheme(value: unknown): void {
+  if (
+    typeof value === "string" &&
+    PROJECT_COLOR_THEMES.includes(value as ProjectColorTheme)
+  ) {
+    projectColorTheme.value = value as ProjectColorTheme;
+  }
+}
+
 function toFolderInput(folder: EditorProjectFolder): ProjectFolderInput {
   return {
     access: folder.access,
@@ -178,6 +192,7 @@ function submit(): void {
     defaultFolderId: defaultFolderId.value,
     folders: folders.value.map(toFolderInput),
     name: name.value.trim(),
+    projectColorTheme: projectColorTheme.value,
   });
 }
 
@@ -199,6 +214,41 @@ watch(() => props.project, reset, { immediate: true });
             autocomplete="off"
             :placeholder="t('projects.editor.namePlaceholder')"
           />
+        </Field>
+
+        <Field>
+          <FieldLabel id="project-color-theme-label">
+            {{ t("projects.editor.colorThemeLabel") }}
+          </FieldLabel>
+          <Select
+            :model-value="projectColorTheme"
+            @update:model-value="updateProjectColorTheme"
+          >
+            <SelectTrigger
+              class="w-full"
+              aria-labelledby="project-color-theme-label"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem
+                  v-for="option in PROJECT_COLOR_THEME_OPTIONS"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  <span class="flex items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      class="size-3 rounded-full ring-1 ring-border"
+                      :style="{ backgroundColor: option.swatch }"
+                    />
+                    {{ t(`projects.editor.colorThemes.${option.value}`) }}
+                  </span>
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </Field>
 
         <Field orientation="horizontal">

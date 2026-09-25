@@ -115,6 +115,19 @@ export const PICK_PROJECT_FOLDERS_CHANNEL = "project:pick-folders" as const;
 
 export type ProjectFolderAccess = "read-only" | "read-write";
 
+export const PROJECT_COLOR_THEMES = [
+  "olive",
+  "red",
+  "rose",
+  "orange",
+  "green",
+  "blue",
+  "yellow",
+  "violet",
+] as const;
+
+export type ProjectColorTheme = (typeof PROJECT_COLOR_THEMES)[number];
+
 export interface ProjectFolderInput {
   access: ProjectFolderAccess;
   id: string;
@@ -139,6 +152,7 @@ export interface PineProject {
   id: string;
   lastOpenedAt?: string;
   name: string;
+  projectColorTheme?: ProjectColorTheme;
   schemaVersion: 1;
   sessionGroups?: PineSessionGroup[];
   updatedAt: string;
@@ -148,6 +162,7 @@ export interface ProjectMutationInput {
   defaultFolderId: string;
   folders: ProjectFolderInput[];
   name: string;
+  projectColorTheme?: ProjectColorTheme;
 }
 
 export type CreateProjectRequest = ProjectMutationInput;

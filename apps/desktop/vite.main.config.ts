@@ -6,7 +6,11 @@ import { defineConfig } from "vite";
 export default defineConfig({
   build: {
     rollupOptions: {
-      external: ["@anthropic-ai/sandbox-runtime", "node:sqlite"],
+      external: [
+        "@anthropic-ai/sandbox-runtime",
+        "@earendil-works/pi-coding-agent",
+        "node:sqlite",
+      ],
     },
   },
 });

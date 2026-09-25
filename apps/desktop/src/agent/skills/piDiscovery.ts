@@ -2,7 +2,6 @@ import type {
   LoadSkillsResult,
   Skill as PiSkill,
 } from "@earendil-works/pi-coding-agent";
-import { loadSkills } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -39,6 +38,7 @@ export function filterPineManagedSkills(
   repository: PineSkillRepository,
   cwd: string,
   agentDir: string,
+  loadSkills: typeof import("@earendil-works/pi-coding-agent").loadSkills,
 ) {
   const projectSkillPaths = piProjectSkillPaths(cwd);
   return (result: LoadSkillsResult): LoadSkillsResult => {

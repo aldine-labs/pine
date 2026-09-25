@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { provide, shallowRef, watchEffect } from "vue";
+import { provide, shallowRef, watch, watchEffect } from "vue";
 import { RouterView } from "vue-router";
 import { formatWindowTitle } from "@/app/windowTitle";
 import { Toaster } from "@/components/ui/sonner";
+import { applyProjectColorTheme } from "@/lib/projectColorThemes";
 import {
   WINDOW_TAB_CLOSE_HANDLER_KEY,
   type WindowTabCloseHandler,
@@ -30,6 +31,21 @@ watchEffect(() => {
     projectName: activeProject.value?.name,
   });
 });
+
+watch(
+  () =>
+    [
+      activeProject.value?.projectColorTheme ?? "olive",
+      colorScheme.value,
+    ] as const,
+  ([projectColorTheme]) => {
+    const root = document.documentElement;
+
+    root.dataset.projectColorTheme = projectColorTheme;
+    applyProjectColorTheme(root, projectColorTheme);
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

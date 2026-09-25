@@ -5,6 +5,7 @@ import {
   ModelRuntime,
   SessionManager,
   SettingsManager,
+  loadSkills,
   type AgentSession,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
@@ -1702,6 +1703,7 @@ export class PineAgentRuntime {
         skillRepository,
         location.cwd,
         location.agentDir,
+        loadSkills,
       ),
       systemPromptOverride: () => systemPromptForPlatform(PINE_SYSTEM_PROMPT),
     });
