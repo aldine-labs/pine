@@ -333,6 +333,7 @@ function statusFor(name: string): string {
         <Button
           v-if="previousName"
           variant="destructive"
+          class="sm:mr-auto"
           :disabled="saving"
           @click="removing = true"
         >
