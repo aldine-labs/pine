@@ -90,9 +90,6 @@ const isRefreshingModelCatalog = ref(false);
 const profileDraft = reactive<PineUserProfile>(createDefaultPineUserProfile());
 const isHydratingProfile = ref(false);
 const hasHydratedProfile = ref(false);
-const profileSaveState = ref<"idle" | "pending" | "saving" | "saved" | "error">(
-  "idle",
-);
 const contextCompactionStrategy = ref<PineContextCompactionStrategy>(
   DEFAULT_CONTEXT_COMPACTION_STRATEGY,
 );
@@ -169,13 +166,7 @@ watch(
   profileDraft,
   () => {
     if (!hasHydratedProfile.value || isHydratingProfile.value) return;
-    if (
-      !isProfileDirty.value &&
-      !userProfileStore.isSaving &&
-      profileSaveState.value === "idle"
-    ) {
-      return;
-    }
+    if (!isProfileDirty.value) return;
     scheduleUserProfileSave();
   },
   { deep: true, flush: "sync" },
@@ -213,7 +204,6 @@ async function loadUserProfile(): Promise<void> {
       Object.assign(profileDraft, userProfileStore.profile);
       isHydratingProfile.value = false;
       hasHydratedProfile.value = true;
-      profileSaveState.value = "idle";
     }
   } catch (error) {
     handleError(error, {
@@ -226,7 +216,6 @@ async function loadUserProfile(): Promise<void> {
 
 function scheduleUserProfileSave(): void {
   if (profileSaveTimer) clearTimeout(profileSaveTimer);
-  profileSaveState.value = "pending";
   profileSaveTimer = setTimeout(() => {
     profileSaveTimer = undefined;
     void enqueueUserProfileSave();
@@ -249,12 +238,10 @@ function enqueueUserProfileSave(): Promise<void> {
           isHydratingProfile.value = true;
           Object.assign(profileDraft, snapshot);
           isHydratingProfile.value = false;
-          profileSaveState.value = "saved";
         }
         return;
       }
 
-      profileSaveState.value = "saving";
       await userProfileStore.save(snapshot);
       if (
         userProfilesEqual(
@@ -265,13 +252,9 @@ function enqueueUserProfileSave(): Promise<void> {
         isHydratingProfile.value = true;
         Object.assign(profileDraft, snapshot);
         isHydratingProfile.value = false;
-        profileSaveState.value = "saved";
-      } else {
-        profileSaveState.value = "pending";
       }
     })
     .catch((error: unknown) => {
-      profileSaveState.value = "error";
       handleError(error, {
         id: "user-profile.save",
         title: t("errors.userProfile.title"),
@@ -582,28 +565,6 @@ function updateSidebarVibrancy(value: boolean): void {
               </Field>
             </FieldGroup>
           </ScrollArea>
-
-          <div class="flex items-center gap-3 px-6 py-3">
-            <div
-              class="mr-auto flex items-center gap-2 text-sm text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              <Spinner v-if="profileSaveState === 'saving'" />
-              <span v-if="profileSaveState === 'pending'">
-                {{ t("preferences.userProfileUnsavedChanges") }}
-              </span>
-              <span v-else-if="profileSaveState === 'saving'">
-                {{ t("common.saving") }}
-              </span>
-              <span v-else-if="profileSaveState === 'saved'">
-                {{ t("preferences.userProfileAutoSaved") }}
-              </span>
-              <span v-else-if="profileSaveState === 'error'">
-                {{ t("preferences.userProfileSaveFailed") }}
-              </span>
-            </div>
-          </div>
         </form>
 
         <ScrollArea

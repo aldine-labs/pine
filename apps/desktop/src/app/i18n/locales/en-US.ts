@@ -109,10 +109,6 @@ export default {
       "Enter additional ways you want Pine to work…",
     userProfileInstructionsDescription:
       "System-level personalization; safety and approval rules still apply.",
-    userProfileUnsavedChanges: "Unsaved changes",
-    userProfileSaved: "User profile saved",
-    userProfileAutoSaved: "Changes saved automatically",
-    userProfileSaveFailed: "Autosave failed. Editing again will retry.",
   },
   models: {
     favorites: "Favorites",

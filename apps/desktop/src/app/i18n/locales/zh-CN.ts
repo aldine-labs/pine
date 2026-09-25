@@ -100,10 +100,6 @@ export default {
     userProfileInstructionsPlaceholder: "输入你希望 Pine 遵循的额外工作方式……",
     userProfileInstructionsDescription:
       "作为系统级个性化指令生效，但不能绕过安全和审批规则。",
-    userProfileUnsavedChanges: "有未保存的更改",
-    userProfileSaved: "用户画像已保存",
-    userProfileAutoSaved: "更改已自动保存",
-    userProfileSaveFailed: "自动保存失败；下次更改时会重试",
   },
   models: {
     favorites: "收藏的模型",

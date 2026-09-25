@@ -304,8 +304,6 @@ describe("PinePreferencesDialog", () => {
     backgroundGroup?.vm.$emit("update:modelValue", "professional-user");
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.text()).toContain("有未保存的更改");
-
     await vi.waitFor(() =>
       expect(setUserProfile).toHaveBeenCalledWith({
         communicationStyle: "warm-friendly",
@@ -319,7 +317,6 @@ describe("PinePreferencesDialog", () => {
     await vi.waitFor(() =>
       expect((nickname.element as HTMLInputElement).value).toBe("小 Pine"),
     );
-    await vi.waitFor(() => expect(wrapper.text()).toContain("已自动保存"));
   });
 
   it("applies and persists language and theme selections", async () => {
