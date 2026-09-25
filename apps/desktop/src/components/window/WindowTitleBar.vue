@@ -11,6 +11,12 @@ withDefaults(defineProps<{ controlsOnly?: boolean }>(), {
     data-slot="window-titlebar-drag-region"
     class="window-drag absolute inset-x-0 top-0 z-20 h-[var(--window-titlebar-height)]"
   />
+  <div
+    v-else
+    aria-hidden="true"
+    data-slot="window-titlebar-sidebar-drag-region"
+    class="window-titlebar-sidebar-drag-region window-drag absolute top-0 left-0 z-30 h-[var(--window-titlebar-height)]"
+  />
   <header
     data-slot="window-titlebar"
     class="pointer-events-none absolute inset-x-0 top-0 z-40"
@@ -34,3 +40,24 @@ withDefaults(defineProps<{ controlsOnly?: boolean }>(), {
     </div>
   </header>
 </template>
+
+<style scoped>
+.window-titlebar-sidebar-drag-region {
+  width: var(--sidebar-width);
+}
+
+:global(
+    [data-slot="sidebar-wrapper"]:has(
+      [data-slot="sidebar"][data-state="collapsed"]
+    )
+  )
+  .window-titlebar-sidebar-drag-region {
+  width: 0;
+}
+
+@media (max-width: 768px) {
+  .window-titlebar-sidebar-drag-region {
+    width: 0;
+  }
+}
+</style>
