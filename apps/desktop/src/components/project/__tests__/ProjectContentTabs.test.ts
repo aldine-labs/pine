@@ -255,6 +255,13 @@ describe("ProjectContentTabs", () => {
     expect(
       wrapper.get('[data-slot="project-content-tabs-titlebar"]').classes(),
     ).not.toContain("pointer-events-none");
+    for (const edge of ["top", "bottom"]) {
+      expect(
+        wrapper
+          .get(`[data-slot="project-content-tabs-drag-edge-${edge}"]`)
+          .classes(),
+      ).toContain("window-drag");
+    }
     expect(
       wrapper.get('[data-slot="project-content-tab-items"]').classes(),
     ).toContain("window-drag");
@@ -265,7 +272,7 @@ describe("ProjectContentTabs", () => {
       wrapper.get('[data-slot="project-content-tab-drag-space"]').classes(),
     ).toContain("window-drag");
     expect(wrapper.get(".project-content-tab-separator").classes()).toContain(
-      "window-no-drag",
+      "window-drag",
     );
 
     wrapper.unmount();
